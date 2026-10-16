@@ -3,9 +3,6 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
-import 'package:hive_ce/src/adapters/big_int_adapter.dart';
-import 'package:hive_ce/src/adapters/date_time_adapter.dart';
-import 'package:hive_ce/src/adapters/duration_adapter.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 import 'package:kazumi/modules/collect/collect_change_module.dart';
 import 'package:kazumi/modules/collect/collect_module.dart';
@@ -136,17 +133,8 @@ void main() {
   late PathProviderPlatform originalPaths;
   HttpOverrides? originalHttpOverrides;
 
-  Future<void> switchDevice(String name) async {
-    await Hive.close();
-    Hive.resetAdapters();
-    // resetAdapters also removes the built-ins normally registered by the
-    // HiveImpl/TypeRegistryImpl constructor. Restore that exact initialization
-    // before GStorage.init registers the app's own adapters for this device.
-    Hive.registerAdapter(DateTimeWithTimezoneAdapter(), internal: true);
-    Hive.registerAdapter(DateTimeAdapter<DateTimeWithoutTZ>(), internal: true);
-    Hive.registerAdapter(BigIntAdapter(), internal: true);
-    Hive.registerAdapter(DurationAdapter(), internal: true);
-    final directory = Directory('${root.path}/$name');
+  Future<void> initializeClient() async {
+    final directory = Directory('${root.path}/client');
     await directory.create(recursive: true);
     PathProviderPlatform.instance = _Paths(directory.path);
     Hive.init('${directory.path}/hive');
@@ -169,6 +157,9 @@ void main() {
     root = await Directory.systemTemp.createTemp('kazumis_official_compat_');
     peer = _DavPeer();
     await peer.start();
+    // Production GStorage has a late-final settings box. Initialize exactly
+    // once, like the official app and the existing webdav_service tests.
+    await initializeClient();
   });
 
   tearDownAll(() async {
@@ -185,14 +176,14 @@ void main() {
   test('upstream-compatible viewing and collection sync round-trip without touching novels', () async {
     // These production methods and their Hive models are unchanged from
     // upstream/main 025dcb5. This executes their real webdav_client HTTP calls;
-    // it does not claim an official packaged application's UI was launched.
+    // This is one client uploading and restoring data through the shared
+    // protocol, not two devices or an official packaged application's UI.
     final novelBefore = peer.files.map((key, value) => MapEntry(key, List<int>.of(value)));
     final anime = BangumiItem(id: 42, type: 2, name: 'test', nameCn: '兼容测试番剧',
         summary: '', airDate: '2026-01-01', airWeekday: 1, rank: 0,
         images: {}, tags: [], alias: [], ratingScore: 7, votes: 1, votesCount: [], info: '');
     final initialTime = DateTime.utc(2026, 1, 1);
     final laterTime = initialTime.add(const Duration(days: 1));
-    await switchDevice('official-compatible-a');
     await GStorage.collectibles.put(anime.id, CollectedBangumi(anime, initialTime, 1));
     final history = History(anime, 2, 'fixture-source', initialTime,
         'https://fixture.invalid/anime', '第二集')
@@ -207,7 +198,14 @@ void main() {
     expect(peer.files.containsKey('/kazumiSync/collectibles.tmp'), isTrue);
     expect(peer.files.containsKey('/kazumiSync/history/snapshot.json'), isTrue);
 
-    await switchDevice('book-b');
+    // The production checkpoint completed and removed its local event log,
+    // so an empty local box can only regain these records from remote data.
+    final localLog = await HistorySyncService().localChangeLogFile();
+    expect(await localLog.exists(), isFalse);
+    await GStorage.collectibles.clear();
+    await GStorage.collectChanges.clear();
+    await GStorage.histories.clear();
+    final firstRestoreStart = peer.requests.length;
     expect(GStorage.collectibles, isEmpty);
     expect(GStorage.histories, isEmpty);
     await webDav.syncCollectibles();
@@ -217,6 +215,10 @@ void main() {
     expect(imported.progresses[2]!.progress.inMilliseconds, 12000);
     expect(imported.lastWatchEpisode, 2);
     expect(imported.adapterName, 'fixture-source');
+    expect(peer.requests.skip(firstRestoreStart), containsAll([
+      ('GET', '/kazumiSync/collectibles.tmp'),
+      ('GET', '/kazumiSync/history/snapshot.json'),
+    ]));
 
     await GStorage.collectibles.put(anime.id, CollectedBangumi(anime, laterTime, 4));
     final changeId = laterTime.millisecondsSinceEpoch ~/ 1000;
@@ -230,14 +232,26 @@ void main() {
     await HistorySyncService().appendUpsertProgress(history: imported, episode: 2,
         road: 0, progressMs: 34321);
     await webDav.syncCollectibles();
+    // Exercise another real checkpoint so no local event log can supply the
+    // subsequent restore. No Hive instance, adapter or singleton is reset.
+    await GStorage.putSetting(SettingsKeys.historySyncSnapshotInitialized, false);
     await webDav.syncHistory();
 
-    await switchDevice('official-compatible-a');
+    expect(await localLog.exists(), isFalse);
+    await GStorage.collectibles.clear();
+    await GStorage.collectChanges.clear();
+    await GStorage.histories.clear();
+    final secondRestoreStart = peer.requests.length;
     await webDav.syncCollectibles();
     await webDav.syncHistory();
     expect(GStorage.collectibles.get(anime.id)!.type, 4);
     expect(GStorage.histories.get(history.key)!.progresses[2]!.progress.inMilliseconds, 34321);
     expect(peer.files['/kazumiSync/collectchanges.tmp'], isNotEmpty);
+    expect(peer.requests.skip(secondRestoreStart), containsAll([
+      ('GET', '/kazumiSync/collectibles.tmp'),
+      ('GET', '/kazumiSync/collectchanges.tmp'),
+      ('GET', '/kazumiSync/history/snapshot.json'),
+    ]));
     expect(peer.files.entries.where((entry) => entry.key.startsWith(_novels))
         .map((entry) => entry.key).toSet(), novelBefore.keys.toSet());
     for (final entry in novelBefore.entries) {
