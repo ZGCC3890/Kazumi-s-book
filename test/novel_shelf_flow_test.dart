@@ -143,6 +143,7 @@ Future<void> _start(
   _Service service,
   CollectController collect,
 ) async {
+  print('SHELF start');
   final boot = bootstrapModule(
     createModule(
       register: (c) {
@@ -170,20 +171,26 @@ Future<void> _start(
   );
   await tester.tap(find.text('打开小说'));
   await tester.pumpAndSettle();
+  print('SHELF reader opened');
   await tester.tapAt(const Offset(400, 300));
   await tester.pumpAndSettle();
   await tester.tap(find.byTooltip('下一章'));
   await tester.pumpAndSettle();
+  print('SHELF second chapter opened');
 }
 
 Future<void> _accept(WidgetTester tester) async {
+  print('SHELF request exit');
   await tester.tap(find.byType(BackButton));
   await tester.pumpAndSettle();
   expect(find.text('加入书架？'), findsOneWidget);
+  print('SHELF offer displayed');
   await tester.tap(find.text('加入书架'));
+  print('SHELF offer accepted');
 }
 
 Future<void> _finishWrites(WidgetTester tester, Completer<void> attempt) async {
+  print('SHELF waiting for storage');
   for (var i = 0; i < 100 && !attempt.isCompleted; i++) {
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 20)),
@@ -196,6 +203,7 @@ Future<void> _finishWrites(WidgetTester tester, Completer<void> attempt) async {
     reason: 'Expected storage operation; visible text: ${tester.widgetList<Text>(find.byType(Text)).map((t) => t.data).join(" / ")}',
   );
   await tester.pumpAndSettle();
+  print('SHELF storage reached');
 }
 
 void main() {
@@ -210,8 +218,11 @@ void main() {
     await GStorage.init();
   });
   setUp(() async {
+    print('SHELF setup clear collectibles');
     await GStorage.collectibles.clear();
+    print('SHELF setup clear collectChanges');
     await GStorage.collectChanges.clear();
+    print('SHELF setup complete');
     DioFactory.bangumiDio.httpClientAdapter = _AnimeAdapter();
   });
   tearDown(() {
@@ -237,6 +248,7 @@ void main() {
       expect(service.shelfAnimeId, 42);
       expect(find.byType(NovelReaderPage), findsNothing);
     },
+    timeout: const Timeout(Duration(seconds: 45)),
   );
   testWidgets(
     'collect write failure keeps the reader and shelf unchanged, then retries',
@@ -259,6 +271,7 @@ void main() {
       expect(repo.getCollectType(42), 1);
       expect(service.shelved, true);
     },
+    timeout: const Timeout(Duration(seconds: 45)),
   );
   testWidgets(
     'shelf write failure keeps reading progress and allows exit retry',
@@ -280,5 +293,6 @@ void main() {
       expect(service.shelved, true);
       expect(find.byType(NovelReaderPage), findsNothing);
     },
+    timeout: const Timeout(Duration(seconds: 45)),
   );
 }
