@@ -188,12 +188,12 @@ Future<void> _finishWrites(WidgetTester tester, Completer<void> attempt) async {
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 20)),
     );
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 20));
   }
   expect(
     attempt.isCompleted,
     true,
-    reason: 'The expected storage operation must be reached',
+    reason: 'Expected storage operation; visible text: ${tester.widgetList<Text>(find.byType(Text)).map((t) => t.data).join(" / ")}',
   );
   await tester.pumpAndSettle();
 }

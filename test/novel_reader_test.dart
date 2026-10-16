@@ -79,7 +79,9 @@ class _ReaderStore extends ChangeNotifier implements NovelReaderStore {
     notifyListeners();
   }
   @override Future<void> savePreferences(NovelJson value) async { prefs = Map.of(value); }
-  @override Future<void> addBookmark(NovelPosition position, String note) async {}
+  @override Future<void> addBookmark(NovelPosition position, String note) async {
+    marks.add({'id': 'added', 'note': note, 'position': position.toJson()});
+  }
   @override Future<void> deleteBookmark(String id) async {}
   @override List<NovelJson> bookmarks(String editionId) => marks;
   @override Future<void> resolve(String key, NovelRevision selected) async {
@@ -123,7 +125,8 @@ Future<void> _open(WidgetTester tester, _ReaderStore store, {double scale = 1, b
 Future<void> _showControls(WidgetTester tester) async {
   if (find.byType(BackButton).evaluate().isNotEmpty) return;
   final size = tester.view.physicalSize / tester.view.devicePixelRatio;
-  await tester.tapAt(Offset(size.width / 2, size.height - 8));
+  final scrollMode = find.byType(ListView).evaluate().isNotEmpty;
+  await tester.tapAt(Offset(scrollMode ? 4 : size.width / 2, size.height / 2));
   await tester.pumpAndSettle();
 }
 
@@ -191,16 +194,13 @@ void main() {
     });
     final store = _ReaderStore({_one.url: const [
       NovelBlock.image('https://test/front.png'), NovelBlock.text('新书源完全不同的正文。'),
-    ],
-        }, initial: _position(_one, '原书源中已经消失的一段锚点文本。', 3), imageBytes: bytes!,
-      );
+    ]}, initial: _position(_one, '原书源中已经消失的一段锚点文本。', 3), imageBytes: bytes!);
     await _open(tester, store);
     expect(find.byType(AlertDialog), findsNothing);
     expect(_scroll(tester).offset, 0);
     expect(store.saved.last.imageHash, sha256.convert(bytes).toString());
     expect(tester.takeException(), isNull);
-  },
-  );
+  });
 
   testWidgets('an illustration without a matching paragraph resumes at chapter start', (tester) async {
     final bytes = await tester.runAsync(() async {
@@ -216,16 +216,13 @@ void main() {
     });
     final store = _ReaderStore({_one.url: const [
       NovelBlock.text(text), NovelBlock.image('https://test/moved.png'),
-    ],
-        }, initial: previous, imageBytes: bytes,
-      );
+    ]}, initial: previous, imageBytes: bytes);
     await _open(tester, store);
     expect(find.byType(AlertDialog), findsNothing);
     expect(store.saved.last.textOffset, 0);
     expect(store.saved.last.imageHash, isNull);
     expect(tester.takeException(), isNull);
-  },
-  );
+  });
 
   for (final mode in ['scroll', 'page']) {
   testWidgets('$mode window reflow and font changes preserve the exact saved text anchor', (tester) async {
@@ -357,6 +354,19 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('saving a bookmark waits for the input dialog to close', (tester) async {
+    final store = _ReaderStore({_one.url: const [NovelBlock.text('正文中添加书签。')]});
+    await _open(tester, store);
+    await tester.tap(find.byTooltip('添加书签'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '想要重读的段落');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(store.marks.single['note'], '想要重读的段落');
+    expect(store.marks.single['position']['chapter']['url'], _one.url);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('cross-source bookmarks reuse the same confirmed chapter mapping', (tester) async {
     const oldChapter = NovelChapter(url: 'https://old/bookmark-chapter', title: '旧书签章节',
       volume: '不同卷名', kind: '正文', number: 71);
@@ -404,24 +414,20 @@ void main() {
 
   testWidgets('a mapped chapter with no paragraph anchor opens directly and keeps catalog navigation', (tester) async {
     const oldChapter = NovelChapter(url: 'https://old/combined', title: '旧源合并章节',
-      volume: '旧源卷', kind: '正文', number: 99,
-      );
+      volume: '旧源卷', kind: '正文', number: 99);
     const text = '旧源的一章被新源拆成两章，原书签的唯一文本锚点实际在第二章。';
     final original = NovelPosition.fromJson({
       ..._position(oldChapter, text, 7).toJson(), 'sourceId': 'old-source',
     });
     final store = _ReaderStore({_one.url: const [NovelBlock.text('第一章完全没有旧书签的上下文。')],
-      _two.url: const [NovelBlock.text(text)],
-      }, initial: original);
+      _two.url: const [NovelBlock.text(text)]}, initial: original);
     await store.confirmChapterMapping(original, _book, _one);
     await _open(tester, store);
     expect(find.byType(AlertDialog), findsNothing);
     expect(store.saved.last.chapter.url, _one.url);
-      expect(store.saved.last.textOffset, 0);
-      expect(
-        store.readIdentities['${_book.sourceId}/${_one.url}'],
-        'old-source/${oldChapter.url}',
-      );
+    expect(store.saved.last.textOffset, 0);
+    expect(store.readIdentities['${_book.sourceId}/${_one.url}'],
+      'old-source/${oldChapter.url}');
     await tester.tap(find.text('目录'));
     await tester.pumpAndSettle();
     await tester.tap(find.text(_two.title));
@@ -431,8 +437,7 @@ void main() {
     expect(store.saved.last.chapter.url, _two.url);
     expect(store.saved.last.textOffset, 0);
     expect(tester.takeException(), isNull);
-  },
-  );
+  });
 
   testWidgets('refresh fetches new catalog and content while preserving the semantic location', (tester) async {
     final text = List.generate(15, (i) => '第$i段：目录更新后仍要恢复这段唯一正文的位置。').join('\n');

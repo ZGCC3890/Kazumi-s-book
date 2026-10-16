@@ -63,8 +63,7 @@ class _ScaffoldMenu extends State<ScaffoldMenu> with RouteAware {
 
   void _selectDestination(int index) {
     _lastExitPromptAt = null;
-    if (index == _selectedIndex &&
-        widget.location == '/tab${menu.getPath(index)}/') {
+    if (index == _selectedIndex && index != 2) {
       return;
     }
     final outlet = _outletKey.currentState;

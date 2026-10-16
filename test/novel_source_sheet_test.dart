@@ -201,7 +201,7 @@ void main() {
       );
       await tester.tap(find.text('登录并搜索'));
       await tester.pump();
-      await tester.pageBack();
+      await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       service.loginResult.complete();
       await tester.pumpAndSettle();

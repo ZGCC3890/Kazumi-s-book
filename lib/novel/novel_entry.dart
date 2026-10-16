@@ -395,7 +395,6 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
                           username.text.trim(),
                           password.text,
                         );
-                        password.clear();
                         if (ctx.mounted) Navigator.pop(ctx, true);
                       } catch (failure) {
                         if (ctx.mounted)
@@ -481,7 +480,7 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
     final url = await Navigator.of(context).push(dialog);
     await dialog.completed;
     controller.dispose();
-    if (url == null) return;
+    if (url == null || !mounted) return;
     setState(() {
       _busy = true;
       _error = null;

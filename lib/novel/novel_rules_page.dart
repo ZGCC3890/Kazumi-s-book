@@ -61,7 +61,7 @@ class _NovelRulesPageState extends State<NovelRulesPage> {
   });
   Future<void> _paste() async {
     final controller = TextEditingController();
-    final raw = await showDialog<String>(
+    final dialog = DialogRoute<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('导入小说规则'),
@@ -86,8 +86,10 @@ class _NovelRulesPageState extends State<NovelRulesPage> {
         ],
       ),
     );
+    final raw = await Navigator.of(context).push(dialog);
+    await dialog.completed;
     controller.dispose();
-    if (raw == null || raw.isEmpty) return;
+    if (raw == null || raw.isEmpty || !mounted) return;
     await _run(
       () async => widget.service.importRule(
         raw.startsWith('https://') || raw.startsWith('http://')

@@ -184,6 +184,7 @@ void main() {
         ),
       ),
     );
+    await tester.pump();
     await tester.runAsync(() async {
       await Future<void>.delayed(const Duration(milliseconds: 50));
     });

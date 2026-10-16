@@ -512,7 +512,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
   Future<void> _bookmark() async {
     if (_location == null) return;
     final controller = TextEditingController();
-    final note = await showDialog<String>(
+    final dialog = DialogRoute<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('添加书签'),
@@ -532,6 +532,8 @@ class _NovelReaderPageState extends State<NovelReaderPage>
         ],
       ),
     );
+    final note = await Navigator.of(context).push(dialog);
+    await dialog.completed;
     controller.dispose();
     if (note != null) await service.addBookmark(_location!, note);
   }
@@ -1009,40 +1011,26 @@ class _NovelReaderPageState extends State<NovelReaderPage>
                           },
                           child: Focus(
                             autofocus: true,
-                            child: Stack(
-                              children: [
-                                Positioned.fill(
-                                  child: LayoutBuilder(
-                                    builder: (_, c) {
-                                      final column = c.maxWidth.clamp(
-                                        0.0,
-                                        900.0,
-                                      );
-                                      final width =
-                                          column -
-                                          2 *
-                                              (_prefs['margin'] as num)
-                                                  .toDouble();
-                                      return _body(
-                                        width,
-                                        c.maxHeight,
-                                        style,
-                                        (c.maxWidth - width) / 2,
-                                      );
-                                    },
-                                  ),
+                            child: DecoratedBox(
+                              position: DecorationPosition.foreground,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(
+                                  alpha: (_prefs['brightness'] as num).toDouble(),
                                 ),
-                                Positioned.fill(
-                                  child: IgnorePointer(
-                                    child: ColoredBox(
-                                      color: Colors.black.withValues(
-                                        alpha: (_prefs['brightness'] as num)
-                                            .toDouble(),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
+                              ),
+                              child: LayoutBuilder(
+                                builder: (_, c) {
+                                  final column = c.maxWidth.clamp(0.0, 900.0);
+                                  final width = column -
+                                      2 * (_prefs['margin'] as num).toDouble();
+                                  return _body(
+                                    width,
+                                    c.maxHeight,
+                                    style,
+                                    (c.maxWidth - width) / 2,
+                                  );
+                                },
+                              ),
                             ),
                           ),
                         ),

@@ -64,6 +64,10 @@ class _NovelBookCoverState extends State<NovelBookCover> {
                   fit: BoxFit.cover,
                   cacheWidth: 160,
                   semanticLabel: '${widget.book!.title}封面',
+                  errorBuilder: (context, error, stack) => Tooltip(
+                    message: '封面解码失败：$error',
+                    child: const Icon(Icons.broken_image_outlined),
+                  ),
                 );
               },
             ),
