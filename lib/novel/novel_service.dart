@@ -51,7 +51,10 @@ class NovelService extends ChangeNotifier
     _box = await Hive.openBox<String>('novel_v1', path: path);
     _cache = await Hive.openBox<String>('novel_cache_v1', path: path);
     _rules = await Hive.openBox<String>('novel_rules_v1', path: path);
-    _http = NovelHttpSession(() => DioFactory.pluginDio, '$path/novel_sessions');
+    _http = NovelHttpSession(
+      () => DioFactory.pluginDio,
+      '$path/novel_sessions',
+    );
     final storedId = _box.get('deviceId');
     deviceId = storedId ?? newId();
     if (storedId == null) await _box.put('deviceId', deviceId);
@@ -95,18 +98,20 @@ class NovelService extends ChangeNotifier
   Future<void> importRule(String raw) async {
     final parsed = NovelRule.decode(raw);
     await _rules.put(parsed.id, parsed.encode());
+    await _box.delete('ruleRemoved/${parsed.id}');
     notifyListeners();
   }
 
   Future<void> removeRule(String id) async {
     await _rules.delete(id);
+    await _box.put('ruleRemoved/$id', '1');
     notifyListeners();
   }
 
   /// Install the separate rule repository once. Deletions remain intentional;
   /// a failed download is reported to the caller and can be retried.
   Future<void> ensureDefaultRules() {
-    if (_box.get('defaultRulesInstalled') == '1') return Future.value();
+    if (_box.get('defaultRulesInstalled') == '2') return Future.value();
     return _defaultRulesInstallation ??= _installDefaultRules().whenComplete(
       () => _defaultRulesInstallation = null,
     );
@@ -114,6 +119,11 @@ class NovelService extends ChangeNotifier
 
   Future<void> _installDefaultRules() async {
     final url = ruleCatalogUrl ?? defaultCatalog;
+    if (_box.get('defaultRulesInstalled') == '1' && ruleCatalogUrl == null) {
+      for (final id in ['wenku8', 'syosetu']) {
+        if (!_rules.containsKey(id)) await _box.put('ruleRemoved/$id', '1');
+      }
+    }
     Future<String> get(String address) async =>
         (await DioFactory.pluginDio.get<String>(
           address,
@@ -123,6 +133,7 @@ class NovelService extends ChangeNotifier
     if (catalog['version'] != 1) throw const FormatException('不支持的规则索引版本');
     final downloads = <String, String>{};
     for (final entry in catalog['rules'] as List) {
+      if (_box.get('ruleRemoved/${entry['id']}') == '1') continue;
       final parsed = NovelRule.decode(
         await get(Uri.parse(url).resolve(entry['file'] as String).toString()),
       );
@@ -145,7 +156,7 @@ class NovelService extends ChangeNotifier
     if (preferredSource == null) {
       await selectSource((catalog['rules'] as List).first['id'] as String);
     }
-    await _box.put('defaultRulesInstalled', '1');
+    await _box.put('defaultRulesInstalled', '2');
     await _box.flush();
     notifyListeners();
   }
@@ -166,6 +177,56 @@ class NovelService extends ChangeNotifier
       .map((key) => NovelEdition.fromJson(state.value(key)!))
       .toList();
   NovelWork work(String id) => NovelWork.fromJson(state.value('work/$id')!);
+  bool isShelved(String editionId) {
+    final revisions = state.revisions('shelf/$editionId');
+    if (revisions.isNotEmpty) {
+      return revisions.length == 1 && revisions.single.value != null;
+    }
+    // 0.1.0 treated every edition as a shelf item. Preserve those records.
+    return state.value('edition/$editionId')?['preview'] != true;
+  }
+
+  List<NovelEdition> get shelfEditions =>
+      editions.where((e) => isShelved(e.id)).toList();
+
+  Future<int> recordReadChapters(String editionId, Set<String> chapters) async {
+    final key = 'readChapters/$editionId';
+    final read = <String>{
+      if (_box.get(key) != null)
+        ...List<String>.from(jsonDecode(_box.get(key)!) as List),
+      ...chapters,
+    };
+    await _box.put(key, jsonEncode(read.toList()));
+    return read.length;
+  }
+
+  Future<void> addToShelf(String editionId, {int animeId = 0}) => _commit(
+    (s) => s.edit('shelf/$editionId', {
+      'editionId': editionId,
+      'animeId': animeId,
+    }, deviceId),
+  );
+
+  List<int> animeIdsForEdition(String editionId) => state
+      .keys('anime')
+      .where(
+        (key) => state.revisions(key).length == 1 && state.value(key) != null,
+      )
+      .map(state.value)
+      .whereType<NovelJson>()
+      .where((j) => (j['editionIds'] as List).contains(editionId))
+      .map((j) => j['animeId'] as int)
+      .toList();
+
+  String? editionForBook(NovelBook book) {
+    for (final edition in editions) {
+      final source = state.value('source/${edition.id}/${book.sourceId}');
+      if (source != null && (source['book'] as NovelJson)['url'] == book.url)
+        return edition.id;
+    }
+    return null;
+  }
+
   List<String> boundEditions(int animeId) {
     final j = state.value('anime/$animeId');
     return j == null ? [] : List<String>.from(j['editionIds'] as List);
@@ -289,11 +350,10 @@ class NovelService extends ChangeNotifier
             deviceId,
           );
         }
-        s = s.edit(
-          'edition/$editionId',
-          NovelEdition(editionId, workId, editionLabel, language).toJson(),
-          deviceId,
-        );
+        s = s.edit('edition/$editionId', {
+          ...NovelEdition(editionId, workId, editionLabel, language).toJson(),
+          'preview': true,
+        }, deviceId);
       }
       if (animeId > 0) {
         final old = s.value('anime/$animeId');

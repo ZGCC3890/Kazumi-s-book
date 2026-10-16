@@ -16,6 +16,9 @@ class DanmakuClient {
     Map<String, dynamic> headers = const {},
     CancelToken? cancelToken,
   }) async {
+    if (dandanCredentials['id']!.isEmpty || dandanCredentials['value']!.isEmpty) {
+      throw StateError("Kazumi's book 尚未配置弹弹play应用凭据，弹幕服务暂不可用");
+    }
     final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final uri = Uri.parse(url);
     final requestHeaders = <String, dynamic>{

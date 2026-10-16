@@ -85,9 +85,11 @@ NovelPosition _position(NovelChapter chapter, String text, int offset) => NovelL
   editionId: 'edition', sourceId: _book.sourceId, chapter: chapter,
   text: text, offset: offset, updatedAt: 1);
 
-Future<void> _open(WidgetTester tester, _ReaderStore store, {double scale = 1, bool awaitsChoice = false}) async {
+Future<void> _open(WidgetTester tester, _ReaderStore store, {double scale = 1, bool awaitsChoice = false,
+  bool showControls = true, Size size = const Size(480, 800),
+  Future<void> Function(Set<String>)? onLeave}) async {
   tester.view.devicePixelRatio = 1;
-  tester.view.physicalSize = const Size(480, 800);
+  tester.view.physicalSize = size;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   addTearDown(() async { await tester.pumpWidget(const SizedBox.shrink()); store.dispose(); });
@@ -96,7 +98,7 @@ Future<void> _open(WidgetTester tester, _ReaderStore store, {double scale = 1, b
       data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)), child: child!),
     home: Builder(builder: (context) => Scaffold(body: TextButton(
       onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
-        NovelReaderPage(service: store, editionId: 'edition', book: _book))),
+        NovelReaderPage(service: store, editionId: 'edition', book: _book, onLeave: onLeave))),
       child: const Text('Open reader')))),
   ));
   await tester.tap(find.text('Open reader'));
@@ -107,11 +109,54 @@ Future<void> _open(WidgetTester tester, _ReaderStore store, {double scale = 1, b
     await tester.pumpAndSettle();
   }
   await tester.pump(const Duration(milliseconds: 700));
+  if (showControls && !awaitsChoice) await _showControls(tester);
+}
+
+Future<void> _showControls(WidgetTester tester) async {
+  if (find.byType(BackButton).evaluate().isNotEmpty) return;
+  final size = tester.view.physicalSize / tester.view.devicePixelRatio;
+  await tester.tapAt(Offset(size.width / 2, size.height - 8));
+  await tester.pumpAndSettle();
 }
 
 ScrollController _scroll(WidgetTester tester) => tester.widget<ListView>(find.byType(ListView).first).controller!;
 
 void main() {
+  testWidgets('tablet margins scroll on both sides and center toggles hidden controls', (tester) async {
+    final store = _ReaderStore({_one.url: List.generate(160,
+      (i) => NovelBlock.text('第$i段：平板两侧留白也可以正常滑动正文。'))});
+    await _open(tester, store, size: const Size(1440, 900), showControls: false);
+    expect(find.byType(AppBar), findsNothing);
+    expect(find.byTooltip('阅读设置'), findsNothing);
+    expect(find.textContaining('1/1'), findsNothing);
+    await tester.dragFrom(const Offset(40, 650), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    final left = _scroll(tester).offset;
+    expect(left, greaterThan(0));
+    await tester.dragFrom(const Offset(1400, 650), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(_scroll(tester).offset, greaterThan(left));
+    await tester.tapAt(const Offset(720, 450));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('阅读设置'), findsOneWidget);
+    await tester.tapAt(const Offset(720, 450));
+    await tester.pumpAndSettle();
+    expect(find.byType(AppBar), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('exit reports only successfully opened distinct chapters', (tester) async {
+    Set<String>? read;
+    final store = _ReaderStore({_one.url: const [NovelBlock.text('第一章正文')],
+      _two.url: const [NovelBlock.text('第二章正文')]});
+    await _open(tester, store, onLeave: (chapters) async { read = chapters; });
+    await tester.tap(find.byTooltip('下一章'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(read, {'text/${NovelLocator.digest('第一章正文')}', 'text/${NovelLocator.digest('第二章正文')}'});
+    expect(find.byType(NovelReaderPage), findsNothing);
+  });
   testWidgets('first open keeps the leading illustration visible and bookmarks its bytes', (tester) async {
     final bytes = await tester.runAsync(() async {
       final image = await createTestImage(width: 8, height: 8);

@@ -82,13 +82,13 @@ class NovelLibraryPage extends StatelessWidget {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => NovelEntry.conflicts(context, service),
             ),
-          if (service.editions.isEmpty)
+          if (service.shelfEditions.isEmpty)
             const Padding(
               padding: EdgeInsets.all(32),
               child: Text('点击“添加小说”搜索书源，也可以从番剧详情或追番卡片关联小说。'),
             ),
           if (service.state.conflicts.isEmpty)
-            for (final edition in service.editions)
+            for (final edition in service.shelfEditions)
               Card(
                 child: ListTile(
                   leading: const Icon(Icons.menu_book_outlined),

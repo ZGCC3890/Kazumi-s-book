@@ -354,7 +354,7 @@ class BangumiApi {
       );
     } catch (e) {
       KazumiLogger().e('Network: unknown search problem', error: e);
-      return null;
+      rethrow;
     }
   }
 

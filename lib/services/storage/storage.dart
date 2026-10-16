@@ -13,6 +13,7 @@ import 'package:kazumi/modules/search/search_history_module.dart';
 import 'package:kazumi/modules/download/download_module.dart';
 import 'package:kazumi/services/storage/history_storage_coordinator.dart';
 import 'package:kazumi/services/download/download_path_migration.dart';
+import 'package:kazumi/services/network/book_network_migration.dart';
 
 import 'package:kazumi/services/storage/settings_keys.dart';
 export 'package:kazumi/services/storage/settings_keys.dart';
@@ -154,6 +155,7 @@ class GStorage {
     collectibles = await _openBoxSafe<CollectedBangumi>('collectibles');
     histories = await _openBoxSafe<History>('histories');
     _setting = await _openBoxSafe<dynamic>('setting');
+    await migrateBookNetwork(_setting);
     collectChanges =
         await _openBoxSafe<CollectedBangumiChange>('collectchanges');
     shieldList = await _openBoxSafe<String>('shieldList');

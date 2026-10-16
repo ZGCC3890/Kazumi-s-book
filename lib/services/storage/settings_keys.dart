@@ -260,7 +260,7 @@ class SettingsKeys {
   );
   static const enableBangumiProxy = SettingKey<bool>(
     _SettingBoxKey.enableBangumiProxy,
-    true,
+    false,
     group: SettingGroup.proxy,
   );
   static const imageAcceleration = SettingKey<String>(
@@ -268,10 +268,15 @@ class SettingsKeys {
     'ech',
     group: SettingGroup.proxy,
   );
-  // An unset mode inherits the old mirror switch (enabled by default).
+  // The independent app uses the upstream public Bangumi endpoints.
   static const bangumiAcceleration = SettingKey<String>(
     'bangumiAcceleration',
-    '',
+    'direct',
+    group: SettingGroup.proxy,
+  );
+  static const bookNetworkNotice = SettingKey<bool>(
+    'bookNetworkNotice',
+    false,
     group: SettingGroup.proxy,
   );
   static const enableSystemProxy = SettingKey<bool>(
@@ -305,7 +310,9 @@ class SettingsKeys {
     group: SettingGroup.webdav,
   );
   static const webDavEnableNovels = SettingKey<bool>(
-    'webDavEnableNovels', false, group: SettingGroup.webdav,
+    'webDavEnableNovels',
+    false,
+    group: SettingGroup.webdav,
   );
   static const danmakuShieldSyncDeviceId = SettingKey<String>(
     'danmakuShieldSyncDeviceId',
@@ -676,7 +683,7 @@ class SettingsKeys {
   static List<SettingKey<Object?>> byGroup(SettingGroup group) {
     return [
       for (final key in all)
-        if (key.group == group) key
+        if (key.group == group) key,
     ];
   }
 

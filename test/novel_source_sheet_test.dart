@@ -1,0 +1,155 @@
+import 'dart:async';
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:kazumi/novel/novel_entry.dart';
+import 'package:kazumi/novel/novel_models.dart';
+import 'package:kazumi/novel/novel_rule.dart';
+import 'package:kazumi/novel/novel_service.dart';
+import 'package:kazumi/services/sync/webdav.dart';
+
+class _Adapter implements NovelSourceAdapter {
+  _Adapter(this.source);
+  final String source;
+  final requests = <(String, Completer<List<NovelBook>>)>[];
+  @override
+  Future<List<NovelBook>> search(String query) {
+    final result = Completer<List<NovelBook>>();
+    requests.add((query, result));
+    return result.future;
+  }
+
+  void complete(int i, String title) => requests[i].$2.complete([
+    NovelBook(
+      sourceId: source,
+      url: 'https://test/$source/$title',
+      title: title,
+    ),
+  ]);
+  @override
+  Future<NovelBook> bookFromUrl(String url) => throw UnimplementedError();
+  @override
+  Future<List<NovelChapter>> catalog(NovelBook book) =>
+      throw UnimplementedError();
+  @override
+  Future<List<NovelBlock>> content(NovelChapter chapter) =>
+      throw UnimplementedError();
+}
+
+class _Service extends NovelService {
+  _Service() : super(WebDav());
+  final sources = {
+    'linovel': _Adapter('linovel'),
+    'lightnovel': _Adapter('lightnovel'),
+  };
+  NovelBook? selected;
+  @override
+  List<NovelRule> get rules => sources.keys
+      .map(
+        (id) =>
+            NovelRule.decode(File('novel_rules/$id.json').readAsStringSync()),
+      )
+      .toList();
+  @override
+  String? get preferredSource => null;
+  @override
+  Future<void> ensureDefaultRules() async {}
+  @override
+  NovelSourceAdapter adapter(String id) => sources[id]!;
+  @override
+  String? editionForBook(NovelBook book) => null;
+  @override
+  Future<String> bind({
+    required int animeId,
+    required NovelBook book,
+    required String editionLabel,
+    required String language,
+    String? existingEditionId,
+    String? existingWorkId,
+  }) async {
+    selected = book;
+    return 'selected-edition';
+  }
+}
+
+Future<void> _open(WidgetTester tester, _Service service) async {
+  addTearDown(service.dispose);
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: TextButton(
+            onPressed: () => showDialog<String>(
+              context: context,
+              builder: (_) => Dialog(
+                child: SizedBox(
+                  width: 640,
+                  height: 500,
+                  child: NovelSearchPage(
+                    service: service,
+                    animeId: 42,
+                    initialQuery: '原词',
+                  ),
+                ),
+              ),
+            ),
+            child: const Text('选择小说'),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.tap(find.text('选择小说'));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
+void main() {
+  testWidgets(
+    'each source finishes independently and a selected result opens without version forms',
+    (tester) async {
+      final service = _Service();
+      await _open(tester, service);
+      service.sources['linovel']!.complete(0, '源甲小说');
+      await tester.pump();
+      expect(find.text('源甲小说'), findsOneWidget);
+      expect(find.text('正在搜索…'), findsOneWidget);
+      await tester.tap(find.text('源甲小说'));
+      await tester.pumpAndSettle();
+      expect(service.selected!.sourceId, 'linovel');
+      expect(find.text('确认对应小说和版本'), findsNothing);
+      service.sources['lightnovel']!.complete(0, '已关闭弹窗的结果');
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'new query ignores stale results; single-source retry uses submitted query',
+    (tester) async {
+      final service = _Service();
+      await _open(tester, service);
+      await tester.enterText(find.byType(TextField), '新词');
+      await tester.tap(find.byTooltip('搜索'));
+      await tester.pump();
+      for (final source in service.sources.values) {
+        source.complete(0, '过期结果');
+        source.complete(1, '${source.source}新结果');
+      }
+      await tester.pumpAndSettle();
+      expect(find.text('过期结果'), findsNothing);
+      expect(find.text('linovel新结果'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), '未提交的词');
+      await tester.tap(find.byType(PopupMenuButton<String>).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('重新搜索'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(service.sources['linovel']!.requests.last.$1, '新词');
+      service.sources['linovel']!.complete(2, '重试结果');
+      await tester.pumpAndSettle();
+      expect(find.text('重试结果'), findsOneWidget);
+      await tester.tap(find.byTooltip('关闭'));
+      await tester.pumpAndSettle();
+    },
+  );
+}

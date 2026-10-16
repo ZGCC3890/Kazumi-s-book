@@ -9,6 +9,7 @@ import 'package:kazumi/novel/novel_locator.dart';
 import 'package:kazumi/novel/novel_models.dart';
 import 'package:kazumi/novel/novel_service.dart';
 import 'package:kazumi/novel/novel_webdav_exchange.dart';
+import 'package:kazumi/request/core/dio_factory.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/services/sync/webdav.dart';
 import 'package:logger/logger.dart';
@@ -252,6 +253,50 @@ void main() {
     expect(remote.requests.length, count);
   });
 
+  test('0.1.0 source deletion survives adding new defaults on upgrade', () async {
+    remote.files['/rules/catalog.json'] = await File('novel_rules/catalog.json').readAsBytes();
+    for (final id in ['wenku8', 'syosetu', 'linovel', 'lightnovel']) {
+      remote.files['/rules/$id.json'] = await File('novel_rules/$id.json').readAsBytes();
+    }
+    final service = await device('legacy-rule-upgrade');
+    await service.importRule(await File('novel_rules/syosetu.json').readAsString());
+    await Hive.box<String>('novel_v1').put('defaultRulesInstalled', '1');
+    final rewrite = InterceptorsWrapper(onRequest: (options, handler) {
+      if (options.uri.toString().startsWith(NovelService.defaultCatalog.replaceAll('catalog.json', ''))) {
+        options.path = '${remote.url}/rules/${options.uri.pathSegments.last}';
+      }
+      handler.next(options);
+    });
+    DioFactory.pluginDio.interceptors.add(rewrite);
+    try {
+      await service.ensureDefaultRules();
+      expect(service.rules.map((r) => r.id), unorderedEquals(['syosetu', 'linovel', 'lightnovel']));
+    } finally {
+      DioFactory.pluginDio.interceptors.remove(rewrite);
+    }
+  });
+
+  test('legacy shelves retain membership; new shelf membership syncs to another device', () async {
+    var service = await device('A');
+    final edition = await seed(service);
+    final stored = Hive.box<String>('novel_v1');
+    final envelope = jsonDecode(stored.get('state')!) as Map<String, dynamic>;
+    // Reproduce a 0.1.0 edition by removing only its new preview field.
+    final old = service.state.edit('edition/$edition', {
+      ...service.state.value('edition/$edition')!, 'preview': false,
+    }, service.deviceId);
+    envelope['data'] = old.encode();
+    await stored.put('state', jsonEncode(envelope));
+    service = await device('A');
+    expect(service.isShelved(edition), true);
+    await service.addToShelf(edition, animeId: 42);
+    await sync(service);
+    service = await device('B');
+    await sync(service);
+    expect(service.shelfEditions.single.id, edition);
+    expect(service.state.value('shelf/$edition')!['animeId'], 42);
+  });
+
   test('interrupted default rule install reports failure without partial registry and retries', () async {
     remote.files['/rules/catalog.json'] = utf8.encode(jsonEncode({'version': 1, 'rules': [
       {'id': 'wenku8', 'file': 'wenku8.json', 'replaces': <String>[]},
@@ -292,6 +337,22 @@ void main() {
     await service.saveRuleCatalogUrl('${remote.url}/rules/catalog.json');
     await service.ensureDefaultRules();
     expect(service.rules.single.name, '本机自定义文库');
+  });
+
+  test('preview progress is separate from shelf membership and survives restart', () async {
+    var service = await device('A');
+    final edition = await seed(service);
+    expect(service.shelfEditions, isEmpty);
+    expect(await service.recordReadChapters(edition, {_chapterA.url}), 1);
+    service = await device('A');
+    expect(await service.recordReadChapters(edition, {_chapterA.url, _chapterB.url}), 2);
+    expect(service.shelfEditions, isEmpty);
+    await service.addToShelf(edition, animeId: 42);
+    service = await device('A');
+    expect(service.shelfEditions.single.id, edition);
+    expect(service.state.value('shelf/$edition')!['animeId'], 42);
+    expect(service.animeIdsForEdition(edition), containsAll([42, 43]));
+    expect(service.editionForBook(_bookA), edition);
   });
 
   test('disk restart preserves position, bookmark, local preferences and both mapping directions', () async {

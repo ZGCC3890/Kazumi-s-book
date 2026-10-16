@@ -19,10 +19,7 @@ abstract class _SearchPageController with Store {
   static const int _searchPageSize = 20;
   static const int _maxPagesPerSearch = 3;
 
-  _SearchPageController(
-    this._collectRepository,
-    this._searchHistoryRepository,
-  );
+  _SearchPageController(this._collectRepository, this._searchHistoryRepository);
 
   final ICollectRepository _collectRepository;
   final ISearchHistoryRepository _searchHistoryRepository;
@@ -31,6 +28,7 @@ abstract class _SearchPageController with Store {
   int _searchGeneration = 0;
 
   bool hasMoreSearchResults = true;
+  String? searchError;
 
   @observable
   bool isLoading = false;
@@ -72,6 +70,7 @@ abstract class _SearchPageController with Store {
     final generation = type == 'add' ? _searchGeneration : ++_searchGeneration;
     isLoading = true;
     isTimeOut = false;
+    searchError = null;
     if (type != 'add') {
       bangumiList.clear();
       _searchOffset = 0;
@@ -100,8 +99,10 @@ abstract class _SearchPageController with Store {
       return;
     }
     var pagesFetched = 0;
-    do {
-      final page = await BangumiApi.bangumiSearch(filterState.keyword,
+    try {
+      do {
+        final page = await BangumiApi.bangumiSearch(
+          filterState.keyword,
           tags: filterState.tags,
           limit: _searchPageSize,
           offset: _searchOffset,
@@ -109,26 +110,34 @@ abstract class _SearchPageController with Store {
           dateRange: filterState.effectiveDateRange,
           rankRange: filterState.rankRange,
           scoreRange: filterState.scoreRange,
-          weekdays: filterState.weekdays);
-      // Discard stale responses before mutating the current search.
+          weekdays: filterState.weekdays,
+        );
+        // Discard stale responses before mutating the current search.
+        if (generation != _searchGeneration) return;
+        if (page == null) {
+          break;
+        }
+        pagesFetched++;
+        _searchOffset += page.rawCount;
+        hasMoreSearchResults = page.rawCount == _searchPageSize;
+        final existingIds = bangumiList.map((item) => item.id).toSet();
+        final newItems = page.items
+            .where((item) => existingIds.add(item.id))
+            .toList();
+        if (newItems.isNotEmpty) {
+          bangumiList.addAll(newItems);
+          break;
+        }
+      } while (hasMoreSearchResults && pagesFetched < _maxPagesPerSearch);
+      isLoading = false;
+      isTimeOut =
+          bangumiList.isEmpty && (pagesFetched == 0 || !hasMoreSearchResults);
+    } catch (error) {
       if (generation != _searchGeneration) return;
-      if (page == null) {
-        break;
-      }
-      pagesFetched++;
-      _searchOffset += page.rawCount;
-      hasMoreSearchResults = page.rawCount == _searchPageSize;
-      final existingIds = bangumiList.map((item) => item.id).toSet();
-      final newItems =
-          page.items.where((item) => existingIds.add(item.id)).toList();
-      if (newItems.isNotEmpty) {
-        bangumiList.addAll(newItems);
-        break;
-      }
-    } while (hasMoreSearchResults && pagesFetched < _maxPagesPerSearch);
-    isLoading = false;
-    isTimeOut =
-        bangumiList.isEmpty && (pagesFetched == 0 || !hasMoreSearchResults);
+      searchError = error.toString();
+      isLoading = false;
+      isTimeOut = true;
+    }
   }
 
   @action

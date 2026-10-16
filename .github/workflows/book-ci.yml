@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+env:
+  DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
+  DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
+
 concurrency:
   group: book-${{ github.ref }}
   cancel-in-progress: true
@@ -40,7 +44,7 @@ jobs:
           flutter-version-file: pubspec.yaml
           cache: true
       - run: flutter pub get
-      - run: flutter build windows --release
+      - run: flutter build windows --release "--dart-define=DANDANAPI_APPID=$env:DANDANAPI_APPID" "--dart-define=DANDANAPI_KEY=$env:DANDANAPI_KEY"
       - name: Verify Windows identity and native startup
         shell: pwsh
         run: |
@@ -96,7 +100,7 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a') as output:
               output.write('BOOK_KEYSTORE_PASSWORD=' + key['password'] + '\n')
           PY
-      - run: flutter build apk --release --target-platform android-arm64
+      - run: flutter build apk --release --target-platform android-arm64 "--dart-define=DANDANAPI_APPID=$DANDANAPI_APPID" "--dart-define=DANDANAPI_KEY=$DANDANAPI_KEY"
       - name: Verify independent Android application ID
         shell: bash
         run: |

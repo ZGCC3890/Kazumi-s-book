@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "type": "novel-xpath",
+  "id": "linovel",
+  "name": "轻之文库（中文原创）",
+  "revision": "2026-10-17.1",
+  "language": "zh",
+  "edition": "中文原创",
+  "encoding": "utf-8",
+  "headers": {"Referer": "https://www.linovel.net/", "User-Agent": "KazumisBook/0.1.0", "Accept-Encoding": "identity"},
+  "loginRequiredUrlPattern": "",
+  "loginRequiredXPath": "",
+  "searchFormat": "html",
+  "searchMethod": "GET",
+  "searchUrl": "https://www.linovel.net/search/?kw=@keyword",
+  "searchBody": {},
+  "directBookUrlPattern": "^https://www\\.linovel\\.net/book/[0-9]+\\.html$",
+  "search": {
+    "singleDetect": "",
+    "singleTitle": "//h1[@class='book-title']",
+    "singleAuthor": "//div[@class='author-frame']/div[@class='novelist']/div[@class='name']/a",
+    "singleAuthorRegex": "^(.+)$",
+    "singleCover": "//div[@class='meta-info']/div[@class='book-cover']/a/img",
+    "itemsMode": "css",
+    "items": "a.search-book",
+    "title": ".//div[@class='book-name']",
+    "titleAttribute": "",
+    "link": ".",
+    "linkAttribute": "href",
+    "author": ".//div[@class='book-extra']",
+    "authorRegex": "^(.*?)\\s*丨",
+    "cover": ".//div[@class='book-cover']/img",
+    "coverAttribute": "src"
+  },
+  "catalog": {
+    "mode": "sequence-css",
+    "nodes": "h2.volume-title, div.chapter > a",
+    "volumeClass": "volume-title",
+    "detailToCatalog": "",
+    "title": ".", "link": ".", "linkAttribute": "href",
+    "next": "", "nextAttribute": "href"
+  },
+  "content": {
+    "root": "//div[@class='article-text']",
+    "remove": "//script | //style",
+    "imageAttribute": "src",
+    "next": "", "nextAttribute": "href"
+  }
+}

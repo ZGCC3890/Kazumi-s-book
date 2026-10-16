@@ -75,6 +75,10 @@ class NovelRule {
       throw const FormatException('encoding 必须显式指定 utf-8 或 gbk');
     }
     Map<String, String>.from(j['searchBody'] as Map);
+    if (j.containsKey('requestEncoding') &&
+        !['form', 'json'].contains(j['requestEncoding'])) {
+      throw const FormatException('requestEncoding 必须是 form 或 json');
+    }
     for (final spec in ['search', 'catalog', 'content']) {
       final fields = j[spec] as NovelJson;
       for (final value in fields.values) {
@@ -276,6 +280,7 @@ class XPathNovelAdapter implements NovelSourceAdapter {
   @override
   Future<List<NovelChapter>> catalog(NovelBook book) async {
     final spec = rule.json['catalog'] as NovelJson;
+    if (spec['mode'] == 'json-volumes') return _jsonCatalog(book, spec);
     final visited = <String>{}, links = <String>{};
     final chapters = <NovelChapter>[];
     var url = book.url;
@@ -328,6 +333,113 @@ class XPathNovelAdapter implements NovelSourceAdapter {
     return chapters;
   }
 
+  Object? _jsonValue(Object? document, String path) =>
+      JsonPath(path).readValues(document).single;
+
+  Map<String, String> _jsonBody(String template, Map<String, String> values) {
+    for (final entry in values.entries) {
+      template = template.replaceAll('@${entry.key}', entry.value);
+    }
+    return Map<String, String>.from(jsonDecode(template) as Map);
+  }
+
+  Future<Object?> _jsonRequest(
+    String url,
+    String body,
+    Map<String, String> values,
+  ) async {
+    final response = await fetch(
+      url,
+      'POST',
+      rule.headers,
+      _jsonBody(body, values),
+    );
+    final document = jsonDecode(response.body);
+    if (_jsonValue(document, r'$.code') != 0) {
+      throw FormatException('书源接口返回错误：${_jsonValue(document, r"$.code")}');
+    }
+    return document;
+  }
+
+  Future<List<NovelChapter>> _jsonCatalog(
+    NovelBook book,
+    NovelJson spec,
+  ) async {
+    final match = RegExp(spec['bookIdPattern'] as String).firstMatch(book.url);
+    if (match == null) throw const FormatException('书籍链接未匹配目录规则');
+    final bookId = match.group(1)!;
+    final volumes = <Object?>[];
+    var page = 1;
+    while (true) {
+      final document = await _jsonRequest(
+        spec['volumesUrl'] as String,
+        spec['volumesBody'] as String,
+        {'book': bookId, 'page': '$page'},
+      );
+      final batch = JsonPath(
+        spec['itemsPath'] as String,
+      ).readValues(document).toList();
+      volumes.addAll(batch);
+      final next = _jsonValue(document, spec['hasNextPath'] as String);
+      if (next == 0) break;
+      if (next != 1 || batch.isEmpty) throw const FormatException('卷目录分页数据无效');
+      page++;
+    }
+    final result = <NovelChapter>[];
+    final volumeIds = <String>{}, links = <String>{};
+    for (final volume in volumes) {
+      final id = _jsonValue(volume, spec['volumeIdPath'] as String).toString();
+      if (!volumeIds.add(id)) throw const FormatException('卷目录分页返回重复卷');
+      final title =
+          _jsonValue(volume, spec['volumeTitlePath'] as String) as String;
+      page = 1;
+      var count = 0;
+      while (true) {
+        final document = await _jsonRequest(
+          spec['chaptersUrl'] as String,
+          spec['chaptersBody'] as String,
+          {'book': bookId, 'volume': id, 'page': '$page'},
+        );
+        final batch = JsonPath(
+          spec['itemsPath'] as String,
+        ).readValues(document).toList();
+        for (final item in batch) {
+          final chapterId = _jsonValue(
+            item,
+            spec['chapterIdPath'] as String,
+          ).toString();
+          final chapterTitle =
+              _jsonValue(item, spec['chapterTitlePath'] as String) as String;
+          final url = (spec['chapterUrl'] as String)
+              .replaceAll('@book', bookId)
+              .replaceAll('@chapter', chapterId);
+          if (chapterTitle.isEmpty || !links.add(url))
+            throw const FormatException('章节标题为空或目录分页重复');
+          result.add(
+            NovelChapter(
+              url: url,
+              title: chapterTitle,
+              volume: title,
+              kind: NovelLocator.kindOf(chapterTitle),
+              number: NovelLocator.numberOf(chapterTitle),
+            ),
+          );
+          count++;
+        }
+        final next = _jsonValue(document, spec['hasNextPath'] as String);
+        if (next == 0) break;
+        if (next != 1 || batch.isEmpty)
+          throw const FormatException('章节目录分页数据无效');
+        page++;
+      }
+      if (count != _jsonValue(volume, spec['volumeCountPath'] as String)) {
+        throw const FormatException('章节数量与书源声明不一致，未取得完整目录');
+      }
+    }
+    if (result.isEmpty) throw const FormatException('规则未提取到章节目录');
+    return result;
+  }
+
   String _next(XPathNode<dom.Node> root, NovelJson spec, String url) {
     final xpath = spec['next'] as String;
     if (xpath.isEmpty || root.queryXPath(xpath).nodes.isEmpty) return '';
@@ -341,7 +453,27 @@ class XPathNovelAdapter implements NovelSourceAdapter {
     var url = chapter.url;
     while (url.isNotEmpty) {
       if (!visited.add(url)) throw const FormatException('正文分页形成循环');
-      final response = await fetch(url, 'GET', rule.headers, {});
+      final NovelResponse response;
+      if (spec['format'] == 'json-html') {
+        final match = RegExp(
+          spec['chapterIdPattern'] as String,
+        ).firstMatch(url);
+        if (match == null) throw const FormatException('章节链接未匹配正文规则');
+        final document = await _jsonRequest(
+          spec['url'] as String,
+          spec['body'] as String,
+          {'book': match.group(1)!, 'chapter': match.group(2)!},
+        );
+        final locked = _jsonValue(document, spec['lockedPath'] as String);
+        if (locked == 1) throw StateError('此章节需要书源访问权限，无法匿名阅读，请选择其他公开章节或书源');
+        if (locked != 0) throw const FormatException('书源未返回明确的章节访问状态');
+        response = NovelResponse(
+          _jsonValue(document, spec['htmlPath'] as String) as String,
+          url,
+        );
+      } else {
+        response = await fetch(url, 'GET', rule.headers, {});
+      }
       final root = _root(response);
       final remove = spec['remove'] as String;
       if (remove.isNotEmpty) {

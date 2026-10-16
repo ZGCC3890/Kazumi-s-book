@@ -39,15 +39,18 @@ class NovelHttpSession {
         .map((b) => '%${b.toRadixString(16).padLeft(2, '0')}')
         .join();
     final jar = _jar(rule);
+    final jsonBody = rule.json['requestEncoding'] == 'json';
     while (true) {
       if (!visited.add('$method $uri')) throw StateError('书源重定向循环：$uri');
       final cookies = await jar.loadForRequest(uri);
       final response = await _client().request<List<int>>(
         uri.toString(),
         data: method == 'POST'
-            ? body.entries
-                  .map((e) => '${form(e.key)}=${form(e.value)}')
-                  .join('&')
+            ? jsonBody
+                  ? jsonEncode(body)
+                  : body.entries
+                        .map((e) => '${form(e.key)}=${form(e.value)}')
+                        .join('&')
             : null,
         options: Options(
           method: method,
@@ -56,7 +59,9 @@ class NovelHttpSession {
           validateStatus: (status) =>
               status != null && status >= 200 && status < 400,
           contentType: method == 'POST'
-              ? Headers.formUrlEncodedContentType
+              ? jsonBody
+                    ? Headers.jsonContentType
+                    : Headers.formUrlEncodedContentType
               : null,
           headers: {
             ...headers,

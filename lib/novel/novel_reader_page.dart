@@ -13,10 +13,12 @@ class NovelReaderPage extends StatefulWidget {
     required this.service,
     required this.editionId,
     required this.book,
+    this.onLeave,
   });
   final NovelReaderStore service;
   final String editionId;
   final NovelBook book;
+  final Future<void> Function(Set<String> chapters)? onLeave;
   @override
   State<NovelReaderPage> createState() => _NovelReaderPageState();
 }
@@ -33,7 +35,9 @@ class _NovelReaderPageState extends State<NovelReaderPage>
   late NovelJson _prefs;
   NovelPosition? _location, _savedLocation;
   int _chapterIndex = 0, _fragment = 0, _generation = 0;
-  bool _busy = true, _chrome = true, _restoring = true, _leaving = false;
+  bool _busy = true, _chrome = false, _restoring = true, _leaving = false;
+  bool _exitPending = false;
+  final Set<String> _readChapters = {};
   bool _initialSavePending = false,
       _orientationChanged = false,
       _startAtEnd = false;
@@ -49,6 +53,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     _prefs = service.preferences;
     WidgetsBinding.instance.addObserver(this);
     service.addListener(_serviceChanged);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     unawaited(_open());
   }
 
@@ -270,6 +275,11 @@ class _NovelReaderPageState extends State<NovelReaderPage>
         _busy = false;
         _layoutKey = null;
       });
+      _readChapters.add(
+        _text.isNotEmpty
+            ? 'text/${restore != null && (proven || confirmMapping) ? restore.chapterDigest : _location!.chapterDigest}'
+            : 'image/${_location!.imageHash}',
+      );
     } catch (error) {
       if (generation == _generation) _fail(error);
     }
@@ -319,14 +329,26 @@ class _NovelReaderPageState extends State<NovelReaderPage>
   }
 
   Future<void> _leave() async {
-    if (_leaving) return;
-    if (service.state.revisions('position/${widget.editionId}').length > 1) {
-      await _resolvePosition();
+    if (_leaving || _exitPending) return;
+    _exitPending = true;
+    try {
+      if (service.state.revisions('position/${widget.editionId}').length > 1) {
+        await _resolvePosition();
+      }
+      if (!await _save()) return;
+      await widget.onLeave?.call(Set.unmodifiable(_readChapters));
+      if (mounted) setState(() => _leaving = true);
+      unawaited(service.syncAutomatically());
+      if (mounted) Navigator.pop(context);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    } finally {
+      _exitPending = false;
     }
-    if (!await _save()) return;
-    if (mounted) setState(() => _leaving = true);
-    unawaited(service.syncAutomatically());
-    if (mounted) Navigator.pop(context);
   }
 
   Future<void> _refresh() async {
@@ -772,7 +794,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     );
   }
 
-  Widget _body(double width, double height, TextStyle style) {
+  Widget _body(double width, double height, TextStyle style, double inset) {
     final scaler = MediaQuery.textScalerOf(context);
     final key =
         '$width/$height/${_prefs['fontSize']}/${_prefs['lineHeight']}/'
@@ -825,7 +847,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
         child: ListView(
           key: ValueKey(key),
           controller: _scroll,
-          padding: EdgeInsets.zero,
+          padding: EdgeInsets.symmetric(horizontal: inset),
           children: [
             for (final f in _layout!.fragments) _fragmentWidget(f, style),
             Row(
@@ -852,12 +874,15 @@ class _NovelReaderPageState extends State<NovelReaderPage>
       controller: _pages,
       itemCount: _layout!.pages.length,
       onPageChanged: (page) => _moved(_layout!.pages[page].first),
-      itemBuilder: (_, page) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (final i in _layout!.pages[page])
-            _fragmentWidget(_layout!.fragments[i], style),
-        ],
+      itemBuilder: (_, page) => Padding(
+        padding: EdgeInsets.symmetric(horizontal: inset),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final i in _layout!.pages[page])
+              _fragmentWidget(_layout!.fragments[i], style),
+          ],
+        ),
       ),
     );
   }
@@ -995,6 +1020,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
                           child: Focus(
                             autofocus: true,
                             child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
                               onTapUp: (details) {
                                 final width = MediaQuery.sizeOf(context).width;
                                 if (_prefs['mode'] == 'page' &&
@@ -1014,24 +1040,25 @@ class _NovelReaderPageState extends State<NovelReaderPage>
                               },
                               child: Stack(
                                 children: [
-                                  Center(
-                                    child: ConstrainedBox(
-                                      constraints: const BoxConstraints(
-                                        maxWidth: 900,
-                                      ),
-                                      child: Padding(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: (_prefs['margin'] as num)
-                                              .toDouble(),
-                                        ),
-                                        child: LayoutBuilder(
-                                          builder: (_, c) => _body(
-                                            c.maxWidth,
-                                            c.maxHeight,
-                                            style,
-                                          ),
-                                        ),
-                                      ),
+                                  Positioned.fill(
+                                    child: LayoutBuilder(
+                                      builder: (_, c) {
+                                        final column = c.maxWidth.clamp(
+                                          0.0,
+                                          900.0,
+                                        );
+                                        final width =
+                                            column -
+                                            2 *
+                                                (_prefs['margin'] as num)
+                                                    .toDouble();
+                                        return _body(
+                                          width,
+                                          c.maxHeight,
+                                          style,
+                                          (c.maxWidth - width) / 2,
+                                        );
+                                      },
                                     ),
                                   ),
                                   Positioned.fill(
@@ -1050,7 +1077,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
                           ),
                         ),
                 ),
-                if (!_busy && _error == null)
+                if (_chrome && !_busy && _error == null)
                   Padding(
                     padding: const EdgeInsets.all(8),
                     child: Text(

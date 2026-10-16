@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_modular/flutter_modular.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
+import 'package:kazumi/modules/collect/collect_type.dart';
+import 'package:kazumi/pages/collect/collect_controller.dart';
+import 'package:kazumi/request/apis/bangumi_api.dart';
 import 'novel_models.dart';
 import 'novel_rule.dart';
 import 'novel_reader_page.dart';
 import 'novel_service.dart';
+import 'novel_search_query.dart';
 
 class NovelEntry {
   static Future<void> conflicts(
@@ -88,7 +93,7 @@ class NovelEntry {
         context,
         service,
         anime.id,
-        anime.nameCn.isEmpty ? anime.name : anime.nameCn,
+        novelQueryFromAnime(anime.nameCn.isEmpty ? anime.name : anime.nameCn),
       );
       return;
     }
@@ -116,22 +121,79 @@ class NovelEntry {
       if (selected == null || !context.mounted) return;
       id = selected;
     }
-    await read(context, service, id);
+    if (!context.mounted) return;
+    await search(
+      context,
+      service,
+      anime.id,
+      novelQueryFromAnime(anime.nameCn.isEmpty ? anime.name : anime.nameCn),
+      editionId: id,
+    );
   }
 
   static Future<void> read(
     BuildContext context,
     NovelService service,
-    String editionId,
-  ) async {
+    String editionId, {
+    int animeId = 0,
+  }) async {
     final book = service.selectedBook(editionId);
     if (book == null) throw StateError('小说版本未关联书源');
     await service.ensureDefaultRules();
     if (!context.mounted) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) =>
-            NovelReaderPage(service: service, editionId: editionId, book: book),
+        builder: (readerContext) => NovelReaderPage(
+          service: service,
+          editionId: editionId,
+          book: book,
+          onLeave: (chapters) async {
+            if (chapters.isEmpty) return;
+            final count = await service.recordReadChapters(editionId, chapters);
+            if (count <= 1 ||
+                service.isShelved(editionId) ||
+                !readerContext.mounted)
+              return;
+            final associations = service.animeIdsForEdition(editionId);
+            final targetAnimeId = animeId > 0
+                ? animeId
+                : associations.length == 1
+                ? associations.single
+                : 0;
+            final add = await showDialog<bool>(
+              context: readerContext,
+              builder: (ctx) => AlertDialog(
+                title: const Text('加入书架？'),
+                content: Text(
+                  targetAnimeId > 0
+                      ? '已读过一章以上。加入书架后，关联番剧也会加入追番并标记为“在看”。'
+                      : '已读过一章以上，加入书架方便下次继续阅读。',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('暂不添加'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('加入书架'),
+                  ),
+                ],
+              ),
+            );
+            if (add != true) return;
+            if (targetAnimeId > 0) {
+              final anime = await BangumiApi.getBangumiInfoByID(targetAnimeId);
+              if (anime == null) throw StateError('无法获取关联番剧，尚未加入书架，请重试');
+              final collect = inject<CollectController>();
+              await collect.addCollect(anime, type: CollectType.watching.value);
+              if (collect.getCollectType(anime) != CollectType.watching.value) {
+                throw StateError('番剧“在看”状态未保存，尚未加入书架，请重试');
+              }
+            }
+            await service.addToShelf(editionId, animeId: targetAnimeId);
+          },
+        ),
       ),
     );
   }
@@ -144,17 +206,25 @@ class NovelEntry {
     String? editionId,
     String? workId,
   }) async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => NovelSearchPage(
-          service: service,
-          animeId: animeId,
-          initialQuery: title,
-          existingEditionId: editionId,
-          existingWorkId: workId,
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (_) => Dialog(
+        child: SizedBox(
+          width: 640,
+          height: MediaQuery.sizeOf(context).height * .7,
+          child: NovelSearchPage(
+            service: service,
+            animeId: animeId,
+            initialQuery: title,
+            existingEditionId: editionId,
+            existingWorkId: workId,
+          ),
         ),
       ),
     );
+    if (selected != null && context.mounted) {
+      await read(context, service, selected, animeId: animeId);
+    }
   }
 }
 
@@ -178,7 +248,11 @@ class NovelSearchPage extends StatefulWidget {
 class _NovelSearchPageState extends State<NovelSearchPage> {
   late final TextEditingController _query;
   String? _source;
-  List<NovelBook> _results = [];
+  final Map<String, List<NovelBook>> _results = {};
+  final Map<String, String> _errors = {};
+  final Set<String> _loading = {}, _loginRequired = {};
+  int _generation = 0;
+  String _submittedQuery = '';
   bool _busy = false;
   String? _error;
   @override
@@ -224,34 +298,49 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
   }
 
   Future<void> _search() async {
-    if (_query.text.trim().isEmpty || _source == null) return;
+    if (_query.text.trim().isEmpty) return;
+    final generation = ++_generation;
+    final query = _query.text.trim();
+    _submittedQuery = query;
     setState(() {
-      _busy = true;
       _error = null;
-      _results = [];
+      _results.clear();
+      _errors.clear();
+      _loginRequired.clear();
+      _loading
+        ..clear()
+        ..addAll(widget.service.rules.map((r) => r.id));
     });
+    await Future.wait(
+      widget.service.rules.map(
+        (rule) => _searchSource(rule.id, query, generation),
+      ),
+    );
+  }
+
+  Future<void> _searchSource(
+    String source,
+    String query,
+    int generation,
+  ) async {
     try {
-      final results = await widget.service
-          .adapter(_source!)
-          .search(_query.text.trim());
-      if (mounted) _results = results;
+      final results = await widget.service.adapter(source).search(query);
+      if (mounted && generation == _generation) _results[source] = results;
     } on NovelLoginRequired catch (error) {
-      if (mounted) {
-        setState(() {
-          _error = error.toString();
-          _busy = false;
-        });
-        await _login();
+      if (mounted && generation == _generation) {
+        _errors[source] = error.toString();
+        _loginRequired.add(source);
       }
     } catch (error) {
-      if (mounted) _error = error.toString();
+      if (mounted && generation == _generation)
+        _errors[source] = error.toString();
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted && generation == _generation)
+        setState(() => _loading.remove(source));
     }
   }
 
-  Future<void> _login() async {
-    final source = _source!;
+  Future<void> _login(String source) async {
     final username = TextEditingController();
     final password = TextEditingController();
     var busy = false;
@@ -325,21 +414,64 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
     password.clear();
     username.dispose();
     password.dispose();
-    if (loggedIn == true && mounted) await _search();
+    if (loggedIn == true && mounted) {
+      final generation = _generation;
+      setState(() {
+        _loading.add(source);
+        _errors.remove(source);
+        _loginRequired.remove(source);
+      });
+      await _searchSource(source, _submittedQuery, generation);
+    }
   }
 
   Future<void> _bind(NovelBook book) async {
-    final service = widget.service;
-    var editionId = widget.existingEditionId;
-    final label = TextEditingController(
-      text: service.rule(book.sourceId).json['edition'] as String,
-    );
-    var language = service.rule(book.sourceId).json['language'] as String;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, update) => AlertDialog(
-          title: const Text('确认对应小说和版本'),
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final service = widget.service;
+      final editionId = widget.existingEditionId;
+      if (editionId != null && service.editionForBook(book) == editionId) {
+        await service.bind(
+          animeId: widget.animeId,
+          book: book,
+          editionLabel: service.rule(book.sourceId).json['edition'] as String,
+          language: service.rule(book.sourceId).json['language'] as String,
+          existingEditionId: editionId,
+        );
+        if (mounted) Navigator.pop(context, editionId);
+        return;
+      }
+      if (editionId == null) {
+        setState(() {
+          _busy = true;
+          _error = null;
+        });
+        try {
+          final rule = service.rule(book.sourceId);
+          final id = await service.bind(
+            animeId: widget.animeId,
+            book: book,
+            editionLabel: rule.json['edition'] as String,
+            language: rule.json['language'] as String,
+            existingEditionId: service.editionForBook(book),
+            existingWorkId: widget.existingWorkId,
+          );
+          if (mounted) Navigator.pop(context, id);
+        } catch (error) {
+          if (mounted) setState(() => _error = error.toString());
+        } finally {
+          if (mounted) setState(() => _busy = false);
+        }
+        return;
+      }
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('更换同版本书源？'),
           content: SizedBox(
             width: 520,
             child: SingleChildScrollView(
@@ -352,49 +484,12 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
                       '${book.author}\n${service.rule(book.sourceId).name}',
                     ),
                   ),
-                  if (widget.existingEditionId == null)
-                    DropdownButtonFormField<String>(
-                      initialValue: editionId ?? 'new',
-                      isExpanded: true,
-                      decoration: const InputDecoration(labelText: '关联版本'),
-                      items: [
-                        const DropdownMenuItem(
-                          value: 'new',
-                          child: Text('新建小说版本'),
-                        ),
-                        for (final edition in service.editions)
-                          DropdownMenuItem(
-                            value: edition.id,
-                            child: Text(
-                              '${service.work(edition.workId).title} · ${edition.label}',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                      ],
-                      onChanged: (v) =>
-                          update(() => editionId = v == 'new' ? null : v),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      '仅当确认是同一译本/文本版本时关联已有版本。不同译文请新建版本。切源后仍需核验章节与文本位置。',
                     ),
-                  if (editionId != null)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Text(
-                        '仅当确认是同一译本/文本版本时关联已有版本。不同译文请新建版本。切源后仍需核验章节与文本位置。',
-                      ),
-                    ),
-                  if (editionId == null) ...[
-                    TextField(
-                      controller: label,
-                      decoration: const InputDecoration(labelText: '版本名称'),
-                    ),
-                    DropdownButton<String>(
-                      value: language,
-                      items: const [
-                        DropdownMenuItem(value: 'zh', child: Text('中文')),
-                        DropdownMenuItem(value: 'ja', child: Text('日文')),
-                      ],
-                      onChanged: (v) => update(() => language = v!),
-                    ),
-                  ],
+                  ),
                 ],
               ),
             ),
@@ -410,24 +505,27 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
             ),
           ],
         ),
-      ),
-    );
-    if (confirmed == true) {
-      try {
-        final id = await service.bind(
-          animeId: widget.animeId,
-          book: book,
-          editionLabel: label.text,
-          language: language,
-          existingEditionId: editionId,
-          existingWorkId: widget.existingWorkId,
-        );
-        if (mounted) await NovelEntry.read(context, service, id);
-      } catch (error) {
-        if (mounted) setState(() => _error = error.toString());
+      );
+      if (confirmed == true) {
+        try {
+          final id = await service.bind(
+            animeId: widget.animeId,
+            book: book,
+            editionLabel: service.rule(book.sourceId).json['edition'] as String,
+            language: service.rule(book.sourceId).json['language'] as String,
+            existingEditionId: editionId,
+            existingWorkId: widget.existingWorkId,
+          );
+          if (mounted) Navigator.pop(context, id);
+        } catch (error) {
+          if (mounted) setState(() => _error = error.toString());
+        }
       }
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
-    label.dispose();
   }
 
   Future<void> _addUrl() async {
@@ -473,38 +571,28 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('查找轻小说')),
+    appBar: AppBar(
+      automaticallyImplyLeading: false,
+      title: const Text('选择小说书源'),
+      actions: [
+        IconButton(
+          tooltip: '关闭',
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.close),
+        ),
+      ],
+    ),
     body: Column(
       children: [
         Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              DropdownButtonFormField<String>(
-                initialValue: _source,
-                decoration: const InputDecoration(labelText: '小说书源'),
-                items: [
-                  for (final r in widget.service.rules)
-                    DropdownMenuItem(value: r.id, child: Text(r.name)),
-                ],
-                onChanged: _busy
-                    ? null
-                    : (v) async {
-                        await widget.service.selectSource(v!);
-                        if (!mounted) return;
-                        setState(() {
-                          _source = v;
-                          _results = [];
-                        });
-                        await _search();
-                      },
-              ),
-              const SizedBox(height: 12),
               TextField(
                 controller: _query,
                 onSubmitted: (_) => _search(),
                 decoration: InputDecoration(
-                  labelText: '书名或关键词，可修改译名搜索',
+                  labelText: '书名',
                   suffixIcon: IconButton(
                     tooltip: '搜索',
                     onPressed: _busy ? null : _search,
@@ -512,22 +600,6 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
-              if (_source != null &&
-                  widget.service.rule(_source!).json['login'] != null)
-                TextButton.icon(
-                  onPressed: _busy ? null : _login,
-                  icon: const Icon(Icons.account_circle_outlined),
-                  label: const Text('书源账号'),
-                ),
-              if (_source != null &&
-                  widget.service.rule(_source!).directBookUrlPattern.isNotEmpty)
-                TextButton.icon(
-                  onPressed: _busy ? null : _addUrl,
-                  icon: const Icon(Icons.add_link),
-                  label: const Text('从公开书籍链接添加'),
-                ),
-              const Text('首次确认作品和版本后，追番卡片上的阅读键会直接续读。'),
             ],
           ),
         ),
@@ -547,14 +619,83 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
             ),
           ),
         Expanded(
-          child: ListView.builder(
-            itemCount: _results.length,
-            itemBuilder: (_, i) => ListTile(
-              title: Text(_results[i].title),
-              subtitle: Text(_results[i].author),
-              trailing: const Icon(Icons.menu_book_outlined),
-              onTap: () => _bind(_results[i]),
-            ),
+          child: ListView(
+            children: [
+              for (final rule in widget.service.rules) ...[
+                ListTile(
+                  dense: true,
+                  title: Text(
+                    rule.name,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  subtitle: Text(
+                    _loading.contains(rule.id)
+                        ? '正在搜索…'
+                        : _errors[rule.id] ??
+                              (_results[rule.id]?.isEmpty == true
+                                  ? '没有找到这本小说'
+                                  : '${_results[rule.id]?.length ?? 0} 个结果'),
+                  ),
+                  trailing: _loading.contains(rule.id)
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : _loginRequired.contains(rule.id)
+                      ? TextButton(
+                          onPressed: () => _login(rule.id),
+                          child: const Text('首次登录'),
+                        )
+                      : PopupMenuButton<String>(
+                          itemBuilder: (_) => [
+                            const PopupMenuItem(
+                              value: 'retry',
+                              child: Text('重新搜索'),
+                            ),
+                            if (rule.directBookUrlPattern.isNotEmpty)
+                              const PopupMenuItem(
+                                value: 'url',
+                                child: Text('打开书籍链接'),
+                              ),
+                            if (rule.json['login'] != null)
+                              const PopupMenuItem(
+                                value: 'login',
+                                child: Text('书源账号'),
+                              ),
+                          ],
+                          onSelected: (action) async {
+                            if (action == 'login') {
+                              await _login(rule.id);
+                              return;
+                            }
+                            if (action == 'url') {
+                              _source = rule.id;
+                              await _addUrl();
+                              return;
+                            }
+                            setState(() {
+                              _loading.add(rule.id);
+                              _errors.remove(rule.id);
+                            });
+                            await _searchSource(
+                              rule.id,
+                              _submittedQuery,
+                              _generation,
+                            );
+                          },
+                        ),
+                ),
+                for (final book in _results[rule.id] ?? <NovelBook>[])
+                  ListTile(
+                    title: Text(book.title),
+                    subtitle: Text(book.author),
+                    trailing: const Icon(Icons.menu_book_outlined),
+                    onTap: _busy ? null : () => _bind(book),
+                  ),
+                const Divider(height: 1),
+              ],
+            ],
           ),
         ),
       ],

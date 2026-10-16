@@ -2,6 +2,20 @@
   "version": 1,
   "rules": [
     {
+      "id": "lightnovel",
+      "name": "LightNovel（中文译文）",
+      "file": "lightnovel.json",
+      "replaces": [],
+      "description": "公开章节支持匿名搜索和原位插图；站点部分章节有访问限制，章节粒度可能为整卷。"
+    },
+    {
+      "id": "linovel",
+      "name": "轻之文库（中文原创）",
+      "file": "linovel.json",
+      "replaces": [],
+      "description": "中文原创轻小说，支持匿名搜索、分卷目录、正文和原位插图。"
+    },
+    {
       "id": "wenku8",
       "name": "轻小说文库",
       "file": "wenku8.json",
