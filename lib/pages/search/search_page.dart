@@ -161,11 +161,15 @@ class _SearchPageState extends State<SearchPage> {
       ),
     );
     if (!mounted || result == null || _domain != _SearchDomain.anime ||
-        domainRevision != _domainRevision) return;
+        domainRevision != _domainRevision) {
+      return;
+    }
     await _controller.setNotShowWatchedBangumis(result.notShowWatched);
     await _controller.setNotShowAbandonedBangumis(result.notShowAbandoned);
     if (!mounted || _domain != _SearchDomain.anime ||
-        domainRevision != _domainRevision) return;
+        domainRevision != _domainRevision) {
+      return;
+    }
     await _applyFilters(result.filterState);
   }
 
@@ -174,7 +178,9 @@ class _SearchPageState extends State<SearchPage> {
     _inputFocus.unfocus();
     final result = await context.pushNamed('/search/image');
     if (!mounted || result is! String || result.isEmpty ||
-        _domain != _SearchDomain.anime || domainRevision != _domainRevision) return;
+        _domain != _SearchDomain.anime || domainRevision != _domainRevision) {
+      return;
+    }
     await _submit(result);
   }
 

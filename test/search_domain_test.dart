@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_modular/flutter_modular.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:mobx/mobx.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
@@ -420,7 +421,15 @@ void main() {
     'tag route remains an anime search and never starts a novel request',
     (tester) async {
       final anime = _Anime(), novels = _Novels();
-      await _open(tester, anime, novels, inputTag: '奇幻');
+      final encoded = Uri.encodeComponent('奇幻');
+      final routes = RouteCollection()
+        ..add(ModularRoute('/search/:tag', (_, _) => const SizedBox.shrink()));
+      final tag = routes
+          .match(Uri.parse('/search/$encoded'))!
+          .last
+          .params['tag']!;
+      expect(tag, encoded);
+      await _open(tester, anime, novels, inputTag: tag);
       expect(anime.queries.single, contains('奇幻'));
       expect(find.text('番剧搜索'), findsOneWidget);
       expect(novels.source.requests, isEmpty);
