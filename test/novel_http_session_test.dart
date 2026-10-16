@@ -42,13 +42,18 @@ void main() {
     json['login'] = {'url': '$base/login', 'usernameField': 'username', 'passwordField': 'password',
       'fields': <String, String>{}, 'verifyUrl': '$base/verified', 'verifySelector': '#authenticated'};
     final rule = NovelRule.decode(jsonEncode(json));
-    final dio = Dio();
+    var dio = Dio();
     try {
-      var session = NovelHttpSession(dio, directory.path);
+      var session = NovelHttpSession(() => dio, directory.path);
       await expectLater(session.fetch(rule, '$base/book', 'GET', rule.headers, {}),
         throwsA(isA<NovelLoginRequired>()));
       await session.login(rule, 'fixture', 'private-password');
-      session = NovelHttpSession(dio, directory.path);
+      // ProxyManager closes and replaces the old Dio when settings change.
+      // Keep the local session usable without retaining that closed client.
+      dio.close();
+      dio = Dio();
+      expect((await session.fetch(rule, '$base/book', 'GET', rule.headers, {})).body, contains('fixture book'));
+      session = NovelHttpSession(() => dio, directory.path);
       expect((await session.fetch(rule, '$base/book', 'GET', rule.headers, {})).body, contains('fixture book'));
       expect(await session.image(rule, '$base/image'), isNotEmpty);
       expect(loginRequests, 1);

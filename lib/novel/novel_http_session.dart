@@ -9,8 +9,8 @@ import 'novel_rule.dart';
 
 /// Source-specific sessions stay on this device. Passwords are never persisted.
 class NovelHttpSession {
-  NovelHttpSession(this.dio, this.directory);
-  final Dio dio;
+  NovelHttpSession(this._client, this.directory);
+  final Dio Function() _client;
   final String directory;
   final _jars = <String, PersistCookieJar>{};
   PersistCookieJar _jar(NovelRule rule) => _jars.putIfAbsent(
@@ -42,7 +42,7 @@ class NovelHttpSession {
     while (true) {
       if (!visited.add('$method $uri')) throw StateError('书源重定向循环：$uri');
       final cookies = await jar.loadForRequest(uri);
-      final response = await dio.request<List<int>>(
+      final response = await _client().request<List<int>>(
         uri.toString(),
         data: method == 'POST'
             ? body.entries

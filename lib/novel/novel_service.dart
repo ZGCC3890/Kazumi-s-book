@@ -51,7 +51,7 @@ class NovelService extends ChangeNotifier
     _box = await Hive.openBox<String>('novel_v1', path: path);
     _cache = await Hive.openBox<String>('novel_cache_v1', path: path);
     _rules = await Hive.openBox<String>('novel_rules_v1', path: path);
-    _http = NovelHttpSession(DioFactory.pluginDio, '$path/novel_sessions');
+    _http = NovelHttpSession(() => DioFactory.pluginDio, '$path/novel_sessions');
     final storedId = _box.get('deviceId');
     deviceId = storedId ?? newId();
     if (storedId == null) await _box.put('deviceId', deviceId);
