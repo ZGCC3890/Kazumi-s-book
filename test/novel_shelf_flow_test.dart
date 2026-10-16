@@ -143,7 +143,6 @@ Future<void> _start(
   _Service service,
   CollectController collect,
 ) async {
-  print('SHELF start');
   final boot = bootstrapModule(
     createModule(
       register: (c) {
@@ -171,39 +170,23 @@ Future<void> _start(
   );
   await tester.tap(find.text('打开小说'));
   await tester.pumpAndSettle();
-  print('SHELF reader opened');
   await tester.tapAt(const Offset(400, 300));
   await tester.pumpAndSettle();
   await tester.tap(find.byTooltip('下一章'));
   await tester.pumpAndSettle();
-  print('SHELF second chapter opened');
 }
 
-Future<void> _accept(WidgetTester tester) async {
-  print('SHELF request exit');
-  await tester.tap(find.byType(BackButton));
+Future<void> _accept(WidgetTester tester, Completer<void> completed) async {
+  // Hive retains futures between tests. Start the entire leave/write chain in
+  // the real async zone, including the dialog's result future.
+  await tester.runAsync(() => tester.tap(find.byType(BackButton)));
   await tester.pumpAndSettle();
   expect(find.text('加入书架？'), findsOneWidget);
-  print('SHELF offer displayed');
-  await tester.tap(find.text('加入书架'));
-  print('SHELF offer accepted');
-}
-
-Future<void> _finishWrites(WidgetTester tester, Completer<void> attempt) async {
-  print('SHELF waiting for storage');
-  for (var i = 0; i < 100 && !attempt.isCompleted; i++) {
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 20)),
-    );
-    await tester.pump(const Duration(milliseconds: 20));
-  }
-  expect(
-    attempt.isCompleted,
-    true,
-    reason: 'Expected storage operation; visible text: ${tester.widgetList<Text>(find.byType(Text)).map((t) => t.data).join(" / ")}',
-  );
+  await tester.runAsync(() async {
+    await tester.tap(find.text('加入书架'));
+    await completed.future;
+  });
   await tester.pumpAndSettle();
-  print('SHELF storage reached');
 }
 
 void main() {
@@ -218,11 +201,8 @@ void main() {
     await GStorage.init();
   });
   setUp(() async {
-    print('SHELF setup clear collectibles');
     await GStorage.collectibles.clear();
-    print('SHELF setup clear collectChanges');
     await GStorage.collectChanges.clear();
-    print('SHELF setup complete');
     DioFactory.bangumiDio.httpClientAdapter = _AnimeAdapter();
   });
   tearDown(() {
@@ -237,11 +217,11 @@ void main() {
   testWidgets(
     'accepting the exit offer saves official watching collection then shelf',
     (tester) async {
-      final service = _Service();
-      final repo = _CollectRepository();
+      final (service, repo) = (await tester.runAsync(
+        () async => (_Service(), _CollectRepository()),
+      ))!;
       await _start(tester, service, CollectController(repo));
-      await _accept(tester);
-      await _finishWrites(tester, service.shelfAttempt);
+      await _accept(tester, service.shelfAttempt);
       expect(repo.getCollectType(42), 1);
       expect(GStorage.collectChanges.values.single.bangumiID, 42);
       expect(service.shelved, true);
@@ -253,11 +233,11 @@ void main() {
   testWidgets(
     'collect write failure keeps the reader and shelf unchanged, then retries',
     (tester) async {
-      final service = _Service();
-      final repo = _CollectRepository()..fail = true;
+      final (service, repo) = (await tester.runAsync(
+        () async => (_Service(), _CollectRepository()..fail = true),
+      ))!;
       await _start(tester, service, CollectController(repo));
-      await _accept(tester);
-      await _finishWrites(tester, repo.attempt);
+      await _accept(tester, repo.attempt);
       expect(service.shelved, false);
       expect(repo.getCollectType(42), 0);
       expect(find.byType(NovelReaderPage), findsOneWidget);
@@ -266,8 +246,7 @@ void main() {
         findsOneWidget,
       );
       repo.fail = false;
-      await _accept(tester);
-      await _finishWrites(tester, service.shelfAttempt);
+      await _accept(tester, service.shelfAttempt);
       expect(repo.getCollectType(42), 1);
       expect(service.shelved, true);
     },
@@ -276,20 +255,21 @@ void main() {
   testWidgets(
     'shelf write failure keeps reading progress and allows exit retry',
     (tester) async {
-      final service = _Service()..failShelf = true;
-      final repo = _CollectRepository();
+      final (service, repo) = (await tester.runAsync(
+        () async => (_Service()..failShelf = true, _CollectRepository()),
+      ))!;
       await _start(tester, service, CollectController(repo));
-      await _accept(tester);
-      await _finishWrites(tester, service.shelfAttempt);
+      await _accept(tester, service.shelfAttempt);
       expect(repo.getCollectType(42), 1);
       expect(service.shelved, false);
       expect(service.saved!.chapter.url, _chapters[1].url);
       expect(find.byType(NovelReaderPage), findsOneWidget);
       expect(find.textContaining('fixture shelf write failed'), findsOneWidget);
       service.failShelf = false;
-      service.shelfAttempt = Completer<void>();
-      await _accept(tester);
-      await _finishWrites(tester, service.shelfAttempt);
+      service.shelfAttempt = (await tester.runAsync(
+        () async => Completer<void>(),
+      ))!;
+      await _accept(tester, service.shelfAttempt);
       expect(service.shelved, true);
       expect(find.byType(NovelReaderPage), findsNothing);
     },

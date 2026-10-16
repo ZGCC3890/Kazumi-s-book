@@ -249,6 +249,10 @@ CI `38967246915`（`b0a9613`）为 301 项通过、10 项失败、1 项默认跳
 
 进度控件的语义断言经 Astra 最小实验定位：Focus 下的双层亮度 Stack 在遮蔽期间滚动后出现未构建 IndexedSemantics 节点。移除 SelectionArea 或挪 Focus 均不足以解决。纯视觉亮度改为正文前景 DecoratedBox，保留键盘 Focus 与全部语义；未修改 SDK、未关闭断言或无障碍。实际生产 Reader 的 20 项原测试及新增书签回归在独立依赖 harness 全部通过（`work/reader011-green.log`）；该结果只覆盖 Reader，完整应用 CI 仍待重跑。
 
+`7191f86` 的完整 CI 日志确认 Reader 20 项、导航两种尺寸、封面解码失败展示、选源 5 项均通过；入架同时写入官方“在看”的正常流程也通过。失败重试用例在 10 分钟后超时，因此该轮取消，未发布。增加 CI 步骤 5 分钟上限以便卡住时能收尾并取得日志，不跳过失败。
+
+Astra 用真实 Hive CE 跨两个 Widget 测试复现：首项写入/flush 成功，第二项 setUp 的 clear 超时。Hive 保留的完成 Future 属于首项已结束的 FakeAsync zone；Dart 已完成 Future 的后续监听仍由原 zone 调度。对照将写入链、确认弹窗 Future 及终态 Completer 放在 tester.runAsync 的真实 zone，连续两项通过。修复仅改测试夹具的异步边界，不重建 GStorage、不修改应用存储队列；生产集成重跑待 CI。
+
 ## 验证状态说明
 
 “源码审查通过”只说明所检查代码满足架构约束；“自动验证通过”必须列出执行命令/结果；“待设备测试”不能改写成“完成”。真实书源、真实跨设备同步和阅读器排版恢复需分别记录实际运行证据。
