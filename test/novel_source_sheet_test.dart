@@ -314,7 +314,8 @@ void main() {
       await tester.tap(find.text('登录并搜索'));
       await tester.pump();
       await tester.binding.handlePopRoute();
-      await tester.pumpAndSettle();
+      // Finish the login while the popped dialog is still animating and mounted.
+      await tester.pump();
       service.loginResult.complete();
       await tester.pumpAndSettle();
       expect(find.text('登录并搜索'), findsNothing);

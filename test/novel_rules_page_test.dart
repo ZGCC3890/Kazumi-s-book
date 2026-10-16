@@ -4,13 +4,22 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_ce/hive.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:kazumi/bean/dialog/rule_add_dialog.dart';
 import 'package:kazumi/novel/novel_rule.dart';
 import 'package:kazumi/novel/novel_rules_page.dart';
 import 'package:kazumi/novel/novel_service.dart';
 import 'package:kazumi/services/sync/webdav.dart';
+import 'package:kazumi/services/storage/storage.dart';
 
 String get _raw => File('novel_rules/linovel.json').readAsStringSync();
+
+class _Paths extends PathProviderPlatform {
+  _Paths(this.path);
+  final String path;
+  @override Future<String?> getApplicationSupportPath() async => path;
+}
 
 class _Rules extends NovelService {
   _Rules() : super(WebDav());
@@ -66,6 +75,25 @@ Future<void> _add(WidgetTester tester, String option) async {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  late Directory root;
+  late PathProviderPlatform paths;
+  setUpAll(() async {
+    paths = PathProviderPlatform.instance;
+    root = await Directory.systemTemp.createTemp('novel-rule-ui-');
+    PathProviderPlatform.instance = _Paths(root.path);
+    Hive.init(root.path);
+    await GStorage.init();
+    // Native plugin registration is owned by this test isolate.
+    FilePicker.platform = _Picker();
+  });
+  tearDownAll(() async {
+    await Hive.close();
+    PathProviderPlatform.instance = paths;
+    expect(root.parent.absolute.path, Directory.systemTemp.absolute.path);
+    expect(root.uri.pathSegments.where((part) => part.isNotEmpty).last, startsWith('novel-rule-ui-'));
+    await root.delete(recursive: true);
+  });
   testWidgets('shared anime add dialog retains all four existing choices', (tester) async {
     await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => Scaffold(
       body: TextButton(onPressed: () => showRuleAddDialog(context), child: const Text('打开'))))));

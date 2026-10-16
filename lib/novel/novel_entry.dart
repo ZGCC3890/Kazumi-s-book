@@ -355,6 +355,7 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
   }
 
   Future<void> _login(String source) async {
+    final owner = ModalRoute.of(context)!;
     final username = TextEditingController();
     final password = TextEditingController();
     var busy = false;
@@ -399,6 +400,7 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
               onPressed: busy
                   ? null
                   : () async {
+                      final loginOwner = ModalRoute.of(ctx)!;
                       update(() {
                         busy = true;
                         error = null;
@@ -409,9 +411,9 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
                           username.text.trim(),
                           password.text,
                         );
-                        if (ctx.mounted) Navigator.pop(ctx, true);
+                        if (ctx.mounted && loginOwner.isActive) Navigator.pop(ctx, true);
                       } catch (failure) {
-                        if (ctx.mounted)
+                        if (ctx.mounted && loginOwner.isActive)
                           update(() {
                             busy = false;
                             error = failure.toString();
@@ -429,7 +431,7 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
     password.clear();
     username.dispose();
     password.dispose();
-    if (loggedIn == true && mounted) {
+    if (loggedIn == true && mounted && owner.isActive) {
       final generation = _generation;
       setState(() {
         _loading.add(source);
@@ -442,6 +444,7 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
 
   Future<void> _bind(NovelBook book) async {
     if (_busy) return;
+    final owner = ModalRoute.of(context)!;
     setState(() {
       _busy = true;
       _error = null;
@@ -458,7 +461,7 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
             widget.existingEditionId ?? service.editionForBook(book),
         existingWorkId: widget.existingWorkId,
       );
-      if (mounted) Navigator.pop(context, id);
+      if (mounted && owner.isActive) Navigator.pop(context, id);
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     } finally {
@@ -467,6 +470,7 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
   }
 
   Future<void> _addUrl() async {
+    final owner = ModalRoute.of(context)!;
     final controller = TextEditingController();
     final dialog = DialogRoute<String>(
       context: context,
@@ -494,14 +498,14 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
     final url = await Navigator.of(context).push(dialog);
     await dialog.completed;
     controller.dispose();
-    if (url == null || !mounted) return;
+    if (url == null || !mounted || !owner.isActive) return;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
       final book = await widget.service.adapter(_source!).bookFromUrl(url);
-      if (mounted) {
+      if (mounted && owner.isActive) {
         setState(() => _busy = false);
         await _bind(book);
       }
@@ -513,10 +517,11 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
   }
 
   Future<void> _manageRules() async {
+    final owner = ModalRoute.of(context)!;
     await Navigator.of(context).push<void>(MaterialPageRoute(
       builder: (_) => NovelRulesPage(service: widget.service),
     ));
-    if (mounted) await _prepare();
+    if (mounted && owner.isActive) await _prepare();
   }
 
   @override
