@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -275,6 +276,55 @@ void main() {
       DioFactory.pluginDio.interceptors.remove(rewrite);
     }
   });
+
+  for (final action in ['import', 'delete']) {
+    test('background default upgrade preserves a concurrent manual $action', () async {
+      final service = await device('concurrent-rule-$action');
+      final old = await File('novel_rules/wenku8.json').readAsString();
+      await service.importRule(old);
+      final stored = service.rules.single;
+      final replacement = jsonEncode({...stored.json, 'name': '默认新版书源'});
+      remote.files['/rules/catalog.json'] = utf8.encode(jsonEncode({'version': 1, 'rules': [
+        {'id': 'wenku8', 'file': 'wenku8.json', 'replaces': [sha256.convert(utf8.encode(stored.encode())).toString()]},
+        {'id': 'syosetu', 'file': 'syosetu.json', 'replaces': <String>[]},
+      ]}));
+      remote.files['/rules/wenku8.json'] = utf8.encode(replacement);
+      remote.files['/rules/syosetu.json'] = await File('novel_rules/syosetu.json').readAsBytes();
+      await service.saveRuleCatalogUrl('${remote.url}/rules/catalog.json');
+      final blocked = Completer<void>(), release = Completer<void>();
+      final dio = DioFactory.pluginDio;
+      final interceptor = InterceptorsWrapper(onRequest: (options, handler) async {
+        if (options.uri.path == '/rules/syosetu.json') {
+          blocked.complete();
+          await release.future;
+        }
+        handler.next(options);
+      });
+      dio.interceptors.add(interceptor);
+      final update = service.ensureDefaultRules();
+      try {
+        await blocked.future.timeout(const Duration(seconds: 5));
+        if (action == 'import') {
+          await service.importRule(jsonEncode({...stored.json, 'name': '我的自定义书源'}));
+        } else {
+          await service.removeRule('wenku8');
+        }
+        release.complete();
+        await update;
+        if (action == 'import') {
+          expect(service.rules.firstWhere((rule) => rule.id == 'wenku8').name, '我的自定义书源');
+        } else {
+          expect(service.rules.any((rule) => rule.id == 'wenku8'), isFalse);
+          expect(Hive.box<String>('novel_v1').get('ruleRemoved/wenku8'), '1');
+        }
+        expect(service.needsDefaultRules, isFalse);
+      } finally {
+        if (!release.isCompleted) release.complete();
+        await update;
+        dio.interceptors.remove(interceptor);
+      }
+    });
+  }
 
   test('legacy shelves retain membership; new shelf membership syncs to another device', () async {
     var service = await device('A');

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +7,7 @@ import 'package:kazumi/novel/novel_entry.dart';
 import 'package:kazumi/novel/novel_models.dart';
 import 'package:kazumi/novel/novel_rule.dart';
 import 'package:kazumi/novel/novel_service.dart';
+import 'package:kazumi/bean/dialog/adaptive_bottom_sheet.dart';
 import 'package:kazumi/services/sync/webdav.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 
@@ -48,6 +50,12 @@ class _Service extends NovelService {
   String? knownEdition, boundEdition;
   final loginResult = Completer<void>();
   List<BangumiItem> linkedAnime = [];
+  bool pendingDefaults = false;
+  Object? defaultError;
+  int defaultRequests = 0;
+  void Function()? installDefaults;
+  Completer<void>? defaultInstallGate;
+  final ruleOverrides = <String, NovelRule>{};
   @override
   Future<List<BangumiItem>> relatedAnime(NovelBook book,
       {String? editionId, bool refresh = false}) async => linkedAnime;
@@ -55,13 +63,21 @@ class _Service extends NovelService {
   List<NovelRule> get rules => sources.keys
       .map(
         (id) =>
-            NovelRule.decode(File('novel_rules/$id.json').readAsStringSync()),
+            ruleOverrides[id] ?? NovelRule.decode(File('novel_rules/$id.json').readAsStringSync()),
       )
       .toList();
   @override
   String? get preferredSource => null;
   @override
-  Future<void> ensureDefaultRules() async {}
+  bool get needsDefaultRules => pendingDefaults;
+  @override
+  Future<void> ensureDefaultRules() async {
+    defaultRequests++;
+    if (defaultError != null) throw defaultError!;
+    if (defaultInstallGate != null) await defaultInstallGate!.future;
+    installDefaults?.call();
+    pendingDefaults = false;
+  }
   @override
   NovelSourceAdapter adapter(String id) => sources[id]!;
   @override
@@ -91,18 +107,13 @@ Future<void> _open(WidgetTester tester, _Service service) async {
       home: Builder(
         builder: (context) => Scaffold(
           body: TextButton(
-            onPressed: () => showDialog<String>(
+            onPressed: () => showAdaptiveBottomSheet<String>(
               context: context,
-              builder: (_) => Dialog(
-                child: SizedBox(
-                  width: 640,
-                  height: 500,
-                  child: NovelSearchPage(
+              maxHeightFactor: .88,
+              builder: (_) => NovelSearchPage(
                     service: service,
                     animeId: 42,
                     initialQuery: '原词',
-                  ),
-                ),
               ),
             ),
             child: const Text('选择小说'),
@@ -117,6 +128,95 @@ Future<void> _open(WidgetTester tester, _Service service) async {
 }
 
 void main() {
+  testWidgets('same-ID default upgrade re-searches the changed source and ignores its old response', (tester) async {
+    final service = _Service()..pendingDefaults = true..defaultInstallGate = Completer<void>();
+    final oldAdapter = service.sources['linovel']!;
+    service.installDefaults = () {
+      final previous = service.rules.firstWhere((rule) => rule.id == 'linovel');
+      service.ruleOverrides['linovel'] = NovelRule.decode(jsonEncode({...previous.json, 'name': '更新后的书源'}));
+      service.sources['linovel'] = _Adapter('linovel');
+    };
+    await _open(tester, service);
+    expect(oldAdapter.requests.length, 1);
+    service.defaultInstallGate!.complete();
+    await tester.pump();
+    final updatedAdapter = service.sources['linovel']!;
+    expect(updatedAdapter.requests.single.$1, '原词');
+    updatedAdapter.complete(0, '新规则小说');
+    await tester.pump();
+    oldAdapter.complete(0, '过时旧规则小说');
+    service.sources['lightnovel']!.complete(0, '未更改的源');
+    await tester.pumpAndSettle();
+    expect(find.text('新规则小说'), findsOneWidget);
+    expect(find.text('过时旧规则小说'), findsNothing);
+    expect(service.sources['lightnovel']!.requests.length, 1);
+  });
+
+  testWidgets('each source previews one result and expansion resets for a new search', (tester) async {
+    final service = _Service();
+    await _open(tester, service);
+    service.sources['linovel']!.requests[0].$2.complete([
+      for (var i = 0; i < 4; i++) NovelBook(sourceId: 'linovel', url: 'https://test/$i', title: '甲源第$i本'),
+    ]);
+    service.sources['lightnovel']!.complete(0, '乙源小说');
+    await tester.pumpAndSettle();
+    expect(find.text('甲源第0本'), findsOneWidget);
+    expect(find.text('甲源第1本'), findsNothing);
+    await tester.tap(find.text('展开全部 4 个结果'));
+    await tester.pumpAndSettle();
+    expect(find.text('甲源第1本'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), '新书名');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pump();
+    service.sources['linovel']!.requests[1].$2.complete([
+      for (var i = 0; i < 3; i++) NovelBook(sourceId: 'linovel', url: 'https://test/new$i', title: '新第$i本'),
+    ]);
+    service.sources['lightnovel']!.complete(1, '乙源新小说');
+    await tester.pumpAndSettle();
+    expect(find.text('新第0本'), findsOneWidget);
+    expect(find.text('新第1本'), findsNothing);
+    expect(find.text('甲源第0本'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('default upgrade failure does not block installed sources and retry searches only added sources', (tester) async {
+    final service = _Service()..pendingDefaults = true..defaultError = StateError('默认规则下载失败');
+    await _open(tester, service);
+    expect(service.sources['linovel']!.requests.length, 1);
+    expect(service.defaultRequests, 1);
+    service.sources['linovel']!.complete(0, '仍可阅读的小说');
+    service.sources['lightnovel']!.complete(0, '另一个源');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('已安装书源可继续使用'), findsOneWidget);
+    service.defaultError = null;
+    service.installDefaults = () => service.sources['wenku8'] = _Adapter('wenku8');
+    await tester.tap(find.text('重试'));
+    await tester.pump();
+    expect(service.sources['wenku8']!.requests.single.$1, '原词');
+    expect(service.sources['linovel']!.requests.length, 1);
+    service.sources['wenku8']!.complete(0, '新安装源的小说');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('已安装书源可继续使用'), findsNothing);
+    await tester.tap(find.text('仍可阅读的小说'));
+    await tester.pumpAndSettle();
+    expect(service.selected?.title, '仍可阅读的小说');
+  });
+
+  testWidgets('first installation failure offers retry without a manual catalog form', (tester) async {
+    final service = _Service()..pendingDefaults = true..defaultError = StateError('首次下载失败');
+    service.sources.clear();
+    await _open(tester, service);
+    expect(find.text('重试获取书源'), findsOneWidget);
+    expect(find.byTooltip('管理小说规则'), findsOneWidget);
+    service.defaultError = null;
+    service.installDefaults = () => service.sources['linovel'] = _Adapter('linovel');
+    await tester.tap(find.text('重试获取书源'));
+    await tester.pump();
+    service.sources['linovel']!.complete(0, '重试后可读');
+    await tester.pumpAndSettle();
+    expect(find.text('重试后可读'), findsOneWidget);
+  });
+
   testWidgets(
     'public book URL transfers from fetching metadata to binding and opening',
     (tester) async {

@@ -25,6 +25,7 @@ class NovelService extends ChangeNotifier
   NovelService(this.webDav);
   final WebDav webDav;
   final _writes = AsyncSerialQueue();
+  final _ruleWrites = AsyncSerialQueue();
   final _anime = NovelAnimeResolver();
   late Box<String> _box, _cache, _rules;
   late String deviceId;
@@ -99,22 +100,28 @@ class NovelService extends ChangeNotifier
   }
 
   Future<void> importRule(String raw) async {
-    final parsed = NovelRule.decode(raw);
-    await _rules.put(parsed.id, parsed.encode());
-    await _box.delete('ruleRemoved/${parsed.id}');
-    notifyListeners();
+    await importRules([NovelRule.decode(raw)]);
   }
 
-  Future<void> removeRule(String id) async {
+  Future<void> importRules(Iterable<NovelRule> rules) => _ruleWrites.run(() async {
+    final imported = rules.toList();
+    await _rules.putAll({for (final rule in imported) rule.id: rule.encode()});
+    await _box.deleteAll(imported.map((rule) => 'ruleRemoved/${rule.id}'));
+    notifyListeners();
+  });
+
+  Future<void> removeRule(String id) => _ruleWrites.run(() async {
     await _rules.delete(id);
     await _box.put('ruleRemoved/$id', '1');
     notifyListeners();
-  }
+  });
 
   /// Install the separate rule repository once. Deletions remain intentional;
   /// a failed download is reported to the caller and can be retried.
+  bool get needsDefaultRules => _box.get('defaultRulesInstalled') != '2';
+
   Future<void> ensureDefaultRules() {
-    if (_box.get('defaultRulesInstalled') == '2') return Future.value();
+    if (!needsDefaultRules) return Future.value();
     return _defaultRulesInstallation ??= _installDefaultRules().whenComplete(
       () => _defaultRulesInstallation = null,
     );
@@ -122,11 +129,13 @@ class NovelService extends ChangeNotifier
 
   Future<void> _installDefaultRules() async {
     final url = ruleCatalogUrl ?? defaultCatalog;
-    if (_box.get('defaultRulesInstalled') == '1' && ruleCatalogUrl == null) {
-      for (final id in ['wenku8', 'syosetu']) {
-        if (!_rules.containsKey(id)) await _box.put('ruleRemoved/$id', '1');
+    await _ruleWrites.run(() async {
+      if (_box.get('defaultRulesInstalled') == '1' && ruleCatalogUrl == null) {
+        for (final id in ['wenku8', 'syosetu']) {
+          if (!_rules.containsKey(id)) await _box.put('ruleRemoved/$id', '1');
+        }
       }
-    }
+    });
     Future<String> get(String address) async =>
         (await DioFactory.pluginDio.get<String>(
           address,
@@ -134,7 +143,7 @@ class NovelService extends ChangeNotifier
         )).data!;
     final catalog = jsonDecode(await get(url)) as NovelJson;
     if (catalog['version'] != 1) throw const FormatException('不支持的规则索引版本');
-    final downloads = <String, String>{};
+    final candidates = <String, (String, List<String>)>{};
     for (final entry in catalog['rules'] as List) {
       if (_box.get('ruleRemoved/${entry['id']}') == '1') continue;
       final parsed = NovelRule.decode(
@@ -143,24 +152,31 @@ class NovelService extends ChangeNotifier
       if (parsed.id != entry['id']) {
         throw const FormatException('规则文件 id 与索引条目不一致');
       }
-      final current = _rules.get(parsed.id);
-      if (current == null ||
-          (entry.containsKey('replaces') &&
-              (entry['replaces'] as List).contains(
-                sha256.convert(utf8.encode(current)).toString(),
-              ))) {
-        downloads[parsed.id] = parsed.encode();
+      candidates[parsed.id] = (parsed.encode(), entry.containsKey('replaces')
+        ? List<String>.from(entry['replaces'] as List) : const []);
+    }
+    await _ruleWrites.run(() async {
+      if (url != (ruleCatalogUrl ?? defaultCatalog)) {
+        throw StateError('规则仓库已更换，请重试获取默认书源');
       }
-    }
-    await _rules.putAll(downloads);
-    await _rules.flush();
-    // Hive enumerates string keys alphabetically, not in catalog order.
-    // Remember the catalog's first source instead of relying on Hive order.
-    if (preferredSource == null) {
-      await selectSource((catalog['rules'] as List).first['id'] as String);
-    }
-    await _box.put('defaultRulesInstalled', '2');
-    await _box.flush();
+      final downloads = <String, String>{};
+      for (final entry in candidates.entries) {
+        if (_box.get('ruleRemoved/${entry.key}') == '1') continue;
+        final current = _rules.get(entry.key);
+        if (current == null || entry.value.$2.contains(sha256.convert(utf8.encode(current)).toString())) {
+          downloads[entry.key] = entry.value.$1;
+        }
+      }
+      await _rules.putAll(downloads);
+      await _rules.flush();
+      // Hive enumerates IDs alphabetically; prefer the first installed catalog source.
+      if (preferredSource == null && _rules.isNotEmpty) {
+        final first = (catalog['rules'] as List).where((entry) => _rules.containsKey(entry['id'])).firstOrNull;
+        if (first != null) await selectSource(first['id'] as String);
+      }
+      await _box.put('defaultRulesInstalled', '2');
+      await _box.flush();
+    });
     notifyListeners();
   }
 
@@ -169,7 +185,7 @@ class NovelService extends ChangeNotifier
 
   String? get ruleCatalogUrl => _box.get('ruleCatalogUrl');
   Future<void> saveRuleCatalogUrl(String url) =>
-      _box.put('ruleCatalogUrl', url);
+      _ruleWrites.run(() => _box.put('ruleCatalogUrl', url));
 
   void refreshView() => notifyListeners();
   List<NovelEdition> get editions => state

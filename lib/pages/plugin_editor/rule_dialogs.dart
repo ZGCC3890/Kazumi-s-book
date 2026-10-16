@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:kazumi/bean/dialog/dialog_helper.dart';
+import 'package:kazumi/bean/dialog/rule_add_dialog.dart';
 import 'package:kazumi/bean/widget/loading_indicator.dart';
 import 'package:kazumi/pages/plugin_editor/rule_management_widgets.dart';
 import 'package:kazumi/plugins/plugins.dart';
@@ -10,84 +11,14 @@ import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/services/plugin/plugin_import_parser.dart';
 import 'package:kazumi/utils/encoding.dart';
 
-enum RuleAddSource { catalog, clipboard, file, create }
-
-Future<RuleAddSource?> showRuleAddDialog(BuildContext context) =>
-    KazumiDialog.show<RuleAddSource>(
-      context: context,
-      builder: (context) {
-        final colors = Theme.of(context).colorScheme;
-        return _RuleDialog(
-          title: '添加规则',
-          icon: Icons.add_circle_outline_rounded,
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('选择一种方式，添加新的番剧来源。'),
-              const SizedBox(height: 20),
-              for (final option in [
-                (
-                  RuleAddSource.catalog,
-                  Icons.travel_explore_rounded,
-                  '浏览规则仓库',
-                  '发现并安装社区规则'
-                ),
-                (
-                  RuleAddSource.clipboard,
-                  Icons.content_paste_rounded,
-                  '从剪贴板导入',
-                  '粘贴规则链接或 JSON'
-                ),
-                (
-                  RuleAddSource.file,
-                  Icons.file_open_outlined,
-                  '从文件导入',
-                  '读取本地 JSON 规则文件'
-                ),
-                (
-                  RuleAddSource.create,
-                  Icons.edit_note_rounded,
-                  '新建规则',
-                  '从模板开始编写'
-                ),
-              ])
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Material(
-                    color: option.$1 == RuleAddSource.catalog
-                        ? colors.secondaryContainer
-                        : colors.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(
-                        option.$1 == RuleAddSource.catalog ? 20 : 12),
-                    clipBehavior: Clip.antiAlias,
-                    child: ListTile(
-                      minVerticalPadding: 14,
-                      leading: Icon(option.$2, color: colors.onSurfaceVariant),
-                      title: Text(option.$3),
-                      subtitle: Text(option.$4),
-                      trailing:
-                          const Icon(Icons.arrow_forward_rounded, size: 20),
-                      onTap: () => Navigator.of(context).pop(option.$1),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('取消')),
-          ],
-        );
-      },
-    );
+export 'package:kazumi/bean/dialog/rule_add_dialog.dart'
+    show RuleAddSource, showRuleAddDialog;
 
 Future<bool> confirmRuleDeletion(
         BuildContext context, Set<String> names) async =>
     await KazumiDialog.show<bool>(
       context: context,
-      builder: (context) => _RuleDialog(
+      builder: (context) => RuleDialog(
         title: names.length == 1 ? '删除这条规则？' : '删除 ${names.length} 条规则？',
         icon: Icons.delete_outline_rounded,
         content: Column(
@@ -121,7 +52,7 @@ Future<void> showRuleShareDialog(BuildContext context, Plugin plugin) async {
   final link = jsonToKazumiBase64(jsonEncode(plugin.toJson()));
   await KazumiDialog.show<void>(
     context: context,
-    builder: (context) => _RuleDialog(
+    builder: (context) => RuleDialog(
       title: '分享规则',
       icon: Icons.ios_share_rounded,
       content: Column(
@@ -239,7 +170,7 @@ class _RuleImportDialogState extends State<_RuleImportDialog> {
   @override
   Widget build(BuildContext context) => PopScope(
         canPop: !_saving,
-        child: _RuleDialog(
+        child: RuleDialog(
           title: '导入规则',
           icon: Icons.content_paste_go_rounded,
           content: Column(
@@ -278,36 +209,4 @@ class _RuleImportDialogState extends State<_RuleImportDialog> {
           ],
         ),
       );
-}
-
-class _RuleDialog extends StatelessWidget {
-  const _RuleDialog({
-    required this.title,
-    required this.icon,
-    required this.content,
-    required this.actions,
-  });
-
-  final String title;
-  final IconData icon;
-  final Widget content;
-  final List<Widget> actions;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return AlertDialog(
-      backgroundColor: colors.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      constraints: const BoxConstraints(maxWidth: 560),
-      insetPadding: const EdgeInsets.all(24),
-      scrollable: true,
-      icon: Icon(icon, color: colors.secondary, size: 32),
-      title: Text(title),
-      content: SizedBox(width: 480, child: content),
-      actionsPadding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-      actionsOverflowButtonSpacing: 8,
-      actions: actions,
-    );
-  }
 }

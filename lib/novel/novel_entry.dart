@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
+import 'package:kazumi/bean/dialog/adaptive_bottom_sheet.dart';
 import 'novel_models.dart';
 import 'novel_rule.dart';
 import 'novel_reader_page.dart';
 import 'novel_service.dart';
 import 'novel_search_query.dart';
 import 'novel_anime_link.dart';
+import 'novel_rules_page.dart';
 
 class NovelEntry {
   static Future<void> conflicts(
@@ -136,8 +139,6 @@ class NovelEntry {
   }) async {
     final book = service.selectedBook(editionId);
     if (book == null) throw StateError('这本小说尚未选择书源');
-    await service.ensureDefaultRules();
-    if (!context.mounted) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (readerContext) => NovelReaderPage(
@@ -190,20 +191,15 @@ class NovelEntry {
     String? editionId,
     String? workId,
   }) async {
-    final selected = await showDialog<String>(
+    final selected = await showAdaptiveBottomSheet<String>(
       context: context,
-      builder: (_) => Dialog(
-        child: SizedBox(
-          width: 640,
-          height: MediaQuery.sizeOf(context).height * .7,
-          child: NovelSearchPage(
-            service: service,
-            animeId: animeId,
-            initialQuery: title,
-            existingEditionId: editionId,
-            existingWorkId: workId,
-          ),
-        ),
+      maxHeightFactor: .88,
+      builder: (_) => NovelSearchPage(
+        service: service,
+        animeId: animeId,
+        initialQuery: title,
+        existingEditionId: editionId,
+        existingWorkId: workId,
       ),
     );
     if (selected != null && context.mounted) {
@@ -234,11 +230,15 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
   String? _source;
   final Map<String, List<NovelBook>> _results = {};
   final Map<String, String> _errors = {};
+  final Map<String, int> _sourceRequests = {};
   final Set<String> _loading = {}, _loginRequired = {};
+  final Set<String> _expanded = {};
   int _generation = 0;
   String _submittedQuery = '';
   bool _busy = false;
   String? _error;
+  bool _updatingRules = false;
+  String? _rulesError;
   @override
   void initState() {
     super.initState();
@@ -255,7 +255,7 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
     });
     try {
       final service = widget.service;
-      await service.ensureDefaultRules();
+      if (service.rules.isEmpty) await service.ensureDefaultRules();
       if (!mounted) return;
       if (service.rules.isEmpty) throw StateError('没有已启用的小说书源，请在书架的小说规则中添加');
       final preferred = service.preferredSource;
@@ -265,6 +265,7 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
             : service.rules.first.id;
         _busy = false;
       });
+      if (service.needsDefaultRules && !_updatingRules) unawaited(_updateDefaults());
       await _search();
     } catch (error) {
       if (mounted)
@@ -272,6 +273,31 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
           _error = error.toString();
           _busy = false;
         });
+    }
+  }
+
+  Future<void> _updateDefaults() async {
+    setState(() { _updatingRules = true; _rulesError = null; });
+    final installed = {for (final rule in widget.service.rules) rule.id: rule.encode()};
+    try {
+      await widget.service.ensureDefaultRules();
+      if (!mounted || _submittedQuery.isEmpty) return;
+      final changed = widget.service.rules.where((rule) => installed[rule.id] != rule.encode()).toList();
+      final generation = _generation, query = _submittedQuery;
+      setState(() {
+        for (final rule in changed) {
+          _results.remove(rule.id);
+          _errors.remove(rule.id);
+          _loginRequired.remove(rule.id);
+          _expanded.remove(rule.id);
+          _loading.add(rule.id);
+        }
+      });
+      await Future.wait(changed.map((rule) => _searchSource(rule.id, query, generation)));
+    } catch (error) {
+      if (mounted) setState(() => _rulesError = error.toString());
+    } finally {
+      if (mounted) setState(() => _updatingRules = false);
     }
   }
 
@@ -291,6 +317,7 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
       _results.clear();
       _errors.clear();
       _loginRequired.clear();
+      _expanded.clear();
       _loading
         ..clear()
         ..addAll(widget.service.rules.map((r) => r.id));
@@ -307,19 +334,22 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
     String query,
     int generation,
   ) async {
+    final request = (_sourceRequests[source] ?? 0) + 1;
+    _sourceRequests[source] = request;
+    bool current() => mounted && generation == _generation && _sourceRequests[source] == request;
     try {
       final results = await widget.service.adapter(source).search(query);
-      if (mounted && generation == _generation) _results[source] = results;
+      if (current()) _results[source] = results;
     } on NovelLoginRequired catch (error) {
-      if (mounted && generation == _generation) {
+      if (current()) {
         _errors[source] = error.toString();
         _loginRequired.add(source);
       }
     } catch (error) {
-      if (mounted && generation == _generation)
+      if (current())
         _errors[source] = error.toString();
     } finally {
-      if (mounted && generation == _generation)
+      if (current())
         setState(() => _loading.remove(source));
     }
   }
@@ -482,12 +512,24 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
     }
   }
 
+  Future<void> _manageRules() async {
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+      builder: (_) => NovelRulesPage(service: widget.service),
+    ));
+    if (mounted) await _prepare();
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       automaticallyImplyLeading: false,
       title: const Text('选择小说书源'),
       actions: [
+        IconButton(
+          tooltip: '管理小说规则',
+          onPressed: _busy ? null : _manageRules,
+          icon: const Icon(Icons.rule_folder_outlined),
+        ),
         IconButton(
           tooltip: '关闭',
           onPressed: () => Navigator.pop(context),
@@ -503,6 +545,8 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
             children: [
               TextField(
                 controller: _query,
+                enabled: !_busy,
+                textInputAction: TextInputAction.search,
                 onSubmitted: (_) => _search(),
                 decoration: InputDecoration(
                   labelText: '书名',
@@ -516,24 +560,27 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
             ],
           ),
         ),
-        if (_busy) const LinearProgressIndicator(),
-        if (_error != null)
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                SelectableText(_error!),
-                if (_source == null)
-                  TextButton(
-                    onPressed: _busy ? null : _prepare,
-                    child: const Text('重试获取书源'),
-                  ),
-              ],
-            ),
-          ),
+        if (_busy || _updatingRules) const LinearProgressIndicator(),
         Expanded(
           child: ListView(
             children: [
+              if (_rulesError != null)
+                ListTile(
+                  title: const Text('默认书源更新未完成，已安装书源可继续使用'),
+                  subtitle: Text(_rulesError!, maxLines: 2, overflow: TextOverflow.ellipsis),
+                  trailing: TextButton(onPressed: _updatingRules ? null : _updateDefaults,
+                    child: const Text('重试')),
+                ),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(children: [
+                    SelectableText(_error!),
+                    if (_source == null)
+                      TextButton(onPressed: _busy ? null : _prepare,
+                        child: const Text('重试获取书源')),
+                  ]),
+                ),
               for (final rule in widget.service.rules) ...[
                 ListTile(
                   dense: true,
@@ -599,7 +646,8 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
                           },
                         ),
                 ),
-                for (final book in _results[rule.id] ?? <NovelBook>[])
+                for (final book in (_results[rule.id] ?? <NovelBook>[]).take(
+                  _expanded.contains(rule.id) ? _results[rule.id]!.length : 1))
                   ListTile(
                     title: Text(book.title),
                     subtitle: Text(book.author),
@@ -611,6 +659,14 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
                       ],
                     ),
                     onTap: _busy ? null : () => _bind(book),
+                  ),
+                if ((_results[rule.id]?.length ?? 0) > 1)
+                  TextButton(
+                    onPressed: () => setState(() {
+                      if (!_expanded.add(rule.id)) _expanded.remove(rule.id);
+                    }),
+                    child: Text(_expanded.contains(rule.id)
+                      ? '收起全部条目' : '展开全部 ${_results[rule.id]!.length} 个结果'),
                   ),
                 const Divider(height: 1),
               ],

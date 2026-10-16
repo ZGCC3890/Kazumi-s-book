@@ -82,7 +82,8 @@ class _Service extends NovelService {
   @override
   NovelBook? selectedBook(String editionId) => _book;
   @override
-  Future<void> ensureDefaultRules() async {}
+  Future<void> ensureDefaultRules() async =>
+      throw StateError('Existing books must not depend on default rule installation');
   @override
   bool isShelved(String editionId) => shelved;
   @override

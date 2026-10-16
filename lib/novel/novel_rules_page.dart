@@ -3,40 +3,38 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:kazumi/request/clients/plugin_site_client.dart';
-import 'novel_models.dart';
+import 'package:kazumi/bean/dialog/rule_add_dialog.dart';
+import 'package:kazumi/bean/settings/settings_detail_scaffold.dart';
+import 'package:kazumi/utils/encoding.dart';
 import 'novel_rule.dart';
+import 'novel_rule_catalog_page.dart';
+import 'novel_rule_import.dart';
+import 'novel_rule_import_dialog.dart';
 import 'novel_service.dart';
 
+Future<String> _readRuleText(String url) =>
+    PluginSiteClient.instance.requestText(url, method: 'GET');
+
 class NovelRulesPage extends StatefulWidget {
-  const NovelRulesPage({super.key, required this.service});
+  const NovelRulesPage({super.key, required this.service, this.readText = _readRuleText});
   final NovelService service;
+  final Future<String> Function(String url) readText;
   static const defaultCatalog = NovelService.defaultCatalog;
   @override
   State<NovelRulesPage> createState() => _NovelRulesPageState();
 }
 
 class _NovelRulesPageState extends State<NovelRulesPage> {
-  late final TextEditingController _catalogUrl;
-  String? _loadedCatalogUrl;
-  List<NovelJson> _catalog = [];
+  final _search = TextEditingController();
+  late final _importer = NovelRuleImport(widget.readText);
   bool _busy = false;
   String? _error;
   @override
-  void initState() {
-    super.initState();
-    _catalogUrl = TextEditingController(
-      text: widget.service.ruleCatalogUrl ?? NovelRulesPage.defaultCatalog,
-    );
-  }
-
-  @override
   void dispose() {
-    _catalogUrl.dispose();
+    _search.dispose();
     super.dispose();
   }
 
-  Future<String> _get(String url) =>
-      PluginSiteClient.instance.requestText(url, method: 'GET');
   Future<void> _run(Future<void> Function() action) async {
     setState(() {
       _busy = true;
@@ -51,52 +49,32 @@ class _NovelRulesPageState extends State<NovelRulesPage> {
     }
   }
 
-  Future<void> _loadCatalog() => _run(() async {
-    final url = _catalogUrl.text.trim();
-    final j = jsonDecode(await _get(url)) as NovelJson;
-    if (j['version'] != 1) throw const FormatException('不支持的规则索引版本');
-    _catalog = List<NovelJson>.from(j['rules'] as List);
-    _loadedCatalogUrl = url;
-    await widget.service.saveRuleCatalogUrl(url);
-  });
-  Future<void> _paste() async {
-    final controller = TextEditingController();
-    final dialog = DialogRoute<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('导入小说规则'),
-        content: SizedBox(
-          width: 600,
-          child: TextField(
-            controller: controller,
-            minLines: 3,
-            maxLines: 12,
-            decoration: const InputDecoration(hintText: '粘贴规则 JSON 或规则文件 URL'),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('导入'),
-          ),
-        ],
-      ),
-    );
-    final raw = await Navigator.of(context).push(dialog);
-    await dialog.completed;
-    controller.dispose();
-    if (raw == null || raw.isEmpty || !mounted) return;
-    await _run(
-      () async => widget.service.importRule(
-        raw.startsWith('https://') || raw.startsWith('http://')
-            ? await _get(raw)
-            : raw,
-      ),
-    );
+  void _feedback(String message) => ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text(message)));
+
+  Future<void> _add() async {
+    final source = await showRuleAddDialog(context, sourceLabel: '小说', allowCreate: false);
+    if (!mounted || source == null) return;
+    switch (source) {
+      case RuleAddSource.catalog:
+        await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) =>
+          NovelRuleCatalogPage(service: widget.service, importer: _importer)));
+      case RuleAddSource.clipboard:
+        var input = '';
+        await _run(() async {
+          final data = await Clipboard.getData(Clipboard.kTextPlain);
+          input = data?.text ?? '';
+        });
+        if (!mounted || _error != null) return;
+        final count = await showDialog<int>(context: context, barrierDismissible: false,
+          builder: (_) => NovelRuleImportDialog(service: widget.service,
+            importer: _importer, initialValue: input));
+        if (count != null && mounted) _feedback('已导入 $count 条小说规则');
+      case RuleAddSource.file:
+        await _file();
+      case RuleAddSource.create:
+        throw StateError('小说规则不提供模板编辑器');
+    }
   }
 
   Future<void> _file() => _run(() async {
@@ -105,103 +83,88 @@ class _NovelRulesPageState extends State<NovelRulesPage> {
       allowedExtensions: ['json'],
       withData: true,
     );
-    if (result != null)
-      await widget.service.importRule(utf8.decode(result.files.single.bytes!));
+    if (result == null || !mounted) return;
+    final rules = await _importer.parse(utf8.decode(result.files.single.bytes!));
+    await widget.service.importRules(rules);
+    if (mounted) _feedback('已导入 ${rules.length} 条小说规则');
   });
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('小说规则'),
+
+  Future<void> _remove(NovelRule rule) async {
+    final confirmed = await showDialog<bool>(context: context, builder: (ctx) => RuleDialog(
+      title: '删除这条规则？', icon: Icons.delete_outline_rounded,
+      content: Text('${rule.name}\n删除后将不再使用这个来源搜索小说，可以稍后重新导入。'),
       actions: [
-        IconButton(
-          tooltip: '从文件导入',
-          onPressed: _busy ? null : _file,
-          icon: const Icon(Icons.file_open_outlined),
-        ),
-        IconButton(
-          tooltip: '粘贴 JSON 或 URL',
-          onPressed: _busy ? null : _paste,
-          icon: const Icon(Icons.add_link),
-        ),
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('保留')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('删除')),
       ],
+    ));
+    if (confirmed != true || !mounted) return;
+    await _run(() => widget.service.removeRule(rule.id));
+  }
+  @override
+  Widget build(BuildContext context) => SettingsDetailScaffold(
+    title: const Text('小说规则'),
+    floatingActionButton: FloatingActionButton.extended(
+      onPressed: _busy ? null : _add,
+      icon: const Icon(Icons.add),
+      label: const Text('添加规则'),
     ),
     body: ListenableBuilder(
       listenable: widget.service,
-      builder: (_, _) => ListView(
+      builder: (_, _) => Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 1000), child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          const Text('默认小说书源在首次搜索时自动获取。这里可更新、删除书源或添加自定义规则；规则与应用代码分别维护。'),
+          const Text('我的规则', style: TextStyle(fontSize: 22)),
+          const SizedBox(height: 8),
+          const Text('默认书源自动获取。在这里管理已安装的小说来源，或添加更多规则。'),
           const SizedBox(height: 16),
           TextField(
-            controller: _catalogUrl,
+            controller: _search,
+            onChanged: (_) => setState(() {}),
             decoration: const InputDecoration(
-              labelText: '规则索引 URL',
+              hintText: '搜索已安装规则',
+              prefixIcon: Icon(Icons.search),
               border: OutlineInputBorder(),
             ),
           ),
-          const SizedBox(height: 8),
-          FilledButton.tonalIcon(
-            onPressed: _busy ? null : _loadCatalog,
-            icon: const Icon(Icons.cloud_download_outlined),
-            label: const Text('获取规则列表'),
-          ),
+          const SizedBox(height: 16),
           if (_busy) const LinearProgressIndicator(),
           if (_error != null)
             Padding(
               padding: const EdgeInsets.all(12),
               child: SelectableText(_error!),
             ),
-          for (final entry in _catalog)
-            ListTile(
-              title: Text(entry['name'] as String),
-              subtitle: Text(entry['description'] as String),
-              trailing: FilledButton.tonal(
-                onPressed: _busy
-                    ? null
-                    : () => _run(() async {
-                        final url = Uri.parse(
-                          _loadedCatalogUrl!,
-                        ).resolve(entry['file'] as String).toString();
-                        final raw = await _get(url);
-                        if (NovelRule.decode(raw).id != entry['id']) {
-                          throw const FormatException('规则文件 id 与索引条目不一致');
-                        }
-                        await widget.service.importRule(raw);
-                      }),
-                child: Text(
-                  widget.service.rules.any((r) => r.id == entry['id'])
-                      ? '更新'
-                      : '导入',
-                ),
-              ),
-            ),
-          const Divider(height: 32),
-          const Text('已安装规则'),
           if (widget.service.rules.isEmpty)
-            const ListTile(title: Text('还没有小说规则，请从列表或文件导入')),
-          for (final rule in widget.service.rules)
-            ListTile(
+            const ListTile(title: Text('还没有小说规则，点击“添加规则”开始')),
+          for (final rule in widget.service.rules.where((rule) =>
+              rule.name.toLowerCase().contains(_search.text.trim().toLowerCase())))
+            Card(child: ListTile(
               title: Text(rule.name),
-              subtitle: Text('${rule.id} · ${rule.json['encoding']}'),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    tooltip: '复制规则 JSON',
-                    onPressed: () =>
-                        Clipboard.setData(ClipboardData(text: rule.encode())),
-                    icon: const Icon(Icons.copy_outlined),
-                  ),
-                  IconButton(
-                    tooltip: '删除规则',
-                    onPressed: () =>
-                        _run(() => widget.service.removeRule(rule.id)),
-                    icon: const Icon(Icons.delete_outline),
-                  ),
+              subtitle: Text(Uri.parse(rule.json['searchUrl'] as String).host),
+              leading: const Icon(Icons.menu_book_outlined),
+              trailing: PopupMenuButton<String>(
+                enabled: !_busy,
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'copy', child: Text('复制规则链接')),
+                  PopupMenuItem(value: 'delete', child: Text('删除规则')),
                 ],
+                onSelected: (action) async {
+                  if (action == 'delete') {
+                    await _remove(rule);
+                  } else {
+                    await _run(() async {
+                      await Clipboard.setData(ClipboardData(text: jsonToKazumiBase64(rule.encode())));
+                      if (mounted) _feedback('已复制规则链接');
+                    });
+                  }
+                },
               ),
-            ),
+            )),
         ],
+      ),
+      ),
       ),
     ),
   );
