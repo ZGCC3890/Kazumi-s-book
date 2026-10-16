@@ -35,6 +35,7 @@ Future<void> main(List<String> args) async {
   final detail = await adapter.bookFromUrl(book.url);
   if (detail.title.isEmpty || detail.author.isEmpty)
     throw StateError('Empty detail metadata');
+  final coverBytes = (await session.image(rule, book.cover)).length;
   final chapters = await adapter.catalog(book);
   final chapter = chapters.singleWhere((c) => c.url == args[3]);
   final blocks = await adapter.content(chapter);
@@ -44,7 +45,7 @@ Future<void> main(List<String> args) async {
       : (await session.image(rule, images.first.value)).length;
   print(
     '${rule.id}: search=${books.length} chapters=${chapters.length} '
-    'text=${blocks.where((b) => !b.image).length} illustrations=${images.length} firstImageBytes=$imageBytes',
+      'text=${blocks.where((b) => !b.image).length} illustrations=${images.length} firstImageBytes=$imageBytes coverBytes=$coverBytes',
   );
   dio.close(force: true);
   await directory.delete(recursive: true);

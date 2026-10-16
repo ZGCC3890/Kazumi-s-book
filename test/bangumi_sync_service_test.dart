@@ -89,7 +89,10 @@ void main() {
     addTearDown(
       () => GStorage.putSetting(SettingsKeys.imageAcceleration, previousMode),
     );
+    final previousBangumi = GStorage.getSetting(SettingsKeys.bangumiAcceleration);
+    addTearDown(() => GStorage.putSetting(SettingsKeys.bangumiAcceleration, previousBangumi));
     await GStorage.putSetting(SettingsKeys.imageAcceleration, 'ech');
+    await GStorage.putSetting(SettingsKeys.bangumiAcceleration, 'mirror');
     await GStorage.putSetting(SettingsKeys.enableBangumiProxy, true);
     for (final url in [
       'https://api.bgm.tv/v0/subjects/1',

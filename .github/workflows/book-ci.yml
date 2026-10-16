@@ -32,6 +32,8 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos --fatal-warnings
+      - name: Isolate reader progress overlay regression
+        run: flutter test test/novel_reader_test.dart --plain-name "dragging chapter progress saves the newly visible text anchor" --reporter expanded
       - run: flutter test
       - name: Verify live upstream anime search and comments
         run: flutter test test/live/book_services_test.dart --dart-define=BOOK_LIVE=true --reporter expanded

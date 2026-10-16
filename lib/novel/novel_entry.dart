@@ -345,7 +345,7 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
     final password = TextEditingController();
     var busy = false;
     String? error;
-    final loggedIn = await showDialog<bool>(
+    final dialog = DialogRoute<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
@@ -411,6 +411,8 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
         ),
       ),
     );
+    final loggedIn = await Navigator.of(context).push(dialog);
+    await dialog.completed;
     password.clear();
     username.dispose();
     password.dispose();
@@ -530,7 +532,7 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
 
   Future<void> _addUrl() async {
     final controller = TextEditingController();
-    final url = await showDialog<String>(
+    final dialog = DialogRoute<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('从公开书籍链接添加'),
@@ -553,6 +555,8 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
         ],
       ),
     );
+    final url = await Navigator.of(context).push(dialog);
+    await dialog.completed;
     controller.dispose();
     if (url == null) return;
     setState(() {
@@ -561,7 +565,10 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
     });
     try {
       final book = await widget.service.adapter(_source!).bookFromUrl(url);
-      if (mounted) await _bind(book);
+      if (mounted) {
+        setState(() => _busy = false);
+        await _bind(book);
+      }
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     } finally {

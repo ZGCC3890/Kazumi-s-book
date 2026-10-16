@@ -3,6 +3,7 @@ import 'package:kazumi/services/storage/storage.dart';
 import 'novel_entry.dart';
 import 'novel_rules_page.dart';
 import 'novel_service.dart';
+import 'novel_book_cover.dart';
 
 class NovelLibraryPage extends StatelessWidget {
   const NovelLibraryPage({super.key, required this.service});
@@ -26,7 +27,7 @@ class NovelLibraryPage extends StatelessWidget {
     listenable: service,
     builder: (_, _) => Scaffold(
       appBar: AppBar(
-        title: const Text('轻小说书架'),
+        title: const Text('书架'),
         actions: [
           IconButton(
             tooltip: '小说规则',
@@ -91,7 +92,7 @@ class NovelLibraryPage extends StatelessWidget {
             for (final edition in service.shelfEditions)
               Card(
                 child: ListTile(
-                  leading: const Icon(Icons.menu_book_outlined),
+                  leading: NovelBookCover(service: service, book: service.selectedBook(edition.id)),
                   title: Text(service.work(edition.workId).title),
                   subtitle: Text(edition.label),
                   onTap: () => _run(context, () async {

@@ -122,8 +122,6 @@ class _CollectPageState extends State<CollectPage> with KazumiDialogOwner {
               ?.copyWith(fontWeight: FontWeight.w700),
         ),
         actions: [
-          IconButton(tooltip: '轻小说书架', icon: const Icon(Icons.menu_book_outlined),
-            onPressed: () => context.pushNamed('/novels/')),
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: Tooltip(

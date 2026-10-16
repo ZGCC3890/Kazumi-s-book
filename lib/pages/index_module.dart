@@ -63,6 +63,8 @@ final tabModule = createModule(
             ..module(popularModule)
             ..module(timelineModule)
             ..module(collectModule)
+            ..route('/novels/', transition: TransitionType.none,
+                child: (context, state) => NovelLibraryPage(service: inject<NovelService>()))
             ..module(myModule);
         },
       );
@@ -120,7 +122,8 @@ final indexModule = createModule(
         transition: _imagePreviewTransition,
       )
       ..module(infoModule)
-      ..route('/novels/', child: (context, state) => NovelLibraryPage(service: inject<NovelService>()))
+      ..route('/novels/', guards: [(state) => '/tab/novels/'],
+          child: (context, state) => const SizedBox.shrink())
       ..module(settingsModule)
       ..module(searchModule);
   },
