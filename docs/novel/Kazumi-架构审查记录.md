@@ -199,6 +199,16 @@ Service 已有强制刷新参数，但 Reader 原未暴露操作，缓存目录�
 
 新增实际 ReaderPage 用例：刷新 fake 返回第二章和前插正文，验证两个调用都收到 refresh=true，目录显示第二章，原 quote 保持、offset 按插入文本的标准化长度平移、正文 digest 更新。另一用例让正文刷新抛网络错误，验证页面显示具体错误、返回成功且保存调用数不增长。完整 Reader 17 项通过，日志 `work/novel-reader-refresh-tests.log`。第二提交新增测试总数随这两项增至 19，完整应用测试结果仍等第二轮 CI。
 
+### A16 第二轮完整 CI 与维护脚本验证
+
+提交 `f1a33b8` 的 [run 38950139335](https://github.com/ZGCC3890/Kazumi-s-book/actions/runs/38950139335) / checks job `117139163024` 成功，日志明确 `281 tests passed`；分析通过，输出 28 个 info。此前待运行的 4 项真实 Service/Hive/loopback HTTP 集成逐项通过：重启恢复位置/书签/本地设置/双向映射；两个独立数据目录经生产 WebDAV 客户端增量读取并解决离线冲突；PUT 失败保留；MOVE 失败保留。旧视频 sentinel 在这些场景中不被读取/修改，证据摘录 `work/ci2-checks-evidence.log`。这关闭自动集成待验项，不等于所有商业 WebDAV 或两台真实设备已验证。
+
+实施者在 Windows PowerShell 5.1 实际运行 `dev/sync-upstream.ps1 -CheckOnly`，退出 0，`work/upstream-check.log` 为“上游待合并提交：0”。脚本 UTF-8 BOM 保证 5.1 中文兼容；这次没有需要合并的上游提交，因此只证明检查路径，不宣称冲突合并路径已经演练。
+
+第二轮原生步骤验证成功：Windows job `117140046552` 的 release 编译、产品标识与原生启动、上传产物均通过；启动步骤先检查 ProductName=`Kazumi's book` / CompanyName=`ZGCC3890`，运行 15 秒后确认进程仍存活、独立目录 `APPDATA/ZGCC3890/Kazumi's book/hive/setting.hive` 已建立。Android job `117140046441` 成功，编译 APK 后 aapt 日志明确验证 `com.zgcc.kazumisbook`。原生证据摘录 `work/ci2-native-evidence.log`；Windows artifact `12068182527` 为 43017667 字节，Android artifact `12068976800` 为 89612752 字节。产物绑定 `f1a33b8`，后续仅文档提交不代表重新构建。
+
+最终 Public REST 核对：该 run 的 checks、Windows、Android 三个 job 均 completed/success。这些结果证明 CI 环境中的真实原生启动、独立存储和编译产物身份，不证明用户手机/桌面的双版本共存、完整阅读 UI、图片缩放、Dart 访问文库8或真实跨设备云服务已通过。Dart 书源 403 与真机阅读边界仍如 A13，不因 CI 通过而消除。
+
 ## 验证状态说明
 
 “源码审查通过”只说明所检查代码满足架构约束；“自动验证通过”必须列出执行命令/结果；“待设备测试”不能改写成“完成”。真实书源、真实跨设备同步和阅读器排版恢复需分别记录实际运行证据。
