@@ -217,11 +217,29 @@ Astra 单变量复核推翻了“Dart客户端本身无法访问”的早期判�
 
 真实 Nextcloud32 上使用生产 `webdav_client + NovelWebDavExchange` 跑通OPTIONS/PROPFIND/MKCOL/PUT/MOVE/GET与快照校验读回；临时应用密码已撤销，测试目录已清理。原始中文WebDAV基址成功；预编码中文基址的MOVE被依赖再次编码导致409，因此配置文档要求原样中文路径。无需修改云盘服务器、反向代理或开放额外端口。
 
-用户强调官方兼容后，Astra 核对上游025dcb5/官方2.3.9：观看/收藏数据模型、init、同步和清理代码与上游逐字一致，小说仅新增兄弟目录；官方只处理已知文件，不会遍历删除小说。新增真实HTTP逆向集成覆盖两套独立Hive数据双向更新观看/收藏，并核验小说快照、未完成cache文件集合与字节不变、无请求触及小说路径，待本轮CI运行。不能把该审查扩展成所有历史/未来官方版本的无限兼容承诺。
+用户强调官方兼容后，Astra 核对上游025dcb5/官方2.3.9：观看/收藏数据模型、init、同步和清理代码与上游逐字一致，小说仅新增兄弟目录；官方只处理已知文件，不会遍历删除小说。新增真实HTTP逆向集成运行同一客户端两轮观看/收藏上传与下载恢复，并核验小说快照、未完成cache文件集合与字节不变、无请求触及小说路径。夹具仅初始化 GStorage 一次，每轮上传经过真实历史 checkpoint、确认本地日志消失，再清空本地业务集合并断言实际 GET 恢复。它不代表两套独立官方设备或官方安装包 UI 验收，也不扩展成所有历史/未来官方版本的无限兼容承诺。
+
+该夹具前两次 CI 失败均为测试初始化错误：首次重置 Hive 适配器清除了内置 DateTime；恢复适配器后，又触发 GStorage._setting 的 late-final 禁止二次初始化。现已删除整条同 isolate 重复初始化/重置路径，沿用官方测试一次初始化方式；生产 GStorage、WebDAV 和历史协调单例均未改。修订测试静态分析通过，完整 HTTP 运行结果等待下一轮 CI。
 
 ### A18 固定签名与发布
 
 用户已配置仓库Secret `BOOK_ANDROID_SIGNING`。Android release使用独立长期PKCS12签名，CI同时校验应用ID及预定证书摘要；私钥在仓库外。`book-release.yml`只发布与版本标签完全相同提交、已经成功完成完整检查和原生构建的产物，不重复打包。上游release工作流首两个依赖job仅允许上游仓库执行，防止fork触发官方打包流程。本轮完整测试、原生包和发布结果待执行后记录。
+
+### A19 发布候选完整检查
+
+提交 `32c607ed7e6f51018454ce6c21456781a3d5a5a0` 的 [run 38955947909](https://github.com/ZGCC3890/Kazumi-s-book/actions/runs/38955947909) / checks `117158994829` 成功，日志明确 `286 tests passed`；分析32个info，无error/warning。新增会话测试证明一次登录后重建会话仍可访问、退出后明确需要登录，持久文件不包含密码；默认规则初始化、失败重试、已知旧版升级及旧v1索引保留自定义规则通过。官方协议测试以单次生产存储初始化执行两轮上传、清空本地业务集合、真实远程GET恢复；小说快照和cache文件集合及字节全不变，没有请求触及小说路径。这是同协议读写与隔离验证，不冒充两份官方安装程序的UI测试。
+
+Hive按key排序的实验导致首选书源不稳定，现把catalog首条明确写入首选设置并在测试断言；不依赖注册表枚举顺序。另一回归是新会话曾持有DioFactory旧客户端，而ProxyManager更改网络配置会关闭它；已改为每次取得当前客户端。真实HTTP纯Dart红绿实验精确复现旧闭连接错误并验证新provider读取成功，CI同时验证客户端替换后本地会话继续可用。构建和发布结果在完成后另记。
+
+### A20 0.1.0 发布及下载核验
+
+同一run `38955947909` 的Windows `117159829042` 与Android `117159828952` 均success，整个run completed/success。Windows日志确认release产物构建、原生进程运行及独立settings目录创建，artifact `12070733561`。Android release APK约33.9MB，日志明确验证包名 `com.zgcc.kazumisbook` 及固定证书SHA256 `85fa5bfda7fd385f44cabf8da36970bcde6c049e297f4dc67ca3e24252e4ee41`，artifact `12071061710`。此前281项的debug包不作为此次发布产物。
+
+标签 `0.1.0` 指向该成功构建提交 `32c607e`。[发布run 38957633003](https://github.com/ZGCC3890/Kazumi-s-book/actions/runs/38957633003) success，复用同提交已成功构建的两个artifact，发布[0.1.0 Release](https://github.com/ZGCC3890/Kazumi-s-book/releases/tag/0.1.0)。公开REST确认非草稿、三项asset齐全；应用使用的 `/releases/latest` 返回0.1.0。
+
+实际从公开Release下载三文件并与GitHub摘要逐一核验：APK33908677字节，SHA256 `1194994bfd9711b06f69e0546a006b6524da01c9c7dd0dc22450856111f00e2f`；WindowsZIP43144191字节，SHA256 `fe9e7e86d03f7651fd3a8e6163053f30852c31b8e6deb5bd592b4fc1d9d919a4`；SHA256SUMS194字节，摘要 `13c709555072d037d1515761a3ee5ff6047dc1863b161fdb1c33e2c3df1499be`。两归档CRC及所需原生文件核验通过。下载验证件在工作区 `outputs/releases/`，公开仓库不包含私钥或账号密码。
+
+Astra最终只读复核未发现偏离用户目标或新的代码发布阻断。仍需用户安装后验收真实账号会话、手机/桌面阅读交互、两款已安装应用共存及实体设备跨源续读；Syosetu访问限制保留在发布说明。后续仅文档进度提交不改变0.1.0二进制绑定提交。
 
 ## 验证状态说明
 

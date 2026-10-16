@@ -6,6 +6,8 @@
 
 当前开发分支：[`feature/novel-reader`](https://github.com/ZGCC3890/Kazumi-s-book/tree/feature/novel-reader)。[使用与维护](docs/novel/使用与维护.md)、[实施方案](docs/novel/Kazumi-轻小说实施方案.md)、[Astra 审查记录](docs/novel/Kazumi-架构审查记录.md)、[独立小说规则](novel_rules/README.md)。进度以方案中的里程碑和验证记录为准。
 
+[下载 0.1.0 测试版](https://github.com/ZGCC3890/Kazumi-s-book/releases/tag/0.1.0)：Android arm64 APK、Windows x64 ZIP及SHA256校验文件。286项自动测试、固定Android签名及Windows原生启动检查已通过，真实设备阅读交互待用户验收。
+
 以下保留上游项目介绍与署名。
 
 <img src="assets/images/logo/logo_rounded.png" width=200></img>
