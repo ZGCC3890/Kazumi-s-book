@@ -3,6 +3,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
+import 'package:hive_ce/src/adapters/big_int_adapter.dart';
+import 'package:hive_ce/src/adapters/date_time_adapter.dart';
+import 'package:hive_ce/src/adapters/duration_adapter.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 import 'package:kazumi/modules/collect/collect_change_module.dart';
 import 'package:kazumi/modules/collect/collect_module.dart';
@@ -136,6 +139,13 @@ void main() {
   Future<void> switchDevice(String name) async {
     await Hive.close();
     Hive.resetAdapters();
+    // resetAdapters also removes the built-ins normally registered by the
+    // HiveImpl/TypeRegistryImpl constructor. Restore that exact initialization
+    // before GStorage.init registers the app's own adapters for this device.
+    Hive.registerAdapter(DateTimeWithTimezoneAdapter(), internal: true);
+    Hive.registerAdapter(DateTimeAdapter<DateTimeWithoutTZ>(), internal: true);
+    Hive.registerAdapter(BigIntAdapter(), internal: true);
+    Hive.registerAdapter(DurationAdapter(), internal: true);
     final directory = Directory('${root.path}/$name');
     await directory.create(recursive: true);
     PathProviderPlatform.instance = _Paths(directory.path);

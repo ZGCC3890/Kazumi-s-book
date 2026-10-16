@@ -239,7 +239,8 @@ void main() {
     var service = await device('automatic-rules');
     await service.saveRuleCatalogUrl('${remote.url}/rules/catalog.json');
     await Future.wait([service.ensureDefaultRules(), service.ensureDefaultRules()]);
-    expect(service.rules.map((r) => r.id), ['wenku8', 'syosetu']);
+    expect(service.rules.map((r) => r.id), unorderedEquals(['wenku8', 'syosetu']));
+    expect(service.preferredSource, 'wenku8');
     expect(remote.requests.where((r) => r.$2 == '/rules/catalog.json').length, 1);
     await service.removeRule('syosetu');
     await service.selectSource('wenku8');

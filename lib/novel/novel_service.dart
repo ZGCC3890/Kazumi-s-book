@@ -140,6 +140,11 @@ class NovelService extends ChangeNotifier
     }
     await _rules.putAll(downloads);
     await _rules.flush();
+    // Hive enumerates string keys alphabetically, not in catalog order.
+    // Remember the catalog's first source instead of relying on Hive order.
+    if (preferredSource == null) {
+      await selectSource((catalog['rules'] as List).first['id'] as String);
+    }
     await _box.put('defaultRulesInstalled', '1');
     await _box.flush();
     notifyListeners();
