@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_modular/flutter_modular.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
-import 'package:kazumi/modules/collect/collect_type.dart';
-import 'package:kazumi/pages/collect/collect_controller.dart';
-import 'package:kazumi/request/apis/bangumi_api.dart';
 import 'novel_models.dart';
 import 'novel_rule.dart';
 import 'novel_reader_page.dart';
 import 'novel_service.dart';
 import 'novel_search_query.dart';
+import 'novel_anime_link.dart';
 
 class NovelEntry {
   static Future<void> conflicts(
@@ -164,11 +161,7 @@ class NovelEntry {
               context: readerContext,
               builder: (ctx) => AlertDialog(
                 title: const Text('加入书架？'),
-                content: Text(
-                  targetAnimeId > 0
-                      ? '已读过一章以上。加入书架后，关联番剧也会加入追番并标记为“在看”。'
-                      : '已读过一章以上，加入书架方便下次继续阅读。',
-                ),
+                content: const Text('已读过一章以上，加入书架方便下次继续阅读。'),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx, false),
@@ -182,15 +175,6 @@ class NovelEntry {
               ),
             );
             if (add != true) return;
-            if (targetAnimeId > 0) {
-              final anime = await BangumiApi.getBangumiInfoByID(targetAnimeId);
-              if (anime == null) throw StateError('无法获取关联番剧，尚未加入书架，请重试');
-              final collect = inject<CollectController>();
-              await collect.addCollect(anime, type: CollectType.watching.value);
-              if (collect.getCollectType(anime) != CollectType.watching.value) {
-                throw StateError('番剧“在看”状态未保存，尚未加入书架，请重试');
-              }
-            }
             await service.addToShelf(editionId, animeId: targetAnimeId);
           },
         ),
@@ -619,7 +603,13 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
                   ListTile(
                     title: Text(book.title),
                     subtitle: Text(book.author),
-                    trailing: const Icon(Icons.menu_book_outlined),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        NovelAnimeLink(service: widget.service, book: book),
+                        const Icon(Icons.menu_book_outlined),
+                      ],
+                    ),
                     onTap: _busy ? null : () => _bind(book),
                   ),
                 const Divider(height: 1),

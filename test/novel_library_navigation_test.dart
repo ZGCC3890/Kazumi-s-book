@@ -17,6 +17,7 @@ import 'package:kazumi/pages/collect/collect_controller.dart';
 import 'package:kazumi/repositories/collect_crud_repository.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/services/sync/webdav.dart';
+import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
 const _book = NovelBook(
@@ -37,6 +38,13 @@ class _Library extends NovelService {
   _Library(this.bytes) : super(WebDav());
   final Uint8List bytes;
   final images = <(String, String)>[];
+  @override
+  Future<List<BangumiItem>> relatedAnime(NovelBook book,
+      {String? editionId, bool refresh = false}) async => [BangumiItem.fromJson({
+        'id': 42, 'type': 2, 'name': '已入架的小说', 'name_cn': '已入架的小说',
+        'rating': {'rank': 1, 'score': 8.0, 'total': 1},
+        'images': <String, String>{},
+      })];
   @override
   List<NovelEdition> get shelfEditions => [
     const NovelEdition('e', 'w', '中文', 'zh'),
@@ -134,6 +142,7 @@ void main() {
         expect(find.text('已入架的小说'), findsOneWidget);
         expect(service.images, [('source-a', 'https://source/covers/1.png')]);
         expect(find.byType(Image), findsOneWidget);
+        expect(find.byTooltip('查看番剧详情'), findsOneWidget);
         if (size.width < size.height) {
           final nav = tester.widget<NavigationBar>(find.byType(NavigationBar));
           expect(nav.selectedIndex, 2);

@@ -4,6 +4,7 @@ import 'package:hive_ce/hive.dart';
 import 'package:kazumi/request/apis/bangumi_api.dart';
 import 'package:kazumi/request/core/dio_factory.dart';
 import 'package:kazumi/services/storage/storage.dart';
+import 'package:kazumi/novel/novel_anime_resolver.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
 class _Paths extends PathProviderPlatform {
@@ -36,6 +37,10 @@ void main() {
           );
         }
         final comments = await BangumiApi.getBangumiCommentsByID(55770);
+        final linked = await NovelAnimeResolver().forTitle('葬送的芙莉莲');
+        expect(linked, isNotEmpty);
+        expect(linked.every((item) => NovelAnimeResolver.matches('葬送的芙莉莲', item)), true);
+        print('LIVE novel anime links: ${linked.map((e) => e.id).join(",")}');
         expect(comments.commentList, isNotEmpty);
         expect(comments.total, greaterThan(0));
         final episode = await BangumiApi.getBangumiEpisodeByID(55770, 1);

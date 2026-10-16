@@ -7,6 +7,7 @@ import 'package:kazumi/novel/novel_models.dart';
 import 'package:kazumi/novel/novel_rule.dart';
 import 'package:kazumi/novel/novel_service.dart';
 import 'package:kazumi/services/sync/webdav.dart';
+import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 
 class _Adapter implements NovelSourceAdapter {
   _Adapter(this.source);
@@ -46,6 +47,10 @@ class _Service extends NovelService {
   NovelBook? selected;
   String? knownEdition, boundEdition;
   final loginResult = Completer<void>();
+  List<BangumiItem> linkedAnime = [];
+  @override
+  Future<List<BangumiItem>> relatedAnime(NovelBook book,
+      {String? editionId, bool refresh = false}) async => linkedAnime;
   @override
   List<NovelRule> get rules => sources.keys
       .map(
@@ -139,10 +144,17 @@ void main() {
     (tester) async {
       final service = _Service();
       service.knownEdition = 'already-reading';
+      service.linkedAnime = [BangumiItem.fromJson({
+        'id': 42, 'type': 2, 'name': '源甲小说', 'name_cn': '源甲小说',
+        'rating': {'rank': 1, 'score': 8.0, 'total': 1},
+        'images': <String, String>{},
+      })];
       await _open(tester, service);
       service.sources['linovel']!.complete(0, '源甲小说');
       await tester.pump();
       expect(find.text('源甲小说'), findsOneWidget);
+      await tester.pump();
+      expect(find.byTooltip('查看番剧详情'), findsOneWidget);
       expect(find.text('正在搜索…'), findsOneWidget);
       await tester.tap(find.text('源甲小说'));
       await tester.pumpAndSettle();

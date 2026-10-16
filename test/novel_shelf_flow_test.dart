@@ -37,12 +37,15 @@ class _Paths extends PathProviderPlatform {
 }
 
 class _AnimeAdapter implements HttpClientAdapter {
+  final requests = <RequestOptions>[];
   @override
   Future<ResponseBody> fetch(
     RequestOptions options,
     Stream<Uint8List>? stream,
     Future<void>? cancel,
-  ) async => ResponseBody.fromString(
+  ) async {
+    requests.add(options);
+    return ResponseBody.fromString(
     jsonEncode({
       'id': 42,
       'name': '测试番剧',
@@ -54,18 +57,17 @@ class _AnimeAdapter implements HttpClientAdapter {
     headers: {
       Headers.contentTypeHeader: ['application/json'],
     },
-  );
+    );
+  }
   @override
   void close({bool force = false}) {}
 }
 
 class _CollectRepository extends CollectCrudRepository {
-  bool fail = false;
-  Completer<void> attempt = Completer<void>();
+  int writes = 0;
   @override
   Future<void> addCollectible(BangumiItem item, int type) async {
-    if (!attempt.isCompleted) attempt.complete();
-    if (fail) throw StateError('fixture collect write failed');
+    writes++;
     await super.addCollectible(item, type);
   }
 }
@@ -193,6 +195,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory root;
   late PathProviderPlatform paths;
+  late _AnimeAdapter animeAdapter;
   setUpAll(() async {
     paths = PathProviderPlatform.instance;
     root = await Directory.systemTemp.createTemp('book-shelf-flow-');
@@ -203,7 +206,8 @@ void main() {
   setUp(() async {
     await GStorage.collectibles.clear();
     await GStorage.collectChanges.clear();
-    DioFactory.bangumiDio.httpClientAdapter = _AnimeAdapter();
+    animeAdapter = _AnimeAdapter();
+    DioFactory.bangumiDio.httpClientAdapter = animeAdapter;
   });
   tearDown(() {
     DioFactory.reset();
@@ -215,15 +219,18 @@ void main() {
     await root.delete(recursive: true);
   });
   testWidgets(
-    'accepting the exit offer saves official watching collection then shelf',
+    'accepting the exit offer shelves the novel without adding an anime collection',
     (tester) async {
       final (service, repo) = (await tester.runAsync(
         () async => (_Service(), _CollectRepository()),
       ))!;
       await _start(tester, service, CollectController(repo));
       await _accept(tester, service.shelfAttempt);
-      expect(repo.getCollectType(42), 1);
-      expect(GStorage.collectChanges.values.single.bangumiID, 42);
+      expect(repo.getCollectType(42), 0);
+      expect(repo.writes, 0);
+      expect(GStorage.collectibles.isEmpty, true);
+      expect(GStorage.collectChanges.isEmpty, true);
+      expect(animeAdapter.requests, isEmpty);
       expect(service.shelved, true);
       expect(service.shelfAnimeId, 42);
       expect(find.byType(NovelReaderPage), findsNothing);
@@ -231,23 +238,29 @@ void main() {
     timeout: const Timeout(Duration(seconds: 45)),
   );
   testWidgets(
-    'collect write failure keeps the reader and shelf unchanged, then retries',
+    'shelving preserves an existing anime status and its sync change log',
     (tester) async {
       final (service, repo) = (await tester.runAsync(
-        () async => (_Service(), _CollectRepository()..fail = true),
+        () async => (_Service(), _CollectRepository()),
       ))!;
+      await tester.runAsync(() async {
+        await repo.addCollectible(BangumiItem.fromJson({
+          'id': 42, 'name': '测试番剧', 'name_cn': '测试番剧',
+          'rating': {'rank': 1, 'score': 8.0, 'total': 1},
+          'images': <String, String>{},
+        }), 2);
+        await GStorage.appendCollectChange(bangumiId: 42, action: 1, type: 2);
+      });
+      repo.writes = 0;
+      final before = GStorage.collectibles.toMap();
+      final changes = GStorage.collectChanges.values.map((e) => e.toString()).toList();
       await _start(tester, service, CollectController(repo));
-      await _accept(tester, repo.attempt);
-      expect(service.shelved, false);
-      expect(repo.getCollectType(42), 0);
-      expect(find.byType(NovelReaderPage), findsOneWidget);
-      expect(
-        find.textContaining('fixture collect write failed'),
-        findsOneWidget,
-      );
-      repo.fail = false;
       await _accept(tester, service.shelfAttempt);
-      expect(repo.getCollectType(42), 1);
+      expect(repo.getCollectType(42), 2);
+      expect(repo.writes, 0);
+      expect(GStorage.collectibles.toMap(), before);
+      expect(GStorage.collectChanges.values.map((e) => e.toString()).toList(), changes);
+      expect(animeAdapter.requests, isEmpty);
       expect(service.shelved, true);
     },
     timeout: const Timeout(Duration(seconds: 45)),
@@ -260,7 +273,10 @@ void main() {
       ))!;
       await _start(tester, service, CollectController(repo));
       await _accept(tester, service.shelfAttempt);
-      expect(repo.getCollectType(42), 1);
+      expect(repo.getCollectType(42), 0);
+      expect(repo.writes, 0);
+      expect(GStorage.collectChanges.isEmpty, true);
+      expect(animeAdapter.requests, isEmpty);
       expect(service.shelved, false);
       expect(service.saved!.chapter.url, _chapters[1].url);
       expect(find.byType(NovelReaderPage), findsOneWidget);

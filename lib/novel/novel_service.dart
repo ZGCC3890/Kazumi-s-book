@@ -16,6 +16,8 @@ import 'novel_rule.dart';
 import 'novel_sync_state.dart';
 import 'novel_reader_store.dart';
 import 'novel_http_session.dart';
+import 'novel_anime_resolver.dart';
+import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 
 class NovelService extends ChangeNotifier
     with WidgetsBindingObserver
@@ -23,6 +25,7 @@ class NovelService extends ChangeNotifier
   NovelService(this.webDav);
   final WebDav webDav;
   final _writes = AsyncSerialQueue();
+  final _anime = NovelAnimeResolver();
   late Box<String> _box, _cache, _rules;
   late String deviceId;
   late NovelHttpSession _http;
@@ -238,6 +241,18 @@ class NovelService extends ChangeNotifier
       .where((j) => (j['editionIds'] as List).contains(editionId))
       .map((j) => j['animeId'] as int)
       .toList();
+
+  Future<List<BangumiItem>> relatedAnime(NovelBook book,
+      {String? editionId, bool refresh = false}) {
+    final ids = animeIdsForBook(book, editionId: editionId);
+    return ids.isEmpty ? _anime.forTitle(book.title, refresh: refresh)
+        : _anime.forIds(ids, refresh: refresh);
+  }
+
+  List<int> animeIdsForBook(NovelBook book, {String? editionId}) {
+    final id = editionId ?? editionForBook(book);
+    return id == null ? <int>[] : animeIdsForEdition(id);
+  }
 
   String? editionForBook(NovelBook book) {
     for (final edition in editions) {

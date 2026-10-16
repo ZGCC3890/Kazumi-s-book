@@ -4,6 +4,7 @@ import 'novel_entry.dart';
 import 'novel_rules_page.dart';
 import 'novel_service.dart';
 import 'novel_book_cover.dart';
+import 'novel_anime_link.dart';
 
 class NovelLibraryPage extends StatelessWidget {
   const NovelLibraryPage({super.key, required this.service, this.title});
@@ -105,17 +106,26 @@ class NovelLibraryPage extends StatelessWidget {
                     if (context.mounted && service.state.conflicts.isEmpty)
                       await NovelEntry.read(context, service, edition.id);
                   }),
-                  trailing: PopupMenuButton<String>(
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'source', child: Text('更换书源')),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (service.selectedBook(edition.id) != null)
+                        NovelAnimeLink(
+                          service: service,
+                          book: service.selectedBook(edition.id)!,
+                          editionId: edition.id,
+                        ),
+                      PopupMenuButton<String>(
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(value: 'source', child: Text('更换书源')),
+                        ],
+                        onSelected: (value) => NovelEntry.search(
+                          context, service, 0,
+                          service.work(edition.workId).title,
+                          editionId: edition.id,
+                        ),
+                      ),
                     ],
-                    onSelected: (value) => NovelEntry.search(
-                      context,
-                      service,
-                      0,
-                      service.work(edition.workId).title,
-                      editionId: edition.id,
-                    ),
                   ),
                 ),
               ),

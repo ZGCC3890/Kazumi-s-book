@@ -311,6 +311,7 @@ class BangumiApi {
       int limit = 20,
       int offset = 0,
       String sort = 'heat',
+      bool includeWithoutChineseName = false,
       SearchDateRange? dateRange,
       SearchIntRange? rankRange,
       SearchDoubleRange? scoreRange,
@@ -339,7 +340,7 @@ class BangumiApi {
         if (jsonItem is Map<String, dynamic>) {
           try {
             BangumiItem bangumiItem = BangumiItem.fromJson(jsonItem);
-            if (bangumiItem.nameCn != '') {
+            if (includeWithoutChineseName || bangumiItem.nameCn != '') {
               bangumiList.add(bangumiItem);
             }
           } catch (e) {
