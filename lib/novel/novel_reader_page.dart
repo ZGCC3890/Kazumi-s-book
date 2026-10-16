@@ -271,15 +271,18 @@ class _NovelReaderPageState extends State<NovelReaderPage>
             ? restore?.imageHash
             : null,
       );
+      final readIdentity = await service.chapterReadIdentity(
+        widget.editionId,
+        widget.book,
+        chapter,
+        proven || confirmMapping ? restore : null,
+      );
+      if (!mounted || generation != _generation) return;
+      _readChapters.add(readIdentity);
       setState(() {
         _busy = false;
         _layoutKey = null;
       });
-      _readChapters.add(
-        _text.isNotEmpty
-            ? 'text/${restore != null && (proven || confirmMapping) ? restore.chapterDigest : _location!.chapterDigest}'
-            : 'image/${_location!.imageHash}',
-      );
     } catch (error) {
       if (generation == _generation) _fail(error);
     }
@@ -794,6 +797,25 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     );
   }
 
+  Widget _readerGestures(Widget child) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTapUp: (details) {
+      final width = MediaQuery.sizeOf(context).width;
+      if (_prefs['mode'] == 'page' && details.localPosition.dx < width * .25) {
+        _turn(-1);
+      } else if (_prefs['mode'] == 'page' &&
+          details.localPosition.dx > width * .75) {
+        _turn(1);
+      } else {
+        setState(() => _chrome = !_chrome);
+        SystemChrome.setEnabledSystemUIMode(
+          _chrome ? SystemUiMode.edgeToEdge : SystemUiMode.immersiveSticky,
+        );
+      }
+    },
+    child: child,
+  );
+
   Widget _body(double width, double height, TextStyle style, double inset) {
     final scaler = MediaQuery.textScalerOf(context);
     final key =
@@ -844,44 +866,48 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     }
     if (_prefs['mode'] == 'scroll') {
       return SelectionArea(
-        child: ListView(
-          key: ValueKey(key),
-          controller: _scroll,
-          padding: EdgeInsets.symmetric(horizontal: inset),
-          children: [
-            for (final f in _layout!.fragments) _fragmentWidget(f, style),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                TextButton(
-                  onPressed: _chapterIndex > 0 ? () => _chapter(-1) : null,
-                  child: const Text('上一章'),
-                ),
-                TextButton(
-                  onPressed: _chapterIndex + 1 < _chapters.length
-                      ? () => _chapter(1)
-                      : null,
-                  child: const Text('下一章'),
-                ),
-              ],
-            ),
-          ],
+        child: _readerGestures(
+          ListView(
+            key: ValueKey(key),
+            controller: _scroll,
+            padding: EdgeInsets.symmetric(horizontal: inset),
+            children: [
+              for (final f in _layout!.fragments) _fragmentWidget(f, style),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: _chapterIndex > 0 ? () => _chapter(-1) : null,
+                    child: const Text('上一章'),
+                  ),
+                  TextButton(
+                    onPressed: _chapterIndex + 1 < _chapters.length
+                        ? () => _chapter(1)
+                        : null,
+                    child: const Text('下一章'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       );
     }
-    return PageView.builder(
-      key: ValueKey(key),
-      controller: _pages,
-      itemCount: _layout!.pages.length,
-      onPageChanged: (page) => _moved(_layout!.pages[page].first),
-      itemBuilder: (_, page) => Padding(
-        padding: EdgeInsets.symmetric(horizontal: inset),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (final i in _layout!.pages[page])
-              _fragmentWidget(_layout!.fragments[i], style),
-          ],
+    return _readerGestures(
+      PageView.builder(
+        key: ValueKey(key),
+        controller: _pages,
+        itemCount: _layout!.pages.length,
+        onPageChanged: (page) => _moved(_layout!.pages[page].first),
+        itemBuilder: (_, page) => Padding(
+          padding: EdgeInsets.symmetric(horizontal: inset),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final i in _layout!.pages[page])
+                _fragmentWidget(_layout!.fragments[i], style),
+            ],
+          ),
         ),
       ),
     );
@@ -1019,60 +1045,40 @@ class _NovelReaderPageState extends State<NovelReaderPage>
                           },
                           child: Focus(
                             autofocus: true,
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTapUp: (details) {
-                                final width = MediaQuery.sizeOf(context).width;
-                                if (_prefs['mode'] == 'page' &&
-                                    details.localPosition.dx < width * .25) {
-                                  _turn(-1);
-                                } else if (_prefs['mode'] == 'page' &&
-                                    details.localPosition.dx > width * .75) {
-                                  _turn(1);
-                                } else {
-                                  setState(() => _chrome = !_chrome);
-                                  SystemChrome.setEnabledSystemUIMode(
-                                    _chrome
-                                        ? SystemUiMode.edgeToEdge
-                                        : SystemUiMode.immersiveSticky,
-                                  );
-                                }
-                              },
-                              child: Stack(
-                                children: [
-                                  Positioned.fill(
-                                    child: LayoutBuilder(
-                                      builder: (_, c) {
-                                        final column = c.maxWidth.clamp(
-                                          0.0,
-                                          900.0,
-                                        );
-                                        final width =
-                                            column -
-                                            2 *
-                                                (_prefs['margin'] as num)
-                                                    .toDouble();
-                                        return _body(
-                                          width,
-                                          c.maxHeight,
-                                          style,
-                                          (c.maxWidth - width) / 2,
-                                        );
-                                      },
-                                    ),
+                            child: Stack(
+                              children: [
+                                Positioned.fill(
+                                  child: LayoutBuilder(
+                                    builder: (_, c) {
+                                      final column = c.maxWidth.clamp(
+                                        0.0,
+                                        900.0,
+                                      );
+                                      final width =
+                                          column -
+                                          2 *
+                                              (_prefs['margin'] as num)
+                                                  .toDouble();
+                                      return _body(
+                                        width,
+                                        c.maxHeight,
+                                        style,
+                                        (c.maxWidth - width) / 2,
+                                      );
+                                    },
                                   ),
-                                  Positioned.fill(
-                                    child: IgnorePointer(
-                                      child: ColoredBox(
-                                        color: Colors.black.withValues(
-                                          alpha: (_prefs['brightness'] as num)
-                                              .toDouble(),
-                                        ),
+                                ),
+                                Positioned.fill(
+                                  child: IgnorePointer(
+                                    child: ColoredBox(
+                                      color: Colors.black.withValues(
+                                        alpha: (_prefs['brightness'] as num)
+                                            .toDouble(),
                                       ),
                                     ),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           ),
                         ),

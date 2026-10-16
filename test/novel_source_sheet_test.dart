@@ -27,7 +27,8 @@ class _Adapter implements NovelSourceAdapter {
     ),
   ]);
   @override
-  Future<NovelBook> bookFromUrl(String url) => throw UnimplementedError();
+  Future<NovelBook> bookFromUrl(String url) async =>
+      NovelBook(sourceId: source, url: url, title: '链接小说');
   @override
   Future<List<NovelChapter>> catalog(NovelBook book) =>
       throw UnimplementedError();
@@ -105,6 +106,28 @@ Future<void> _open(WidgetTester tester, _Service service) async {
 }
 
 void main() {
+  testWidgets(
+    'public book URL transfers from fetching metadata to binding and opening',
+    (tester) async {
+      final service = _Service();
+      await _open(tester, service);
+      for (final source in service.sources.values)
+        source.complete(0, '${source.source}结果');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(PopupMenuButton<String>).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('打开书籍链接'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byType(TextField).last,
+        'https://www.linovel.net/book/42.html',
+      );
+      await tester.tap(find.text('读取详情'));
+      await tester.pumpAndSettle();
+      expect(service.selected?.url, 'https://www.linovel.net/book/42.html');
+      expect(find.byType(NovelSearchPage), findsNothing);
+    },
+  );
   testWidgets(
     'each source finishes independently and a selected result opens without version forms',
     (tester) async {

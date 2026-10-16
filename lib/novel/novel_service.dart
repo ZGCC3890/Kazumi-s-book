@@ -189,6 +189,27 @@ class NovelService extends ChangeNotifier
   List<NovelEdition> get shelfEditions =>
       editions.where((e) => isShelved(e.id)).toList();
 
+  @override
+  Future<String> chapterReadIdentity(
+    String editionId,
+    NovelBook book,
+    NovelChapter chapter,
+    NovelPosition? restoredFrom,
+  ) async {
+    String key(String source, String url) =>
+        'readChapterIdentity/$editionId/$source/$url';
+    final current = key(book.sourceId, chapter.url);
+    final known = _box.get(current);
+    if (known != null) return known;
+    var identity = current;
+    if (restoredFrom != null) {
+      final original = key(restoredFrom.sourceId, restoredFrom.chapter.url);
+      identity = _box.get(original) ?? original;
+    }
+    await _box.put(current, identity);
+    return identity;
+  }
+
   Future<int> recordReadChapters(String editionId, Set<String> chapters) async {
     final key = 'readChapters/$editionId';
     final read = <String>{

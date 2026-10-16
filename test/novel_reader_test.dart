@@ -38,6 +38,14 @@ class _ReaderStore extends ChangeNotifier implements NovelReaderStore {
   @override NovelSyncState get state => _state;
   @override String? get syncError => null;
   @override NovelPosition? position(String editionId) => remotePosition ?? (saved.isEmpty ? initial : saved.last);
+  final readIdentities = <String, String>{};
+  @override Future<String> chapterReadIdentity(String editionId, NovelBook book,
+      NovelChapter chapter, NovelPosition? restoredFrom) async {
+    final current = '${book.sourceId}/${chapter.url}';
+    return readIdentities.putIfAbsent(current, () => restoredFrom == null
+      ? current : readIdentities['${restoredFrom.sourceId}/${restoredFrom.chapter.url}'] ??
+          '${restoredFrom.sourceId}/${restoredFrom.chapter.url}');
+  }
   void receiveSequentialRemote(NovelPosition position) {
     _state = _state.edit('position/edition', position.toJson(), 'remote-device');
     remotePosition = position;
@@ -154,7 +162,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
-    expect(read, {'text/${NovelLocator.digest('第一章正文')}', 'text/${NovelLocator.digest('第二章正文')}'});
+    expect(read, {'${_book.sourceId}/${_one.url}', '${_book.sourceId}/${_two.url}'});
     expect(find.byType(NovelReaderPage), findsNothing);
   });
   testWidgets('first open keeps the leading illustration visible and bookmarks its bytes', (tester) async {
@@ -336,6 +344,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(store.mappingWrites, 1);
     expect(store.saved.last.textOffset, 8);
+    await _showControls(tester);
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
     store.saved.clear(); // Return to the original source position, preserving the mapping.

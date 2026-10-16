@@ -321,9 +321,9 @@ void main() {
     await service.importRule(jsonEncode(old));
     final oldHash = sha256.convert(utf8.encode(service.rules.single.encode())).toString();
     final index = jsonDecode(await File('novel_rules/catalog.json').readAsString()) as Map<String, dynamic>;
-    expect((index['rules'] as List).first['replaces'], contains(oldHash));
+    expect((index['rules'] as List).singleWhere((r) => r['id'] == 'wenku8')['replaces'], contains(oldHash));
     remote.files['/rules/catalog.json'] = utf8.encode(jsonEncode(index));
-    for (final id in ['wenku8', 'syosetu']) {
+    for (final id in ['wenku8', 'syosetu', 'linovel', 'lightnovel']) {
       remote.files['/rules/$id.json'] = await File('novel_rules/$id.json').readAsBytes();
     }
     await service.saveRuleCatalogUrl('${remote.url}/rules/catalog.json');
@@ -337,6 +337,20 @@ void main() {
     await service.saveRuleCatalogUrl('${remote.url}/rules/catalog.json');
     await service.ensureDefaultRules();
     expect(service.rules.single.name, '本机自定义文库');
+  });
+
+  test('cross-source chapter identity remains stable after reopening the target source', () async {
+    var service = await device('A');
+    final edition = await seed(service);
+    final original = await service.chapterReadIdentity(edition, _bookA, _chapterA, null);
+    expect(await service.recordReadChapters(edition, {original}), 1);
+    final mapped = await service.chapterReadIdentity(edition, _bookB, _chapterB, _position(edition, 5));
+    expect(mapped, original);
+    service = await device('A');
+    final reopened = await service.chapterReadIdentity(edition, _bookB, _chapterB,
+      _position(edition, 9, source: 'syosetu', chapter: _chapterB));
+    expect(reopened, original);
+    expect(await service.recordReadChapters(edition, {mapped, reopened}), 1);
   });
 
   test('preview progress is separate from shelf membership and survives restart', () async {

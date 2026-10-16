@@ -33,6 +33,8 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos --fatal-warnings
       - run: flutter test
+      - name: Verify live upstream anime search and comments
+        run: flutter test test/live/book_services_test.dart --dart-define=BOOK_LIVE=true --reporter expanded
   windows:
     needs: checks
     runs-on: windows-latest
