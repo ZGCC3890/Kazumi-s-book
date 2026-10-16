@@ -2,6 +2,7 @@ import 'package:flutter_modular/flutter_modular.dart';
 import 'package:kazumi/pages/search/image_search_page.dart';
 import 'package:kazumi/pages/search/search_controller.dart';
 import 'package:kazumi/pages/search/search_page.dart';
+import 'package:kazumi/novel/novel_service.dart';
 
 void _provideSearchController(Scoped scoped) {
   scoped.add<SearchPageController>(SearchPageController.new);
@@ -16,6 +17,7 @@ final searchModule = createModule(
         provide: _provideSearchController,
         child: (context, state) => SearchPage(
           controller: context.read<SearchPageController>(),
+          novelService: context.read<NovelService>(),
         ),
       )
       ..route(
@@ -30,6 +32,7 @@ final searchModule = createModule(
         provide: _provideSearchController,
         child: (context, state) => SearchPage(
           controller: context.read<SearchPageController>(),
+          novelService: context.read<NovelService>(),
           inputTag: state['tag'] ?? '',
         ),
       );

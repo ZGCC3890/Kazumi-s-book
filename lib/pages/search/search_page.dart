@@ -14,6 +14,10 @@ import 'package:kazumi/bean/widget/empty_state_widget.dart';
 import 'package:kazumi/bean/widget/state_presentation.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 import 'package:kazumi/pages/search/search_controller.dart';
+import 'package:kazumi/pages/search/novel_search_pane.dart';
+import 'package:kazumi/novel/novel_entry.dart';
+import 'package:kazumi/novel/novel_rules_page.dart';
+import 'package:kazumi/novel/novel_service.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/utils/constants.dart';
 import 'package:kazumi/utils/date_time.dart';
@@ -22,10 +26,18 @@ import 'package:kazumi/utils/search_parser.dart';
 part 'search_filter_sheet.dart';
 part 'search_widgets.dart';
 
+enum _SearchDomain { anime, novel }
+
 class SearchPage extends StatefulWidget {
-  const SearchPage({super.key, required this.controller, this.inputTag = ''});
+  const SearchPage({
+    super.key,
+    required this.controller,
+    required this.novelService,
+    this.inputTag = '',
+  });
 
   final SearchPageController controller;
+  final NovelService novelService;
   final String inputTag;
 
   @override
@@ -39,10 +51,17 @@ class _SearchPageState extends State<SearchPage> {
   // Preserve the input subtree when the header moves in or out of the scroll view.
   final _searchHeaderKey = GlobalKey();
   String? _submittedQuery;
+  String? _novelQuery;
+  int _novelRevision = 0;
+  int _domainRevision = 0;
+  _SearchDomain _domain = _SearchDomain.anime;
+  final _drafts = {_SearchDomain.anime: '', _SearchDomain.novel: ''};
   bool _managingHistory = false;
 
   SearchPageController get _controller => widget.controller;
-  bool get _hasSearched => _submittedQuery != null;
+  bool get _hasSearched => _domain == _SearchDomain.anime
+      ? _submittedQuery != null
+      : _novelQuery != null;
 
   @override
   void initState() {
@@ -75,6 +94,16 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Future<void> _submit(String value) async {
+    if (_domain == _SearchDomain.novel) {
+      final query = value.trim();
+      _inputFocus.unfocus();
+      _writeInput(query);
+      setState(() {
+        _novelQuery = query.isEmpty ? null : query;
+        _novelRevision++;
+      });
+      return;
+    }
     final filters = SearchParser(value).toFilterState();
     final query = SearchParser.fromFilterState(filters);
     _inputFocus.unfocus();
@@ -88,17 +117,39 @@ class _SearchPageState extends State<SearchPage> {
   Future<void> _applyFilters(SearchFilterState filters) =>
       _submit(SearchParser.fromFilterState(filters));
 
+  void _switchDomain(_SearchDomain domain) {
+    if (_domain == domain) return;
+    _inputFocus.unfocus();
+    _drafts[_domain] = _input.text;
+    _writeInput(_drafts[domain]!);
+    setState(() {
+      _domain = domain;
+      _domainRevision++;
+      _managingHistory = false;
+    });
+  }
+
+  Future<void> _manageNovelRules() async {
+    final owner = ModalRoute.of(context)!;
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+      builder: (_) => NovelRulesPage(service: widget.novelService),
+    ));
+    if (mounted && owner.isActive) setState(() => _novelRevision++);
+  }
+
   void _loadMoreOnScroll() {
     if (!_scroll.hasClients || _scroll.position.extentAfter > 360) return;
     _loadMore();
   }
 
   void _loadMore() {
+    if (_domain != _SearchDomain.anime) return;
     final query = _submittedQuery;
     if (query != null) _controller.searchBangumi(query);
   }
 
   Future<void> _showFilters() async {
+    final domainRevision = _domainRevision;
     _inputFocus.unfocus();
     final result = await showAdaptiveBottomSheet<_SearchFilterResult>(
       context: context,
@@ -109,17 +160,21 @@ class _SearchPageState extends State<SearchPage> {
         initialNotShowAbandoned: _controller.notShowAbandonedBangumis,
       ),
     );
-    if (!mounted || result == null) return;
+    if (!mounted || result == null || _domain != _SearchDomain.anime ||
+        domainRevision != _domainRevision) return;
     await _controller.setNotShowWatchedBangumis(result.notShowWatched);
     await _controller.setNotShowAbandonedBangumis(result.notShowAbandoned);
-    if (!mounted) return;
+    if (!mounted || _domain != _SearchDomain.anime ||
+        domainRevision != _domainRevision) return;
     await _applyFilters(result.filterState);
   }
 
   Future<void> _imageSearch() async {
+    final domainRevision = _domainRevision;
     _inputFocus.unfocus();
     final result = await context.pushNamed('/search/image');
-    if (!mounted || result is! String || result.isEmpty) return;
+    if (!mounted || result is! String || result.isEmpty ||
+        _domain != _SearchDomain.anime || domainRevision != _domainRevision) return;
     await _submit(result);
   }
 
@@ -127,10 +182,15 @@ class _SearchPageState extends State<SearchPage> {
     _inputFocus.unfocus();
     _writeInput('');
     setState(() {
-      _submittedQuery = null;
+      if (_domain == _SearchDomain.anime) {
+        _submittedQuery = null;
+      } else {
+        _novelQuery = null;
+        _novelRevision++;
+      }
       _managingHistory = false;
     });
-    if (_scroll.hasClients) _scroll.jumpTo(0);
+    if (_domain == _SearchDomain.anime && _scroll.hasClients) _scroll.jumpTo(0);
   }
 
   Widget _searchField() {
@@ -140,7 +200,7 @@ class _SearchPageState extends State<SearchPage> {
       builder: (context, value, child) => SearchBar(
         controller: _input,
         focusNode: _inputFocus,
-        hintText: '搜索番剧名称',
+        hintText: _domain == _SearchDomain.anime ? '搜索番剧名称' : '搜索小说书名',
         textInputAction: TextInputAction.search,
         constraints: const BoxConstraints(minHeight: 64),
         elevation: const WidgetStatePropertyAll(0),
@@ -148,10 +208,21 @@ class _SearchPageState extends State<SearchPage> {
         padding: const WidgetStatePropertyAll(
           EdgeInsets.symmetric(horizontal: 8),
         ),
-        leading: IconButton(
-          tooltip: '搜索',
-          onPressed: () => _submit(_input.text),
-          icon: const Icon(Icons.search_rounded),
+        leading: PopupMenuButton<_SearchDomain>(
+          tooltip: '搜索类型',
+          initialValue: _domain,
+          onSelected: _switchDomain,
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: _SearchDomain.anime, child: Text('番剧')),
+            PopupMenuItem(value: _SearchDomain.novel, child: Text('小说')),
+          ],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Text(_domain == _SearchDomain.anime ? '番剧' : '小说'),
+              const Icon(Icons.arrow_drop_down_rounded, size: 20),
+            ]),
+          ),
         ),
         trailing: [
           if (value.text.isNotEmpty || _hasSearched)
@@ -161,9 +232,9 @@ class _SearchPageState extends State<SearchPage> {
               icon: const Icon(Icons.close_rounded),
             ),
           IconButton(
-            tooltip: '以图搜番',
-            onPressed: _imageSearch,
-            icon: const Icon(Icons.image_search_rounded),
+            tooltip: '搜索',
+            onPressed: () => _submit(_input.text),
+            icon: const Icon(Icons.search_rounded),
           ),
         ],
         onSubmitted: _submit,
@@ -449,9 +520,21 @@ class _SearchPageState extends State<SearchPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const SysAppBar(
+      appBar: SysAppBar(
         backgroundColor: Colors.transparent,
-        title: Text('番剧搜索'),
+        title: Text(_domain == _SearchDomain.anime ? '番剧搜索' : '小说搜索'),
+        actions: [
+          if (_domain == _SearchDomain.anime)
+            IconButton(
+              tooltip: '以图搜番', onPressed: _imageSearch,
+              icon: const Icon(Icons.image_search_rounded),
+            )
+          else
+            IconButton(
+              tooltip: '小说规则', onPressed: _manageNovelRules,
+              icon: const Icon(Icons.rule_folder_outlined),
+            ),
+        ],
       ),
       body: SafeArea(
         top: false,
@@ -463,6 +546,21 @@ class _SearchPageState extends State<SearchPage> {
               constraints.maxWidth - horizontal * 2,
             );
             final inset = (constraints.maxWidth - width) / 2;
+            if (_domain == _SearchDomain.novel) {
+              final revision = _novelRevision;
+              return Padding(
+                padding: EdgeInsets.symmetric(horizontal: inset),
+                child: NovelSearchPane(
+                  service: widget.novelService,
+                  header: _header(), query: _novelQuery, revision: revision,
+                  onSelected: (edition) async {
+                    if (mounted && _domain == _SearchDomain.novel && _novelRevision == revision) {
+                      await NovelEntry.read(context, widget.novelService, edition);
+                    }
+                  },
+                ),
+              );
+            }
             final pinSearch =
                 _hasSearched &&
                 constraints.maxHeight >= 420 &&

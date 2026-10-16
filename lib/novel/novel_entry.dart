@@ -216,8 +216,23 @@ class NovelSearchPage extends StatefulWidget {
     required this.initialQuery,
     this.existingEditionId,
     this.existingWorkId,
-  });
+  }) : embedded = false,
+       onSelected = null,
+       header = null;
+  const NovelSearchPage.results({
+    super.key,
+    required this.service,
+    required this.initialQuery,
+    required this.onSelected,
+    required this.header,
+  }) : animeId = 0,
+       existingEditionId = null,
+       existingWorkId = null,
+       embedded = true;
   final NovelService service;
+  final bool embedded;
+  final Widget? header;
+  final Future<void> Function(String editionId)? onSelected;
   final int animeId;
   final String initialQuery;
   final String? existingEditionId, existingWorkId;
@@ -461,7 +476,13 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
             widget.existingEditionId ?? service.editionForBook(book),
         existingWorkId: widget.existingWorkId,
       );
-      if (mounted && owner.isActive) Navigator.pop(context, id);
+      if (mounted && owner.isActive) {
+        if (widget.embedded) {
+          await widget.onSelected!(id);
+        } else {
+          Navigator.pop(context, id);
+        }
+      }
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     } finally {
@@ -525,7 +546,7 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => widget.embedded ? _content() : Scaffold(
     appBar: AppBar(
       automaticallyImplyLeading: false,
       title: const Text('选择小说书源'),
@@ -542,7 +563,10 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
         ),
       ],
     ),
-    body: Column(
+    body: _content(),
+  );
+
+  Widget _content() => widget.embedded ? _resultList() : Column(
       children: [
         Padding(
           padding: const EdgeInsets.all(16),
@@ -567,8 +591,17 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
         ),
         if (_busy || _updatingRules) const LinearProgressIndicator(),
         Expanded(
-          child: ListView(
+          child: _resultList(),
+        ),
+      ],
+  );
+
+  Widget _resultList() => ListView(
             children: [
+              if (widget.embedded) ...[
+                widget.header!,
+                if (_busy || _updatingRules) const LinearProgressIndicator(),
+              ],
               if (_rulesError != null)
                 ListTile(
                   title: const Text('默认书源更新未完成，已安装书源可继续使用'),
@@ -676,9 +709,5 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
                 const Divider(height: 1),
               ],
             ],
-          ),
-        ),
-      ],
-    ),
   );
 }
