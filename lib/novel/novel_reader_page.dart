@@ -46,6 +46,8 @@ class _NovelReaderPageState extends State<NovelReaderPage>
   PageController? _pages;
   int? _restoreImageBlock;
   String get _text => _blocks.where((b) => !b.image).map((b) => b.value).join();
+  // The former standalone night preset now uses paper white in app light mode.
+  int get _dayTheme => _prefs['theme'] == 3 ? 0 : _prefs['theme'] as int;
 
   @override
   void initState() {
@@ -600,7 +602,10 @@ class _NovelReaderPageState extends State<NovelReaderPage>
             update(() => _prefs[key] = value);
             setState(() {
               _prefs[key] = value;
-              _layoutKey = null;
+              if (const {'fontSize', 'lineHeight', 'margin', 'font', 'mode'}
+                  .contains(key)) {
+                _layoutKey = null;
+              }
             });
             unawaited(service.savePreferences(_prefs));
           }
@@ -638,13 +643,14 @@ class _NovelReaderPageState extends State<NovelReaderPage>
                       divisions: 11,
                       onChanged: (v) => change('margin', v),
                     ),
+                    const Text('日间纸色（深色模式下随应用配色）'),
                     Wrap(
                       spacing: 8,
                       children: [
-                        for (var i = 0; i < 4; i++)
+                        for (var i = 0; i < 3; i++)
                           ChoiceChip(
-                            label: Text(['纸白', '护眼', '羊皮纸', '夜间'][i]),
-                            selected: _prefs['theme'] == i,
+                            label: Text(['纸白', '护眼', '羊皮纸'][i]),
+                            selected: _dayTheme == i,
                             onSelected: (_) => change('theme', i),
                           ),
                       ],
@@ -881,13 +887,15 @@ class _NovelReaderPageState extends State<NovelReaderPage>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final palette = <(Color, Color)>[
       (const Color(0xfffaf9f6), const Color(0xff27251f)),
       (const Color(0xffdce9d5), const Color(0xff253323)),
       (const Color(0xffefe2c4), const Color(0xff433420)),
-      (const Color(0xff17191c), const Color(0xffb9b7b1)),
     ];
-    final colors = palette[_prefs['theme'] as int];
+    final colors = theme.brightness == Brightness.dark
+        ? (theme.colorScheme.surface, theme.colorScheme.onSurface)
+        : palette[_dayTheme];
     final style = TextStyle(
       fontSize: (_prefs['fontSize'] as num).toDouble(),
       height: (_prefs['lineHeight'] as num).toDouble(),
@@ -902,14 +910,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
         if (!didPop) unawaited(_leave());
       },
       child: Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: colors.$2,
-            brightness: _prefs['theme'] == 3
-                ? Brightness.dark
-                : Brightness.light,
-          ),
-        ),
+        data: theme,
         child: Scaffold(
           backgroundColor: colors.$1,
           appBar: _chrome

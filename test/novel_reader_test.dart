@@ -97,20 +97,29 @@ NovelPosition _position(NovelChapter chapter, String text, int offset) => NovelL
 
 Future<void> _open(WidgetTester tester, _ReaderStore store, {double scale = 1, bool awaitsChoice = false,
   bool showControls = true, Size size = const Size(480, 800),
+  ValueNotifier<ThemeMode>? themeMode,
   Future<void> Function(Set<String>)? onLeave}) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = size;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   addTearDown(() async { await tester.pumpWidget(const SizedBox.shrink()); store.dispose(); });
-  await tester.pumpWidget(MaterialApp(
+  final mode = themeMode ?? ValueNotifier(ThemeMode.system);
+  if (themeMode == null) addTearDown(mode.dispose);
+  await tester.pumpWidget(ValueListenableBuilder<ThemeMode>(
+    valueListenable: mode,
+    builder: (_, value, child) => MaterialApp(
+    theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue)),
+    darkTheme: ThemeData(colorScheme: ColorScheme.fromSeed(
+      seedColor: Colors.blue, brightness: Brightness.dark).copyWith(surface: Colors.black)),
+    themeMode: value,
     builder: (context, child) => MediaQuery(
       data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)), child: child!),
     home: Builder(builder: (context) => Scaffold(body: TextButton(
       onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
         NovelReaderPage(service: store, editionId: 'edition', book: _book, onLeave: onLeave))),
       child: const Text('Open reader')))),
-  ));
+  )));
   await tester.tap(find.text('Open reader'));
   if (awaitsChoice) {
     await tester.pump();
@@ -133,6 +142,82 @@ Future<void> _showControls(WidgetTester tester) async {
 ScrollController _scroll(WidgetTester tester) => tester.widget<ListView>(find.byType(ListView).first).controller!;
 
 void main() {
+  for (final readingMode in ['scroll', 'page']) {
+    testWidgets('$readingMode reader follows app theme without moving progress', (tester) async {
+      final mode = ValueNotifier(ThemeMode.light);
+      addTearDown(mode.dispose);
+      final store = _ReaderStore({_one.url: List.generate(160,
+        (i) => NovelBlock.text('第$i段：配色跟随应用设置，切换明暗不改变阅读位置。'))});
+      store.prefs['mode'] = readingMode;
+      store.prefs['theme'] = 1;
+      await _open(tester, store, themeMode: mode, showControls: false);
+      final body = find.byType(readingMode == 'scroll' ? ListView : PageView);
+      await tester.drag(body, Offset(readingMode == 'scroll' ? 0 : -400,
+        readingMode == 'scroll' ? -400 : 0));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 700));
+      final offset = store.saved.last.textOffset;
+      expect(offset, greaterThan(0));
+      Object controller() => readingMode == 'scroll'
+        ? _scroll(tester) : tester.widget<PageView>(body).controller!;
+      double viewportPosition() => readingMode == 'scroll'
+        ? _scroll(tester).offset : tester.widget<PageView>(body).controller!.page!;
+      Color? background() => tester.widget<Scaffold>(find.descendant(
+        of: find.byType(NovelReaderPage), matching: find.byType(Scaffold))).backgroundColor;
+      Text paragraph() => tester.widgetList<Text>(find.descendant(
+        of: body, matching: find.byType(Text))).firstWhere((text) =>
+          text.style?.fontSize == 20 && text.data!.isNotEmpty);
+      final originalController = controller();
+      final originalViewport = viewportPosition();
+      expect(background(), const Color(0xffdce9d5));
+      expect(paragraph().style!.color, const Color(0xff253323));
+      mode.value = ThemeMode.dark;
+      await tester.pumpAndSettle();
+      final scheme = Theme.of(tester.element(find.byType(NovelReaderPage))).colorScheme;
+      expect(background(), scheme.surface);
+      expect(paragraph().style!.color, scheme.onSurface);
+      expect(controller(), same(originalController));
+      expect(viewportPosition(), originalViewport);
+      expect(store.saved.last.textOffset, offset);
+      await _showControls(tester);
+      final toolbar = Theme.of(tester.element(find.byTooltip('阅读设置')));
+      expect(toolbar.brightness, Brightness.dark);
+      expect(toolbar.colorScheme.primary, scheme.primary);
+      await tester.tap(find.byTooltip('阅读设置'));
+      await tester.pumpAndSettle();
+      expect(Theme.of(tester.element(find.text('阅读设置'))).brightness, Brightness.dark);
+      expect(find.text('夜间'), findsNothing);
+      mode.value = ThemeMode.light;
+      await tester.pumpAndSettle();
+      expect(Theme.of(tester.element(find.text('阅读设置'))).brightness, Brightness.light);
+      Navigator.of(tester.element(find.text('阅读设置'))).pop();
+      await tester.pumpAndSettle();
+      expect(background(), const Color(0xffdce9d5));
+      expect(paragraph().style!.color, const Color(0xff253323));
+      expect(store.prefs['theme'], 1);
+      expect(store.saved.last.textOffset, offset);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('reader follows system brightness with legacy night preference', (tester) async {
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    final store = _ReaderStore({_one.url: const [NovelBlock.text('跟随系统的阅读正文')]});
+    store.prefs['theme'] = 3;
+    await _open(tester, store);
+    final scaffold = find.descendant(of: find.byType(NovelReaderPage), matching: find.byType(Scaffold));
+    expect(tester.widget<Scaffold>(scaffold).backgroundColor, Colors.black);
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    await tester.pumpAndSettle();
+    expect(tester.widget<Scaffold>(scaffold).backgroundColor, const Color(0xfffaf9f6));
+    await tester.tap(find.byTooltip('阅读设置'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '纸白')).selected, isTrue);
+    expect(find.text('夜间'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('tablet margins scroll on both sides and center toggles hidden controls', (tester) async {
     final store = _ReaderStore({_one.url: List.generate(160,
       (i) => NovelBlock.text('第$i段：平板两侧留白也可以正常滑动正文。'))});
