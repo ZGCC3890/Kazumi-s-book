@@ -232,6 +232,18 @@ void main() {
       );
     });
 
+    test('translated titles match the same volume and chapter number', () {
+      final translated = _chapter(title: '第2章 出发', volume: '第2卷');
+      expect(
+        NovelLocator.candidates(_capture('这里是正文', 1), 'source-two', [
+          _chapter(title: '第2章 出发', volume: '第1卷'),
+          _chapter(title: '第3章 出发', number: 3),
+          translated,
+        ]),
+        [translated],
+      );
+    });
+
     test('ambiguous duplicate chapters remain multiple candidates', () {
       final first = _chapter(url: 'https://second.test/a');
       final second = _chapter(url: 'https://second.test/b');

@@ -105,13 +105,13 @@ class NovelEntry {
           child: ListView(
             shrinkWrap: true,
             children: [
-              const ListTile(title: Text('选择小说版本')),
+              const ListTile(title: Text('选择小说')),
               for (final edition in service.editions.where(
                 (e) => ids.contains(e.id),
               ))
                 ListTile(
                   title: Text(service.work(edition.workId).title),
-                  subtitle: Text(edition.label),
+                  subtitle: Text(service.work(edition.workId).author),
                   onTap: () => Navigator.pop(ctx, edition.id),
                 ),
             ],
@@ -138,7 +138,7 @@ class NovelEntry {
     int animeId = 0,
   }) async {
     final book = service.selectedBook(editionId);
-    if (book == null) throw StateError('小说版本未关联书源');
+    if (book == null) throw StateError('这本小说尚未选择书源');
     await service.ensureDefaultRules();
     if (!context.mounted) return;
     await Navigator.of(context).push<void>(
@@ -435,94 +435,17 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
     });
     try {
       final service = widget.service;
-      final editionId = widget.existingEditionId;
-      if (editionId != null && service.editionForBook(book) == editionId) {
-        await service.bind(
-          animeId: widget.animeId,
-          book: book,
-          editionLabel: service.rule(book.sourceId).json['edition'] as String,
-          language: service.rule(book.sourceId).json['language'] as String,
-          existingEditionId: editionId,
-        );
-        if (mounted) Navigator.pop(context, editionId);
-        return;
-      }
-      if (editionId == null) {
-        setState(() {
-          _busy = true;
-          _error = null;
-        });
-        try {
-          final rule = service.rule(book.sourceId);
-          final id = await service.bind(
-            animeId: widget.animeId,
-            book: book,
-            editionLabel: rule.json['edition'] as String,
-            language: rule.json['language'] as String,
-            existingEditionId: service.editionForBook(book),
-            existingWorkId: widget.existingWorkId,
-          );
-          if (mounted) Navigator.pop(context, id);
-        } catch (error) {
-          if (mounted) setState(() => _error = error.toString());
-        } finally {
-          if (mounted) setState(() => _busy = false);
-        }
-        return;
-      }
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('更换同版本书源？'),
-          content: SizedBox(
-            width: 520,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ListTile(
-                    title: Text(book.title),
-                    subtitle: Text(
-                      '${book.author}\n${service.rule(book.sourceId).name}',
-                    ),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Text(
-                      '仅当确认是同一译本/文本版本时关联已有版本。不同译文请新建版本。切源后仍需核验章节与文本位置。',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('确认并阅读'),
-            ),
-          ],
-        ),
+      final rule = service.rule(book.sourceId);
+      final id = await service.bind(
+        animeId: widget.animeId,
+        book: book,
+        editionLabel: rule.json['edition'] as String,
+        language: rule.json['language'] as String,
+        existingEditionId:
+            widget.existingEditionId ?? service.editionForBook(book),
+        existingWorkId: widget.existingWorkId,
       );
-      if (confirmed == true) {
-        try {
-          final id = await service.bind(
-            animeId: widget.animeId,
-            book: book,
-            editionLabel: service.rule(book.sourceId).json['edition'] as String,
-            language: service.rule(book.sourceId).json['language'] as String,
-            existingEditionId: editionId,
-            existingWorkId: widget.existingWorkId,
-          );
-          if (mounted) Navigator.pop(context, id);
-        } catch (error) {
-          if (mounted) setState(() => _error = error.toString());
-        }
-      }
+      if (mounted) Navigator.pop(context, id);
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     } finally {

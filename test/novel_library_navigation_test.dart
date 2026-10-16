@@ -10,6 +10,11 @@ import 'package:kazumi/novel/novel_library_page.dart';
 import 'package:kazumi/novel/novel_models.dart';
 import 'package:kazumi/novel/novel_service.dart';
 import 'package:kazumi/pages/menu/menu.dart';
+import 'package:kazumi/pages/collect/collect_module.dart';
+import 'package:kazumi/pages/collect/collect_page.dart';
+import 'package:kazumi/pages/collect/collect_library_tabs.dart';
+import 'package:kazumi/pages/collect/collect_controller.dart';
+import 'package:kazumi/repositories/collect_crud_repository.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/services/sync/webdav.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
@@ -72,7 +77,7 @@ void main() {
   });
   for (final size in [const Size(480, 900), const Size(1280, 900)]) {
     testWidgets(
-      'bookshelf is the next peer after anime tracking at $size and displays source cover',
+      'heart opens anime first; the neighboring bookshelf tab at $size displays source cover',
       (tester) async {
         tester.view.devicePixelRatio = 1;
         tester.view.physicalSize = size;
@@ -85,20 +90,21 @@ void main() {
         });
         final module = createModule(
           register: (c) {
+            c.addSingleton<NovelService>(() => service);
+            c.addSingleton<CollectController>(
+              () => CollectController(CollectCrudRepository()),
+            );
             c.route(
               '/tab/',
               child: (context, state) => ScaffoldMenu(location: state.uri.path),
               children: (sub) {
-                for (final name in ['popular', 'timeline', 'collect', 'my']) {
+                for (final name in ['popular', 'timeline', 'my']) {
                   sub.route(
                     '/$name/',
                     child: (_, _) => Center(child: Text('page:$name')),
                   );
                 }
-                sub.route(
-                  '/novels/',
-                  child: (_, _) => NovelLibraryPage(service: service),
-                );
+                sub.module(collectModule);
               },
             );
           },
@@ -115,8 +121,14 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.text('page:collect'), findsOneWidget);
-        await tester.tap(find.byIcon(Icons.menu_book_outlined));
+        expect(find.byType(CollectPage), findsOneWidget);
+        expect(find.byType(NovelLibraryPage), findsNothing);
+        await tester.tap(
+          find.descendant(
+            of: find.byType(CollectLibraryTabs),
+            matching: find.text('书架'),
+          ),
+        );
         await tester.pumpAndSettle();
         expect(find.byType(NovelLibraryPage), findsOneWidget);
         expect(find.text('已入架的小说'), findsOneWidget);
@@ -124,15 +136,20 @@ void main() {
         expect(find.byType(Image), findsOneWidget);
         if (size.width < size.height) {
           final nav = tester.widget<NavigationBar>(find.byType(NavigationBar));
-          expect(nav.selectedIndex, 3);
+          expect(nav.selectedIndex, 2);
+          expect(nav.destinations, hasLength(4));
           expect((nav.destinations[2] as NavigationDestination).label, '追番');
-          expect((nav.destinations[3] as NavigationDestination).label, '书架');
         } else {
           final nav = tester.widget<NavigationRail>(
             find.byType(NavigationRail),
           );
-          expect(nav.selectedIndex, 3);
+          expect(nav.selectedIndex, 2);
+          expect(nav.destinations, hasLength(4));
         }
+        await tester.tap(find.byIcon(Icons.favorite));
+        await tester.pumpAndSettle();
+        expect(find.byType(CollectPage), findsOneWidget);
+        expect(find.byType(NovelLibraryPage), findsNothing);
         expect(tester.takeException(), isNull);
       },
     );
@@ -154,5 +171,24 @@ void main() {
     }
     expect(service.images, hasLength(1));
     expect(find.bySemanticsLabel('已入架的小说封面'), findsOneWidget);
+  });
+  testWidgets('invalid source cover bytes report a decoding error', (
+    tester,
+  ) async {
+    final service = _Library(Uint8List.fromList([0, 1, 2]));
+    addTearDown(service.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: NovelBookCover(service: service, book: _book),
+        ),
+      ),
+    );
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.broken_image_outlined), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

@@ -20,14 +20,15 @@ class _InterfaceSettingsPageState extends State<InterfaceSettingsPage> {
   late CollectLayout _defaultCollectLayout;
   bool _savingCollectLayout = false;
   static const _exitBehaviorTitles = ['退出 Kazumi', '最小化至托盘', '每次都询问'];
-  int _exitBehavior = GStorage.getSetting(SettingsKeys.exitBehavior)
+  int _exitBehavior = GStorage.getSetting(SettingsKeys.exitBehavior,
+  )
       .clamp(0, _exitBehaviorTitles.length - 1);
 
   static const Map<String, String> defaultPageMap = {
     '/tab/popular/': '推荐',
     '/tab/timeline/': '时间表',
     '/tab/collect/': '追番',
-    '/tab/novels/': '书架',
+    '/tab/collect/novels/': '书架',
     '/tab/my/': '我的',
   };
 
@@ -77,7 +78,8 @@ class _InterfaceSettingsPageState extends State<InterfaceSettingsPage> {
               fallbackLabel: '推荐',
               onChanged: updateDefaultPage,
             ),
-          ]),
+          ],
+          ),
           SettingsSection(title: Text('展示信息'), tiles: [
             SettingsDropdownTile<CollectLayout>(
               leading: Icons.view_agenda_rounded,
@@ -94,14 +96,16 @@ class _InterfaceSettingsPageState extends State<InterfaceSettingsPage> {
               leading: Icons.star_rounded,
               onToggle: (value) async {
                 showRating = value ?? !showRating;
-                await GStorage.putSetting(SettingsKeys.showRating, showRating);
+                await GStorage.putSetting(SettingsKeys.showRating, showRating,
+                  );
                 setState(() {});
               },
               title: Text('显示评分'),
               description: Text('关闭后隐藏概览和番剧列表中的评分信息'),
               initialValue: showRating,
             ),
-          ]),
+          ],
+          ),
           if (isDesktop())
             SettingsSection(
               title: const Text('窗口行为'),

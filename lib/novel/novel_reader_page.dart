@@ -207,48 +207,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
           if (proven) _restoreImageBlock = matches.single.key;
         }
         if (proven) offset = found!;
-        if (!proven) {
-          final decision = await showDialog<String>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('正文或插图无法准确对应'),
-              content: Text(
-                '原位置：${restore.chapter.volume} ${restore.chapter.title}\n'
-                '文本或插图在这个版本中未找到唯一匹配。是否由你确认从所选章节开头阅读？',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, 'keep'),
-                  child: const Text('保留原进度'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(ctx, 'start'),
-                  child: const Text('从本章开始'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, 'chapter'),
-                  child: const Text('重新选择章节'),
-                ),
-              ],
-            ),
-          );
-          if (decision == 'chapter') {
-            final selected = await _chooseChapter(
-              _chapters,
-              title: '选择原位置对应的章节',
-            );
-            if (selected == null) throw StateError('尚未确认章节，已保留原阅读进度');
-            await _load(
-              _chapters.indexOf(selected),
-              restore: restore,
-              confirmMapping: true,
-              refresh: refresh,
-            );
-            return;
-          }
-          if (decision != 'start') throw StateError('定位未确认，已保留原阅读进度');
-          fresh = true;
-        }
+        if (!proven) fresh = true;
       }
       if (!mounted || generation != _generation) return;
       if (confirmMapping) {
@@ -275,7 +234,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
         widget.editionId,
         widget.book,
         chapter,
-        proven || confirmMapping ? restore : null,
+        restore,
       );
       if (!mounted || generation != _generation) return;
       _readChapters.add(readIdentity);
@@ -283,6 +242,11 @@ class _NovelReaderPageState extends State<NovelReaderPage>
         _busy = false;
         _layoutKey = null;
       });
+      if (restore != null && !proven) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('已定位到对应章节，从本章开头继续阅读')));
+      }
     } catch (error) {
       if (generation == _generation) _fail(error);
     }

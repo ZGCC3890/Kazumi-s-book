@@ -183,6 +183,21 @@ Future<void> _accept(WidgetTester tester) async {
   await tester.tap(find.text('加入书架'));
 }
 
+Future<void> _finishWrites(WidgetTester tester, Completer<void> attempt) async {
+  for (var i = 0; i < 100 && !attempt.isCompleted; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump();
+  }
+  expect(
+    attempt.isCompleted,
+    true,
+    reason: 'The expected storage operation must be reached',
+  );
+  await tester.pumpAndSettle();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory root;
@@ -215,8 +230,7 @@ void main() {
       final repo = _CollectRepository();
       await _start(tester, service, CollectController(repo));
       await _accept(tester);
-      await tester.runAsync(() => service.shelfAttempt.future);
-      await tester.pumpAndSettle();
+      await _finishWrites(tester, service.shelfAttempt);
       expect(repo.getCollectType(42), 1);
       expect(GStorage.collectChanges.values.single.bangumiID, 42);
       expect(service.shelved, true);
@@ -231,8 +245,7 @@ void main() {
       final repo = _CollectRepository()..fail = true;
       await _start(tester, service, CollectController(repo));
       await _accept(tester);
-      await tester.runAsync(() => repo.attempt.future);
-      await tester.pumpAndSettle();
+      await _finishWrites(tester, repo.attempt);
       expect(service.shelved, false);
       expect(repo.getCollectType(42), 0);
       expect(find.byType(NovelReaderPage), findsOneWidget);
@@ -242,8 +255,7 @@ void main() {
       );
       repo.fail = false;
       await _accept(tester);
-      await tester.runAsync(() => service.shelfAttempt.future);
-      await tester.pumpAndSettle();
+      await _finishWrites(tester, service.shelfAttempt);
       expect(repo.getCollectType(42), 1);
       expect(service.shelved, true);
     },
@@ -255,8 +267,7 @@ void main() {
       final repo = _CollectRepository();
       await _start(tester, service, CollectController(repo));
       await _accept(tester);
-      await tester.runAsync(() => service.shelfAttempt.future);
-      await tester.pumpAndSettle();
+      await _finishWrites(tester, service.shelfAttempt);
       expect(repo.getCollectType(42), 1);
       expect(service.shelved, false);
       expect(service.saved!.chapter.url, _chapters[1].url);
@@ -265,8 +276,7 @@ void main() {
       service.failShelf = false;
       service.shelfAttempt = Completer<void>();
       await _accept(tester);
-      await tester.runAsync(() => service.shelfAttempt.future);
-      await tester.pumpAndSettle();
+      await _finishWrites(tester, service.shelfAttempt);
       expect(service.shelved, true);
       expect(find.byType(NovelReaderPage), findsNothing);
     },

@@ -6,8 +6,9 @@ import 'novel_service.dart';
 import 'novel_book_cover.dart';
 
 class NovelLibraryPage extends StatelessWidget {
-  const NovelLibraryPage({super.key, required this.service});
+  const NovelLibraryPage({super.key, required this.service, this.title});
   final NovelService service;
+  final Widget? title;
   Future<void> _run(
     BuildContext context,
     Future<void> Function() action,
@@ -27,7 +28,8 @@ class NovelLibraryPage extends StatelessWidget {
     listenable: service,
     builder: (_, _) => Scaffold(
       appBar: AppBar(
-        title: const Text('书架'),
+        automaticallyImplyLeading: false,
+        title: title ?? const Text('书架'),
         actions: [
           IconButton(
             tooltip: '小说规则',
@@ -92,9 +94,12 @@ class NovelLibraryPage extends StatelessWidget {
             for (final edition in service.shelfEditions)
               Card(
                 child: ListTile(
-                  leading: NovelBookCover(service: service, book: service.selectedBook(edition.id)),
+                  leading: NovelBookCover(
+                    service: service,
+                    book: service.selectedBook(edition.id),
+                  ),
                   title: Text(service.work(edition.workId).title),
-                  subtitle: Text(edition.label),
+                  subtitle: Text(service.work(edition.workId).author),
                   onTap: () => _run(context, () async {
                     await NovelEntry.conflicts(context, service);
                     if (context.mounted && service.state.conflicts.isEmpty)
@@ -102,19 +107,14 @@ class NovelLibraryPage extends StatelessWidget {
                   }),
                   trailing: PopupMenuButton<String>(
                     itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'source', child: Text('更换同版本书源')),
-                      PopupMenuItem(
-                        value: 'edition',
-                        child: Text('关联该作品的其他译本/版本'),
-                      ),
+                      PopupMenuItem(value: 'source', child: Text('更换书源')),
                     ],
                     onSelected: (value) => NovelEntry.search(
                       context,
                       service,
                       0,
                       service.work(edition.workId).title,
-                      editionId: value == 'source' ? edition.id : null,
-                      workId: value == 'edition' ? edition.workId : null,
+                      editionId: edition.id,
                     ),
                   ),
                 ),

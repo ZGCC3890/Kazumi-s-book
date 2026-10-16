@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:kazumi/novel/novel_library_page.dart';
-import 'package:kazumi/novel/novel_service.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:kazumi/bean/widget/error_widget.dart';
 import 'package:kazumi/bean/widget/image_preview.dart';
@@ -63,8 +61,6 @@ final tabModule = createModule(
             ..module(popularModule)
             ..module(timelineModule)
             ..module(collectModule)
-            ..route('/novels/', transition: TransitionType.none,
-                child: (context, state) => NovelLibraryPage(service: inject<NovelService>()))
             ..module(myModule);
         },
       );
@@ -98,10 +94,7 @@ final indexModule = createModule(
         '/error',
         child: (context, state) => Scaffold(
           appBar: AppBar(title: const Text("Kazumi's book")),
-          body: const GeneralErrorWidget(
-            title: '初始化失败',
-            errMsg: '请重新启动应用后再试。',
-          ),
+          body: const GeneralErrorWidget(title: '初始化失败', errMsg: '请重新启动应用后再试。'),
         ),
       )
       ..module(tabModule)
@@ -122,8 +115,11 @@ final indexModule = createModule(
         transition: _imagePreviewTransition,
       )
       ..module(infoModule)
-      ..route('/novels/', guards: [(state) => '/tab/novels/'],
-          child: (context, state) => const SizedBox.shrink())
+      ..route(
+        '/novels/',
+        guards: [(state) => '/tab/collect/novels/'],
+        child: (context, state) => const SizedBox.shrink(),
+      )
       ..module(settingsModule)
       ..module(searchModule);
   },

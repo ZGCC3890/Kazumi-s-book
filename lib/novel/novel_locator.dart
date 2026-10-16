@@ -68,15 +68,19 @@ class NovelLocator {
     }
     final old = position.chapter;
     // No positional-index or global-percentage guesses across sources.
-    return chapters
+    final numbered = chapters
         .where(
           (c) =>
               volumeKey(c.volume) == volumeKey(old.volume) &&
               c.kind == old.kind &&
-              titleKey(c.title) == titleKey(old.title) &&
               c.number == old.number,
         )
         .toList();
+    final titled = numbered
+        .where((c) => titleKey(c.title) == titleKey(old.title))
+        .toList();
+    // Translations can rename a chapter without changing its volume/number.
+    return titled.isNotEmpty || old.number == null ? titled : numbered;
   }
 
   static String titleKey(String title) => normalize(
@@ -113,7 +117,7 @@ class NovelLocator {
     );
   }
 
-  /// Null means the location is unproven and must be selected explicitly.
+  /// Null means the paragraph is unproven; resume at the matched chapter start.
   static int? locate(NovelPosition position, String text) {
     final normalized = normalize(text);
     if (position.chapterDigest == digest(text)) {

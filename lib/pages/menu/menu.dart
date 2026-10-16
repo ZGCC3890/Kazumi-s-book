@@ -63,7 +63,8 @@ class _ScaffoldMenu extends State<ScaffoldMenu> with RouteAware {
 
   void _selectDestination(int index) {
     _lastExitPromptAt = null;
-    if (index == _selectedIndex) {
+    if (index == _selectedIndex &&
+        widget.location == '/tab${menu.getPath(index)}/') {
       return;
     }
     final outlet = _outletKey.currentState;
@@ -157,11 +158,6 @@ class _ScaffoldMenu extends State<ScaffoldMenu> with RouteAware {
             label: '追番',
           ),
           NavigationDestination(
-            selectedIcon: Icon(Icons.menu_book),
-            icon: Icon(Icons.menu_book_outlined),
-            label: '书架',
-          ),
-          NavigationDestination(
             selectedIcon: Icon(Icons.settings),
             icon: Icon(Icons.settings),
             label: '我的',
@@ -208,11 +204,6 @@ class _ScaffoldMenu extends State<ScaffoldMenu> with RouteAware {
                   selectedIcon: Icon(Icons.favorite),
                   icon: Icon(Icons.favorite_border),
                   label: Text('追番'),
-                ),
-                NavigationRailDestination(
-                  selectedIcon: Icon(Icons.menu_book),
-                  icon: Icon(Icons.menu_book_outlined),
-                  label: Text('书架'),
                 ),
                 NavigationRailDestination(
                   selectedIcon: Icon(Icons.settings),

@@ -21,12 +21,10 @@ import 'package:kazumi/novel/novel_entry.dart';
 import 'package:kazumi/novel/novel_service.dart';
 
 class CollectPage extends StatefulWidget {
-  const CollectPage({
-    super.key,
-    required this.controller,
-  });
+  const CollectPage({super.key, required this.controller, this.title});
 
   final CollectController controller;
+  final Widget? title;
 
   @override
   State<CollectPage> createState() => _CollectPageState();
@@ -87,8 +85,9 @@ class _CollectPageState extends State<CollectPage> with KazumiDialogOwner {
     if (_syncDialogOpen || _pendingIds.isNotEmpty) return;
     final plan = CollectSyncPlan(
       webDavEnabled: GStorage.getSetting(SettingsKeys.webDavEnable),
-      webDavCollectiblesEnabled:
-          GStorage.getSetting(SettingsKeys.webDavEnableCollect),
+      webDavCollectiblesEnabled: GStorage.getSetting(
+        SettingsKeys.webDavEnableCollect,
+      ),
       bangumiEnabled: GStorage.getSetting(SettingsKeys.bangumiSyncEnable),
     );
     await dialogs.run((task) async {
@@ -101,10 +100,12 @@ class _CollectPageState extends State<CollectPage> with KazumiDialogOwner {
           onSync: _syncStep,
         ),
       );
-      task.withContext((context) => context.pushNamed(switch (destination) {
-            CollectSyncDestination.webDavSettings => '/settings/webdav/',
-            CollectSyncDestination.bangumiSettings => '/settings/bangumi/',
-          }));
+      task.withContext(
+        (context) => context.pushNamed(switch (destination) {
+          CollectSyncDestination.webDavSettings => '/settings/webdav/',
+          CollectSyncDestination.bangumiSettings => '/settings/bangumi/',
+        }),
+      );
     }, errorMessage: '同步未完成，请稍后重试');
   }
 
@@ -114,13 +115,14 @@ class _CollectPageState extends State<CollectPage> with KazumiDialogOwner {
       appBar: SysAppBar(
         needTopOffset: false,
         toolbarHeight: 72,
-        title: Text(
-          '追番',
-          style: Theme.of(context)
-              .textTheme
-              .headlineSmall
-              ?.copyWith(fontWeight: FontWeight.w700),
-        ),
+        title:
+            widget.title ??
+            Text(
+              '追番',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),

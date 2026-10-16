@@ -44,6 +44,8 @@ class _Service extends NovelService {
     'lightnovel': _Adapter('lightnovel'),
   };
   NovelBook? selected;
+  String? knownEdition, boundEdition;
+  final loginResult = Completer<void>();
   @override
   List<NovelRule> get rules => sources.keys
       .map(
@@ -58,7 +60,10 @@ class _Service extends NovelService {
   @override
   NovelSourceAdapter adapter(String id) => sources[id]!;
   @override
-  String? editionForBook(NovelBook book) => null;
+  String? editionForBook(NovelBook book) => knownEdition;
+  @override
+  Future<void> login(String source, String username, String password) =>
+      loginResult.future;
   @override
   Future<String> bind({
     required int animeId,
@@ -69,6 +74,7 @@ class _Service extends NovelService {
     String? existingWorkId,
   }) async {
     selected = book;
+    boundEdition = existingEditionId;
     return 'selected-edition';
   }
 }
@@ -132,6 +138,7 @@ void main() {
     'each source finishes independently and a selected result opens without version forms',
     (tester) async {
       final service = _Service();
+      service.knownEdition = 'already-reading';
       await _open(tester, service);
       service.sources['linovel']!.complete(0, '源甲小说');
       await tester.pump();
@@ -140,9 +147,67 @@ void main() {
       await tester.tap(find.text('源甲小说'));
       await tester.pumpAndSettle();
       expect(service.selected!.sourceId, 'linovel');
+      expect(service.boundEdition, 'already-reading');
       expect(find.text('确认对应小说和版本'), findsNothing);
       service.sources['lightnovel']!.complete(0, '已关闭弹窗的结果');
       await tester.pump();
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'closing the source dialog during URL dialog exit does not bind a book',
+    (tester) async {
+      final service = _Service();
+      await _open(tester, service);
+      for (final source in service.sources.values) {
+        source.complete(0, '${source.source}结果');
+      }
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(PopupMenuButton<String>).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('打开书籍链接'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byType(TextField).last,
+        'https://www.linovel.net/book/42.html',
+      );
+      final navigator = tester.state<NavigatorState>(
+        find.byType(Navigator).first,
+      );
+      await tester.tap(find.text('读取详情'));
+      navigator.pop();
+      await tester.pumpAndSettle();
+      expect(find.byType(NovelSearchPage), findsNothing);
+      expect(service.selected, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'system back during login can finish without touching a closed dialog',
+    (tester) async {
+      final service = _Service();
+      await _open(tester, service);
+      service.sources['linovel']!.requests[0].$2.completeError(
+        const NovelLoginRequired(),
+      );
+      service.sources['lightnovel']!.complete(0, '公开小说');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('首次登录'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).at(1), 'reader');
+      await tester.enterText(
+        find.byType(TextField).last,
+        'temporary-test-password',
+      );
+      await tester.tap(find.text('登录并搜索'));
+      await tester.pump();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      service.loginResult.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('登录并搜索'), findsNothing);
+      expect(service.sources['linovel']!.requests, hasLength(1));
+      expect(find.text('公开小说'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
