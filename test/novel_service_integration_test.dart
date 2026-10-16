@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:kazumi/novel/novel_locator.dart';
@@ -225,6 +226,71 @@ void main() {
     expect(root.uri.pathSegments.where((part) => part.isNotEmpty).last,
       startsWith('kazumis_book_integration_'));
     await root.delete(recursive: true);
+  });
+
+  test('first use installs separate rules once and retains deletion after restart', () async {
+    remote.files['/rules/catalog.json'] = utf8.encode(jsonEncode({'version': 1, 'rules': [
+      {'id': 'wenku8', 'file': 'wenku8.json', 'replaces': <String>[]},
+      {'id': 'syosetu', 'file': 'syosetu.json', 'replaces': <String>[]},
+    ]}));
+    for (final id in ['wenku8', 'syosetu']) {
+      remote.files['/rules/$id.json'] = await File('novel_rules/$id.json').readAsBytes();
+    }
+    var service = await device('automatic-rules');
+    await service.saveRuleCatalogUrl('${remote.url}/rules/catalog.json');
+    await Future.wait([service.ensureDefaultRules(), service.ensureDefaultRules()]);
+    expect(service.rules.map((r) => r.id), ['wenku8', 'syosetu']);
+    expect(remote.requests.where((r) => r.$2 == '/rules/catalog.json').length, 1);
+    await service.removeRule('syosetu');
+    await service.selectSource('wenku8');
+    final count = remote.requests.length;
+    service = await device('automatic-rules');
+    await service.ensureDefaultRules();
+    expect(service.rules.map((r) => r.id), ['wenku8']);
+    expect(service.preferredSource, 'wenku8');
+    expect(remote.requests.length, count);
+  });
+
+  test('interrupted default rule install reports failure without partial registry and retries', () async {
+    remote.files['/rules/catalog.json'] = utf8.encode(jsonEncode({'version': 1, 'rules': [
+      {'id': 'wenku8', 'file': 'wenku8.json', 'replaces': <String>[]},
+      {'id': 'syosetu', 'file': 'syosetu.json', 'replaces': <String>[]},
+    ]}));
+    remote.files['/rules/wenku8.json'] = await File('novel_rules/wenku8.json').readAsBytes();
+    final service = await device('rule-download-retry');
+    await service.saveRuleCatalogUrl('${remote.url}/rules/catalog.json');
+    await expectLater(service.ensureDefaultRules(), throwsA(isA<DioException>()));
+    expect(service.rules, isEmpty);
+    remote.files['/rules/syosetu.json'] = await File('novel_rules/syosetu.json').readAsBytes();
+    await service.ensureDefaultRules();
+    expect(service.rules.length, 2);
+  });
+
+  test('known previous default upgrades but custom rules and old v1 catalogs remain supported', () async {
+    final current = jsonDecode(await File('novel_rules/wenku8.json').readAsString()) as Map<String, dynamic>;
+    final old = Map<String, dynamic>.from(current)..remove('login');
+    old['revision'] = '2026-10-17.2';
+    old['headers'] = {'Referer': 'https://www.wenku8.net/'};
+    var service = await device('old-default');
+    await service.importRule(jsonEncode(old));
+    final oldHash = sha256.convert(utf8.encode(service.rules.single.encode())).toString();
+    final index = jsonDecode(await File('novel_rules/catalog.json').readAsString()) as Map<String, dynamic>;
+    expect((index['rules'] as List).first['replaces'], contains(oldHash));
+    remote.files['/rules/catalog.json'] = utf8.encode(jsonEncode(index));
+    for (final id in ['wenku8', 'syosetu']) {
+      remote.files['/rules/$id.json'] = await File('novel_rules/$id.json').readAsBytes();
+    }
+    await service.saveRuleCatalogUrl('${remote.url}/rules/catalog.json');
+    await service.ensureDefaultRules();
+    expect(service.rule('wenku8').headers['Accept-Encoding'], 'identity');
+    service = await device('custom-old-index');
+    current['name'] = '本机自定义文库';
+    await service.importRule(jsonEncode(current));
+    remote.files['/rules/catalog.json'] = utf8.encode(jsonEncode({'version': 1,
+      'rules': [{'id': 'wenku8', 'file': 'wenku8.json'}]}));
+    await service.saveRuleCatalogUrl('${remote.url}/rules/catalog.json');
+    await service.ensureDefaultRules();
+    expect(service.rules.single.name, '本机自定义文库');
   });
 
   test('disk restart preserves position, bookmark, local preferences and both mapping directions', () async {

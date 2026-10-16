@@ -21,6 +21,12 @@ typedef NovelFetch =
       Map<String, String> body,
     );
 
+class NovelLoginRequired implements Exception {
+  const NovelLoginRequired();
+  @override
+  String toString() => '此书源搜索需要首次登录，登录会话只保存在这台设备';
+}
+
 abstract interface class NovelSourceAdapter {
   Future<List<NovelBook>> search(String keyword);
   Future<NovelBook> bookFromUrl(String url);
@@ -145,7 +151,7 @@ class XPathNovelAdapter implements NovelSourceAdapter {
     final login = rule.json['loginRequiredXPath'] as String;
     if ((loginUrl.isNotEmpty && RegExp(loginUrl).hasMatch(response.url)) ||
         (login.isNotEmpty && root.queryXPath(login).nodes.isNotEmpty)) {
-      throw StateError('书源返回登录页，当前请求未取得公开内容');
+      throw const NovelLoginRequired();
     }
     return root;
   }

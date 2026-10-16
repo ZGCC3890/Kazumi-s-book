@@ -10,9 +10,7 @@ import 'novel_service.dart';
 class NovelRulesPage extends StatefulWidget {
   const NovelRulesPage({super.key, required this.service});
   final NovelService service;
-  static const defaultCatalog =
-      'https://raw.githubusercontent.com/ZGCC3890/'
-      'Kazumi-s-book/feature/novel-reader/novel_rules/catalog.json';
+  static const defaultCatalog = NovelService.defaultCatalog;
   @override
   State<NovelRulesPage> createState() => _NovelRulesPageState();
 }
@@ -130,7 +128,7 @@ class _NovelRulesPageState extends State<NovelRulesPage> {
       builder: (_, _) => ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          const Text('小说规则与番剧规则分开管理。仓库内 novel_rules/ 的规则更新后，可在这里重新导入。'),
+          const Text('默认小说书源在首次搜索时自动获取。这里可更新、删除书源或添加自定义规则；规则与应用代码分别维护。'),
           const SizedBox(height: 16),
           TextField(
             controller: _catalogUrl,

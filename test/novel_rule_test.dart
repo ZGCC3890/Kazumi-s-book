@@ -57,7 +57,7 @@ void main() {
     final adapter = XPathNovelAdapter(_rule('wenku8'), (url, method, headers, body) async =>
       const NovelResponse('<h1>需要登录</h1>', 'http://www.wenku8.net/login.php?jumpurl=book'));
     await expectLater(adapter.bookFromUrl('https://www.wenku8.net/book/4343.htm'),
-      throwsA(isA<StateError>().having((e) => e.message, 'message', contains('登录页'))));
+      throwsA(isA<NovelLoginRequired>()));
   });
 
   test('wenku8 detail-to-catalog follows final URL and nearest preceding volume', () async {
@@ -118,8 +118,7 @@ void main() {
   test('wenku8 login page is an explicit error rather than zero search results', () async {
     final adapter = XPathNovelAdapter(_rule('wenku8'), (url, method, headers, body) async =>
       const NovelResponse('<form><input type="password"></form>', 'https://www.wenku8.net/login.php'));
-    await expectLater(adapter.search('书'), throwsA(isA<StateError>().having(
-      (e) => e.message, 'message', contains('登录页'))));
+    await expectLater(adapter.search('书'), throwsA(isA<NovelLoginRequired>()));
   });
 
   test('syosetu API metadata row is skipped and ncode becomes lowercase URL', () async {

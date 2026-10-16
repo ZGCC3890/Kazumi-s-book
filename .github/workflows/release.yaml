@@ -20,6 +20,7 @@
 
     jobs:
       flutter-test:
+        if: github.repository == 'Predidit/Kazumi'
         runs-on: "ubuntu-latest"
         permissions:
           contents: read
@@ -44,6 +45,7 @@
             shell: bash
 
       flutter-analyze:
+        if: github.repository == 'Predidit/Kazumi'
         runs-on: "ubuntu-latest"
         permissions:
           contents: read

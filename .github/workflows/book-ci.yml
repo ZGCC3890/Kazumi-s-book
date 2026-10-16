@@ -1,4 +1,4 @@
-name: Kazumi's book checks and development builds
+name: Kazumi's book checks, builds and releases
 
 on:
   push:
@@ -83,18 +83,38 @@ jobs:
           flutter-version-file: pubspec.yaml
           cache: true
       - run: flutter pub get
-      - run: flutter build apk --debug --target-platform android-arm64
+      - name: Load private Android signing key
+        env:
+          BOOK_ANDROID_SIGNING: ${{ secrets.BOOK_ANDROID_SIGNING }}
+        run: |
+          python3 - <<'PY'
+          import os, json, base64
+          key = json.loads(os.environ['BOOK_ANDROID_SIGNING'])
+          print('::add-mask::' + key['password'])
+          with open('android/app/book-release.p12', 'xb') as output:
+              output.write(base64.b64decode(key['keystore'], validate=True))
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write('BOOK_KEYSTORE_PASSWORD=' + key['password'] + '\n')
+          PY
+      - run: flutter build apk --release --target-platform android-arm64
       - name: Verify independent Android application ID
         shell: bash
         run: |
           aapt_tools=("$ANDROID_HOME"/build-tools/*/aapt)
-          metadata=$("${aapt_tools[0]}" dump badging build/app/outputs/flutter-apk/app-debug.apk)
+          metadata=$("${aapt_tools[0]}" dump badging build/app/outputs/flutter-apk/app-release.apk)
           if [[ "$metadata" != *"package: name='com.zgcc.kazumisbook'"* ]]; then
             echo 'Unexpected Android application ID.'
             exit 1
           fi
           echo 'Verified com.zgcc.kazumisbook in the compiled APK.'
+          signing_tools=("$ANDROID_HOME"/build-tools/*/apksigner)
+          signature=$("${signing_tools[0]}" verify --print-certs build/app/outputs/flutter-apk/app-release.apk)
+          if [[ "$signature" != *'85fa5bfda7fd385f44cabf8da36970bcde6c049e297f4dc67ca3e24252e4ee41'* ]]; then
+            echo 'Unexpected Android signing certificate.'
+            exit 1
+          fi
+          echo 'Verified the fixed Kazumis book release signing certificate.'
       - uses: actions/upload-artifact@v4
         with:
           name: Kazumis-book-Android-development
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          path: build/app/outputs/flutter-apk/app-release.apk

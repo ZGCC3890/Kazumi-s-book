@@ -5,12 +5,14 @@
       "id": "wenku8",
       "name": "轻小说文库",
       "file": "wenku8.json",
-      "description": "支持公开书籍链接导入、分卷目录和插图。站内搜索需登录，访问还可能受站点验证限制。"
+      "replaces": ["40aba948869a14d213e2118f4540433551cff596253addbc756931453a5a2aa1"],
+      "description": "支持分卷目录、正文和插图。搜索首次登录本人账号，本机会话持久保存。公开书籍链接可直接阅读。"
     },
     {
       "id": "syosetu",
       "name": "小説家になろう",
       "file": "syosetu.json",
+      "replaces": [],
       "description": "日文 Web 原作，支持目录、正文和插图。"
     }
   ]

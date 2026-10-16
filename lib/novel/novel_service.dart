@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
-import 'package:enough_convert/gbk.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hive_ce/hive.dart';
@@ -16,6 +15,7 @@ import 'novel_models.dart';
 import 'novel_rule.dart';
 import 'novel_sync_state.dart';
 import 'novel_reader_store.dart';
+import 'novel_http_session.dart';
 
 class NovelService extends ChangeNotifier
     with WidgetsBindingObserver
@@ -25,6 +25,7 @@ class NovelService extends ChangeNotifier
   final _writes = AsyncSerialQueue();
   late Box<String> _box, _cache, _rules;
   late String deviceId;
+  late NovelHttpSession _http;
   @override
   NovelSyncState state = NovelSyncState();
   Map<String, List<String>> _seen = {};
@@ -34,6 +35,10 @@ class NovelService extends ChangeNotifier
   DateTime? lastSync;
   bool syncing = false;
   Future<void>? _initialization;
+  Future<void>? _defaultRulesInstallation;
+  static const defaultCatalog =
+      'https://raw.githubusercontent.com/ZGCC3890/'
+      'Kazumi-s-book/feature/novel-reader/novel_rules/catalog.json';
 
   static String newId() => List.generate(
     16,
@@ -46,6 +51,7 @@ class NovelService extends ChangeNotifier
     _box = await Hive.openBox<String>('novel_v1', path: path);
     _cache = await Hive.openBox<String>('novel_cache_v1', path: path);
     _rules = await Hive.openBox<String>('novel_rules_v1', path: path);
+    _http = NovelHttpSession(DioFactory.pluginDio, '$path/novel_sessions');
     final storedId = _box.get('deviceId');
     deviceId = storedId ?? newId();
     if (storedId == null) await _box.put('deviceId', deviceId);
@@ -67,49 +73,21 @@ class NovelService extends ChangeNotifier
 
   List<NovelRule> get rules => _rules.values.map(NovelRule.decode).toList();
   NovelRule rule(String id) => rules.singleWhere((r) => r.id == id);
-  NovelSourceAdapter adapter(String id) =>
-      XPathNovelAdapter(rule(id), (url, method, headers, body) async {
-        final codec = rule(id).json['encoding'] == 'gbk'
-            ? const GbkCodec(allowInvalid: false)
-            : utf8;
-        String formValue(String value) => codec
-            .encode(value)
-            .map((byte) => '%${byte.toRadixString(16).padLeft(2, '0')}')
-            .join();
-        final response = await DioFactory.pluginDio.request<List<int>>(
-          url,
-          data: method == 'POST'
-              ? body.entries
-                    .map((e) => '${formValue(e.key)}=${formValue(e.value)}')
-                    .join('&')
-              : null,
-          options: Options(
-            method: method,
-            responseType: ResponseType.bytes,
-            contentType: method == 'POST'
-                ? Headers.formUrlEncodedContentType
-                : null,
-            headers: headers,
-          ),
-        );
-        return NovelResponse(
-          codec.decode(response.data!),
-          response.realUri.toString(),
-        );
-      });
+  NovelSourceAdapter adapter(String id) => XPathNovelAdapter(
+    rule(id),
+    (url, method, headers, body) =>
+        _http.fetch(rule(id), url, method, headers, body),
+  );
+
+  Future<void> login(String sourceId, String username, String password) =>
+      _http.login(rule(sourceId), username, password);
+  Future<void> logout(String sourceId) => _http.logout(rule(sourceId));
   @override
   Future<Uint8List> image(String sourceId, String url) async {
     final key = 'image/$sourceId/$url';
     final cached = _cache.get(key);
     if (cached != null) return base64Decode(cached);
-    final response = await DioFactory.pluginDio.get<List<int>>(
-      url,
-      options: Options(
-        responseType: ResponseType.bytes,
-        headers: rule(sourceId).headers,
-      ),
-    );
-    final bytes = Uint8List.fromList(response.data!);
+    final bytes = await _http.image(rule(sourceId), url);
     await _cache.put(key, base64Encode(bytes));
     return bytes;
   }
@@ -124,6 +102,51 @@ class NovelService extends ChangeNotifier
     await _rules.delete(id);
     notifyListeners();
   }
+
+  /// Install the separate rule repository once. Deletions remain intentional;
+  /// a failed download is reported to the caller and can be retried.
+  Future<void> ensureDefaultRules() {
+    if (_box.get('defaultRulesInstalled') == '1') return Future.value();
+    return _defaultRulesInstallation ??= _installDefaultRules().whenComplete(
+      () => _defaultRulesInstallation = null,
+    );
+  }
+
+  Future<void> _installDefaultRules() async {
+    final url = ruleCatalogUrl ?? defaultCatalog;
+    Future<String> get(String address) async =>
+        (await DioFactory.pluginDio.get<String>(
+          address,
+          options: Options(responseType: ResponseType.plain),
+        )).data!;
+    final catalog = jsonDecode(await get(url)) as NovelJson;
+    if (catalog['version'] != 1) throw const FormatException('不支持的规则索引版本');
+    final downloads = <String, String>{};
+    for (final entry in catalog['rules'] as List) {
+      final parsed = NovelRule.decode(
+        await get(Uri.parse(url).resolve(entry['file'] as String).toString()),
+      );
+      if (parsed.id != entry['id']) {
+        throw const FormatException('规则文件 id 与索引条目不一致');
+      }
+      final current = _rules.get(parsed.id);
+      if (current == null ||
+          (entry.containsKey('replaces') &&
+              (entry['replaces'] as List).contains(
+                sha256.convert(utf8.encode(current)).toString(),
+              ))) {
+        downloads[parsed.id] = parsed.encode();
+      }
+    }
+    await _rules.putAll(downloads);
+    await _rules.flush();
+    await _box.put('defaultRulesInstalled', '1');
+    await _box.flush();
+    notifyListeners();
+  }
+
+  String? get preferredSource => _box.get('preferredSource');
+  Future<void> selectSource(String id) => _box.put('preferredSource', id);
 
   String? get ruleCatalogUrl => _box.get('ruleCatalogUrl');
   Future<void> saveRuleCatalogUrl(String url) =>

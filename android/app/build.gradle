@@ -53,11 +53,19 @@ android {
         versionName flutterVersionName
     }
 
+    signingConfigs {
+        book {
+            storeFile file('book-release.p12')
+            storeType 'PKCS12'
+            storePassword System.getenv('BOOK_KEYSTORE_PASSWORD')
+            keyAlias 'kazumisbook'
+            keyPassword System.getenv('BOOK_KEYSTORE_PASSWORD')
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.book
         }
     }
 }
