@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:kazumi/novel/novel_sync_state.dart';
+import 'package:kazumi/novel/novel_webdav_exchange.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
 import 'package:path_provider/path_provider.dart';
 import 'package:kazumi/modules/history/history_sync.dart';
@@ -79,6 +81,7 @@ class WebDav {
       await GStorage.putSetting(SettingsKeys.webDavEnableHistory, false);
       await GStorage.putSetting(SettingsKeys.webDavEnableCollect, false);
       await GStorage.putSetting(SettingsKeys.webDavEnableDanmakuShield, false);
+      await GStorage.putSetting(SettingsKeys.webDavEnableNovels, false);
     }
     await GStorage.putSetting(SettingsKeys.webDavEnable, enabled);
   }
@@ -90,6 +93,42 @@ class WebDav {
   bool get isDanmakuShieldSyncEnabled =>
       GStorage.getSetting(SettingsKeys.webDavEnable) &&
       GStorage.getSetting(SettingsKeys.webDavEnableDanmakuShield);
+
+  Future<String?> syncNovels({required String deviceId,
+    required Set<String> knownSnapshots,
+    required Future<NovelSyncState> Function(NovelSyncState, Set<String>) merge}) =>
+      _runWebDavExclusive(() async {
+    bool enabled() => GStorage.getSetting(SettingsKeys.webDavEnable) &&
+        GStorage.getSetting(SettingsKeys.webDavEnableNovels);
+    if (!enabled()) return null;
+    if (!initialized) await _init();
+    const path = '$_syncRootPath/novels/v1';
+    await _ensureRemoteDirectory('$_syncRootPath/novels');
+    await _ensureRemoteDirectory(path);
+    await _ensureLocalTempDirectory();
+    final run = await webDavLocalTempDirectory.createTemp('novel-sync-');
+    try {
+      var index = 0;
+      return await const NovelWebDavExchange().run(
+        deviceId: deviceId, knownSnapshots: knownSnapshots, enabled: enabled, merge: merge,
+        list: () async => (await client.readDir(path)).where((e) => e.isDir != true)
+            .map((e) => e.name!).toList(),
+        read: (name) async {
+          final file = File('${run.path}/remote-${index++}.json');
+          await client.read2File('$path/$name', file.path);
+          return file.readAsString();
+        },
+        write: (name, body) async {
+          final upload = File('${run.path}/upload.json');
+          await upload.writeAsString(body, flush: true);
+          await client.writeFromFile(upload.path, '$path/$name');
+        },
+        move: (from, to) => client.rename('$path/$from', '$path/$to', false),
+      );
+    } finally {
+      await run.delete(recursive: true);
+    }
+  });
 
   Future<void> syncDanmakuShield({
     required String deviceId,

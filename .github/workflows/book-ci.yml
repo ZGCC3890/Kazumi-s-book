@@ -1,0 +1,69 @@
+name: Kazumi's book checks and development builds
+
+on:
+  push:
+    branches: [feature/novel-reader]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: book-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Native test dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clang cmake libgtk-3-dev ninja-build libayatana-appindicator3-dev libasound2-dev libssl-dev
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version-file: pubspec.yaml
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos --fatal-warnings
+      - run: flutter test
+  windows:
+    needs: checks
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version-file: pubspec.yaml
+          cache: true
+      - run: flutter pub get
+      - run: flutter build windows --release
+      - shell: pwsh
+        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath Kazumis_book_windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kazumis-book-Windows-development
+          path: Kazumis_book_windows.zip
+  android:
+    needs: checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version-file: pubspec.yaml
+          cache: true
+      - run: flutter pub get
+      - run: flutter build apk --debug --target-platform android-arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kazumis-book-Android-development
+          path: build/app/outputs/flutter-apk/app-debug.apk

@@ -1,4 +1,5 @@
 import 'package:flutter_modular/flutter_modular.dart';
+import 'package:kazumi/novel/novel_service.dart';
 import 'package:kazumi/pages/collect/collect_controller.dart';
 import 'package:kazumi/pages/download/download_controller.dart';
 import 'package:kazumi/pages/history/history_controller.dart';
@@ -38,6 +39,7 @@ final coreModule = createModule(
       ..addSingleton<HistoryPlaybackService>(HistoryPlaybackService.new)
       ..addSingleton<ShaderAssetService>(ShaderAssetService.new)
       ..addSingleton<WebDav>(WebDav.new)
+      ..addSingleton<NovelService>(NovelService.new)
       ..addSingleton<DanmakuShieldSyncService>(DanmakuShieldSyncService.new)
       // Cross-feature state and coordinators.
       ..addSingleton<PluginsController>(PluginsController.new)

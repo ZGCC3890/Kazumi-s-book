@@ -33,7 +33,7 @@ class UpdateAvailableDialog extends StatefulWidget {
 
 class _UpdateAvailableDialogState extends State<UpdateAvailableDialog> {
   final _notesController = ScrollController();
-  var _source = UpdateDownloadSource.mirror;
+  var _source = UpdateDownloadSource.github;
   late var _type = widget.updateInfo.recommendedInstallationType;
   var _disableAutoUpdate = false;
 
@@ -229,7 +229,7 @@ class _UpdateAvailableDialogState extends State<UpdateAvailableDialog> {
           title: const Text('下载源'),
           value: _source,
           options: {
-            for (final source in UpdateDownloadSource.values)
+            for (final source in const [UpdateDownloadSource.github])
               source: source.label,
           },
           onChanged: (source) => setState(() => _source = source),

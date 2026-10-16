@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "type": "novel-xpath",
+  "id": "syosetu",
+  "name": "小説家になろう",
+  "revision": "2026-10-17.1",
+  "language": "ja",
+  "edition": "日文 Web 版",
+  "encoding": "utf-8",
+  "headers": {"Referer": "https://syosetu.com/"},
+  "loginRequiredXPath": "",
+  "searchFormat": "json",
+  "searchMethod": "GET",
+  "searchUrl": "https://api.syosetu.com/novelapi/api/?out=json&lim=20&of=t-n-w&word=@keyword",
+  "searchBody": {},
+  "search": {
+    "singleDetect": "",
+    "items": "$[1:]",
+    "title": "$.title",
+    "titleAttribute": "",
+    "link": "$.ncode",
+    "linkAttribute": "",
+    "linkTransform": "lowercase",
+    "urlTemplate": "https://ncode.syosetu.com/@value/",
+    "author": "$.writer",
+    "authorRegex": "",
+    "cover": "",
+    "coverAttribute": ""
+  },
+  "catalog": {
+    "mode": "sequence-css",
+    "nodes": ".p-eplist__chapter-title, .p-eplist__sublist",
+    "volumeClass": "p-eplist__chapter-title",
+    "detailToCatalog": "",
+    "title": ".//a[contains(@class,'p-eplist__subtitle')]",
+    "link": ".//a[contains(@class,'p-eplist__subtitle')]",
+    "linkAttribute": "href",
+    "next": "//a[contains(@class,'c-pager__item--next')]",
+    "nextAttribute": "href"
+  },
+  "content": {
+    "root": "//div[contains(@class,'js-novel-text')]",
+    "remove": "//rt | //rp | //script | //style",
+    "imageAttribute": "src",
+    "next": "",
+    "nextAttribute": "href"
+  }
+}

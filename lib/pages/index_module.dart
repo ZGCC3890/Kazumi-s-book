@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:kazumi/novel/novel_library_page.dart';
+import 'package:kazumi/novel/novel_service.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:kazumi/bean/widget/error_widget.dart';
 import 'package:kazumi/bean/widget/image_preview.dart';
@@ -93,7 +95,7 @@ final indexModule = createModule(
       ..route(
         '/error',
         child: (context, state) => Scaffold(
-          appBar: AppBar(title: const Text('Kazumi')),
+          appBar: AppBar(title: const Text("Kazumi's book")),
           body: const GeneralErrorWidget(
             title: '初始化失败',
             errMsg: '请重新启动应用后再试。',
@@ -118,6 +120,7 @@ final indexModule = createModule(
         transition: _imagePreviewTransition,
       )
       ..module(infoModule)
+      ..route('/novels/', child: (context, state) => NovelLibraryPage(service: inject<NovelService>()))
       ..module(settingsModule)
       ..module(searchModule);
   },

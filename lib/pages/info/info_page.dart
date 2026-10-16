@@ -9,7 +9,6 @@ import 'package:window_manager/window_manager.dart';
 import 'package:kazumi/bean/appbar/drag_to_move_bar.dart' as dtb;
 import 'package:kazumi/bean/card/bangumi_info_card.dart';
 import 'package:kazumi/bean/card/network_img_layer.dart';
-import 'package:kazumi/bean/dialog/adaptive_bottom_sheet.dart';
 import 'package:kazumi/bean/dialog/dialog_helper.dart';
 import 'package:kazumi/bean/widget/collect_button.dart';
 import 'package:kazumi/bean/widget/embedded_native_control_area.dart';
@@ -18,7 +17,9 @@ import 'package:kazumi/pages/info/info_actions_menu.dart';
 import 'package:kazumi/pages/info/info_controller.dart';
 import 'package:kazumi/pages/info/info_tabview.dart';
 import 'package:kazumi/pages/info/rating_review_dialog.dart';
-import 'package:kazumi/pages/info/source_sheet.dart';
+import 'package:kazumi/pages/info/watch_entry.dart';
+import 'package:kazumi/novel/novel_entry.dart';
+import 'package:kazumi/novel/novel_service.dart';
 import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/platform/desktop_window_config.dart';
@@ -301,23 +302,7 @@ class _InfoPageState extends State<InfoPage>
   }
 
   void _startWatching() {
-    if (widget.pluginsController.pluginList.isEmpty) {
-      KazumiDialog.showToast(
-        message: '还没有规则，无法开始观看',
-        showActionButton: true,
-        actionLabel: '添加规则',
-        onActionPressed: () {
-          if (mounted) context.pushNamed('/settings/plugin/');
-        },
-        duration: const Duration(seconds: 4),
-      );
-      return;
-    }
-    showAdaptiveBottomSheet<void>(
-      context: context,
-      maxHeightFactor: 0.88,
-      builder: (_) => SourceSheet(infoController: infoController),
-    );
+    WatchEntry.open(context, infoController.bangumiItem, controller: infoController);
   }
 
   Future<void> _waitForMinimumBangumiInfoLoadingDuration(
@@ -468,12 +453,18 @@ class _InfoPageState extends State<InfoPage>
           );
         }),
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: Wrap(spacing: 12, runSpacing: 12, children: [
+        FloatingActionButton.extended(
+          heroTag: 'novel-read', tooltip: '阅读轻小说',
+          onPressed: () => NovelEntry.open(context, infoController.bangumiItem, inject<NovelService>()),
+          label: const Text('阅读轻小说'), icon: const Icon(Icons.menu_book_outlined)),
+        FloatingActionButton.extended(
+        heroTag: 'anime-watch',
         tooltip: '开始观看',
         onPressed: _startWatching,
         label: const Text('开始观看'),
         icon: const Icon(Icons.play_arrow_rounded),
-      ),
+      )]),
     );
   }
 }

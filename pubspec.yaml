@@ -1,7 +1,7 @@
 name: kazumi
-description: "A new Flutter project."
+description: "Kazumi's book — anime and light novel reader."
 publish_to: "none"
-version: 2.3.9+20309
+version: 0.1.0+1
 
 environment:
   sdk: ">=3.10.0 <4.0.0"
@@ -77,6 +77,7 @@ dependencies:
   upgrader: ^12.3.0
   open_filex: ^4.7.0
   html: any
+  enough_convert: ^1.7.1
   material_color_utilities: any
   material_new_shapes: ^1.0.0
   path: any
@@ -146,8 +147,9 @@ flutter_native_splash:
   image_dark_ios: assets/images/logo/logo_ios.png
 
 msix_config:
-  display_name: Kazumi
-  publisher: CN=SignPath Foundation, O=SignPath Foundation, L=Lewes, S=Delaware, C=US
+  display_name: Kazumi's book
+  identity_name: ZGCC3890.KazumisBook
+  publisher: CN=ZGCC3890
   logo_path: assets/images/logo/logo_rounded.png
   sign_msix: false
   install_certificate: false

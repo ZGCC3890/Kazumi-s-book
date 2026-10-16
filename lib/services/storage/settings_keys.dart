@@ -304,6 +304,9 @@ class SettingsKeys {
     false,
     group: SettingGroup.webdav,
   );
+  static const webDavEnableNovels = SettingKey<bool>(
+    'webDavEnableNovels', false, group: SettingGroup.webdav,
+  );
   static const danmakuShieldSyncDeviceId = SettingKey<String>(
     'danmakuShieldSyncDeviceId',
     '',
@@ -616,6 +619,7 @@ class SettingsKeys {
     webDavEnableHistory,
     webDavEnableCollect,
     webDavEnableDanmakuShield,
+    webDavEnableNovels,
     danmakuShieldSyncDeviceId,
     danmakuShieldSyncState,
     danmakuShieldSyncCorruptState,

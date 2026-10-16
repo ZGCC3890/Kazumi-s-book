@@ -39,7 +39,7 @@ class AboutPage extends StatelessWidget {
                     ),
                     AboutLinkTile(
                       icon: Icons.forum_rounded,
-                      title: 'Telegram',
+                      title: 'Kazumi 上游社区',
                       url: ApiEndpoints.telegramGroup,
                     ),
                   ],
@@ -112,7 +112,7 @@ class _ProjectHeader extends StatelessWidget {
           Semantics(
             header: true,
             child: Text(
-              'Kazumi',
+              "Kazumi's book",
               style: theme.textTheme.displayMedium?.copyWith(
                 color: colors.primary,
                 fontWeight: FontWeight.w600,

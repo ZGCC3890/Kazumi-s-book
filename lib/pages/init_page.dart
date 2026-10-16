@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:kazumi/novel/novel_service.dart';
 import 'package:flutter/material.dart';
 import 'package:kazumi/bean/dialog/dialog_helper.dart';
 import 'package:kazumi/pages/my/my_controller.dart';
@@ -43,6 +44,7 @@ class InitPage extends StatefulWidget {
 }
 
 class _InitPageState extends State<InitPage> {
+  String? _novelInitializationError;
   PluginsController get pluginsController => widget.pluginsController;
   CollectController get collectController => widget.collectController;
   ShaderAssetService get shaderAssetService => widget.shaderAssetService;
@@ -56,6 +58,12 @@ class _InitPageState extends State<InitPage> {
   }
 
   Future<void> _initializeApp() async {
+    try {
+      await inject<NovelService>().init();
+    } catch (error) {
+      if (mounted) setState(() => _novelInitializationError = error.toString());
+      return;
+    }
     widget.danmakuShieldSync.start();
     _migrateStorage();
     _loadShaders();
@@ -313,6 +321,10 @@ class _InitPageState extends State<InitPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_novelInitializationError != null) {
+      return Scaffold(body: Center(child: Padding(padding: const EdgeInsets.all(24),
+        child: SelectableText('小说数据初始化失败：$_novelInitializationError'))));
+    }
     return const LoadingWidget();
   }
 }

@@ -1,0 +1,120 @@
+import 'package:flutter/material.dart';
+import 'package:kazumi/services/storage/storage.dart';
+import 'novel_entry.dart';
+import 'novel_rules_page.dart';
+import 'novel_service.dart';
+
+class NovelLibraryPage extends StatelessWidget {
+  const NovelLibraryPage({super.key, required this.service});
+  final NovelService service;
+  Future<void> _run(
+    BuildContext context,
+    Future<void> Function() action,
+  ) async {
+    try {
+      await action();
+    } catch (error) {
+      if (context.mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: service,
+    builder: (_, _) => Scaffold(
+      appBar: AppBar(
+        title: const Text('轻小说书架'),
+        actions: [
+          IconButton(
+            tooltip: '小说规则',
+            icon: const Icon(Icons.rule_folder_outlined),
+            onPressed: () => Navigator.of(context).push<void>(
+              MaterialPageRoute(
+                builder: (_) => NovelRulesPage(service: service),
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: '同步小说',
+            icon: const Icon(Icons.sync),
+            onPressed: service.syncing
+                ? null
+                : () => _run(context, service.sync),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          SwitchListTile(
+            title: const Text('WebDAV 自动同步阅读进度与书签'),
+            subtitle: const Text('复用已有云盘配置。阅读时自动保存本地；有网络时自动同步。'),
+            value: GStorage.getSetting(SettingsKeys.webDavEnableNovels),
+            onChanged: (value) => _run(context, () async {
+              if (value && !GStorage.getSetting(SettingsKeys.webDavEnable)) {
+                throw StateError('请先在设置 → 多设备同步中配置并启用 WebDAV');
+              }
+              await GStorage.putSetting(SettingsKeys.webDavEnableNovels, value);
+              if (value) await service.sync();
+              service.refreshView();
+            }),
+          ),
+          if (service.syncError != null)
+            ListTile(
+              leading: const Icon(Icons.cloud_off_outlined),
+              title: const Text('云同步未完成，本地记录已保留'),
+              subtitle: Text(service.syncError!),
+            ),
+          if (service.lastSync != null)
+            ListTile(title: Text('上次同步：${service.lastSync!.toLocal()}')),
+          if (service.state.conflicts.isNotEmpty)
+            ListTile(
+              leading: const Icon(Icons.merge),
+              title: const Text('有多设备修改需要选择'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => NovelEntry.conflicts(context, service),
+            ),
+          if (service.editions.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(32),
+              child: Text('从番剧详情或追番卡片点击阅读，确认小说后会出现在这里。'),
+            ),
+          if (service.state.conflicts.isEmpty)
+            for (final edition in service.editions)
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.menu_book_outlined),
+                  title: Text(service.work(edition.workId).title),
+                  subtitle: Text(edition.label),
+                  onTap: () => _run(context, () async {
+                    await NovelEntry.conflicts(context, service);
+                    if (context.mounted && service.state.conflicts.isEmpty)
+                      await NovelEntry.read(context, service, edition.id);
+                  }),
+                  trailing: PopupMenuButton<String>(
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'source', child: Text('更换同版本书源')),
+                      PopupMenuItem(
+                        value: 'edition',
+                        child: Text('关联该作品的其他译本/版本'),
+                      ),
+                    ],
+                    onSelected: (value) => NovelEntry.search(
+                      context,
+                      service,
+                      0,
+                      service.work(edition.workId).title,
+                      editionId: value == 'source' ? edition.id : null,
+                      workId: value == 'edition' ? edition.workId : null,
+                    ),
+                  ),
+                ),
+              ),
+        ],
+      ),
+    ),
+  );
+}

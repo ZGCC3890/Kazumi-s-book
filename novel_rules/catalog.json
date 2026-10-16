@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "wenku8",
+      "name": "轻小说文库",
+      "file": "wenku8.json",
+      "description": "中文译本、分卷目录和插图。部分网络环境可能遇到站点访问验证。"
+    },
+    {
+      "id": "syosetu",
+      "name": "小説家になろう",
+      "file": "syosetu.json",
+      "description": "日文 Web 原作，支持目录、正文和插图。"
+    }
+  ]
+}

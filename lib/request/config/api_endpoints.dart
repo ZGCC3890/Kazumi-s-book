@@ -8,10 +8,10 @@ class ApiEndpoints {
   static const int apiLevel = 9;
 
   /// 项目主页
-  static const String projectUrl = "https://kazumi.app/";
+  static const String projectUrl = "https://github.com/ZGCC3890/Kazumi-s-book";
 
   /// Github 项目主页
-  static const String sourceUrl = "https://github.com/Predidit/Kazumi";
+  static const String sourceUrl = "https://github.com/ZGCC3890/Kazumi-s-book";
 
   /// 图标作者
   static const String iconUrl = "https://www.pixiv.net/users/66219277";
@@ -26,14 +26,10 @@ class ApiEndpoints {
 
   /// 在线升级
   static const String latestApp =
-      'https://api.github.com/repos/Predidit/Kazumi/releases/latest';
+      'https://api.github.com/repos/ZGCC3890/Kazumi-s-book/releases/latest';
 
   /// Bangumi 镜像测试后端
   static const String bangumiMirrorDomain = 'https://api.kazumi.fyi';
-
-  /// Kazumi 镜像后端应用更新
-  static const String latestAppMirror =
-      '$bangumiMirrorDomain/kazumi/v1/app/latest';
 
   /// 弹弹官网
   static const String dandanIndex = 'https://www.dandanplay.com/';

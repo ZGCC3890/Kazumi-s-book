@@ -8,6 +8,8 @@ class _CollectPosterCard extends StatelessWidget {
     required this.showStatus,
     required this.onOpen,
     required this.onChangeType,
+    this.onPlay,
+    this.onRead,
   });
 
   final CollectedBangumi entry;
@@ -15,6 +17,7 @@ class _CollectPosterCard extends StatelessWidget {
   final bool showStatus;
   final VoidCallback onOpen;
   final ValueChanged<CollectType>? onChangeType;
+  final VoidCallback? onPlay, onRead;
 
   static const _coverRatio = 0.65;
   static bool _isCompact(double width) => width < 160;
@@ -24,32 +27,12 @@ class _CollectPosterCard extends StatelessWidget {
       (scaler.scale(12) * 1.4).ceilToDouble();
   static double _statusHeight(TextScaler scaler) =>
       (scaler.scale(11) * 1.4).ceilToDouble();
-  static bool _stackCompactActions(double width, TextScaler scaler,
-          {required bool showRating, required bool showStatus}) =>
-      (showRating && scaler.scale(12) * 2.5 > width - 56) ||
-      (showStatus && scaler.scale(11) * 2 > width - 56);
-  static double _compactActionsHeight(double width, TextScaler scaler,
-      {required bool showRating, required bool showStatus}) {
-    final detailsHeight = (showRating ? _detailsHeight(scaler) : 0.0) +
-        (showStatus ? _statusHeight(scaler) : 0.0) +
-        (showRating && showStatus ? 2.0 : 0.0);
-    return _stackCompactActions(width, scaler,
-            showRating: showRating, showStatus: showStatus)
-        ? detailsHeight + 48
-        : detailsHeight.clamp(48.0, double.infinity);
-  }
-
   static double extent(double width, TextScaler scaler,
       {required bool showRating, required bool showStatus}) {
-    final footerHeight = _isCompact(width)
-        ? 12 +
-            _titleHeight(scaler, compact: true) +
-            _compactActionsHeight(width, scaler,
-                showRating: showRating, showStatus: showStatus)
-        : 16 +
-            (_titleHeight(scaler) +
-                    (showRating || showStatus ? 4 + _detailsHeight(scaler) : 0))
-                .clamp(48.0, double.infinity);
+    final footerHeight = 20 + _titleHeight(scaler, compact: _isCompact(width)) +
+        (showRating || showStatus ? 4 + _detailsHeight(scaler) +
+          (_isCompact(width) && showRating && showStatus ? _statusHeight(scaler) + 2 : 0) : 0) +
+        (width - 16 < scaler.scale(14) * 2 + 138 ? 96 : 48);
     return width / _coverRatio + footerHeight;
   }
 
@@ -116,67 +99,14 @@ class _CollectPosterCard extends StatelessWidget {
                 if (showStatus) type.label,
               ].join(' · ')),
       );
-      final menu = _CollectEntryMenu(entry: entry, onChanged: onChangeType);
-      final footer = compact
-          ? Padding(
-              padding: const EdgeInsets.only(top: 8, bottom: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: titleBlock,
-                  ),
-                  SizedBox(
-                    height: _compactActionsHeight(constraints.maxWidth, scaler,
-                        showRating: showRating, showStatus: showStatus),
-                    child: _stackCompactActions(constraints.maxWidth, scaler,
-                            showRating: showRating, showStatus: showStatus)
-                        ? Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 8),
-                                child: detailsBlock,
-                              ),
-                              Align(
-                                alignment: AlignmentDirectional.centerEnd,
-                                child: menu,
-                              ),
-                            ],
-                          )
-                        : Padding(
-                            padding: const EdgeInsetsDirectional.only(start: 8),
-                            child: Row(
-                              children: [Expanded(child: detailsBlock), menu],
-                            ),
-                          ),
-                  ),
-                ],
-              ),
-            )
-          : Padding(
-              padding: const EdgeInsetsDirectional.fromSTEB(12, 8, 0, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        titleBlock,
-                        if (showDetails) ...[
-                          const SizedBox(height: 4),
-                          detailsBlock,
-                        ],
-                      ],
-                    ),
-                  ),
-                  menu,
-                ],
-              ),
-            );
+      final footer = Padding(padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          titleBlock,
+          if (showDetails) ...[const SizedBox(height: 4), detailsBlock],
+          const SizedBox(height: 4),
+          _CollectQuickActions(entry: entry, onChanged: onChangeType,
+            onPlay: onPlay, onRead: onRead),
+        ]));
 
       return Material(
         color: colors.surfaceContainerLow,
@@ -218,12 +148,15 @@ class _CollectListTile extends StatelessWidget {
     required this.showRating,
     required this.onOpen,
     required this.onChangeType,
+    this.onPlay,
+    this.onRead,
   });
 
   final CollectedBangumi entry;
   final bool showRating;
   final VoidCallback onOpen;
   final ValueChanged<CollectType>? onChangeType;
+  final VoidCallback? onPlay, onRead;
 
   @override
   Widget build(BuildContext context) {
@@ -311,10 +244,11 @@ class _CollectListTile extends StatelessWidget {
                           ),
                         ),
                       ),
-                      _CollectEntryMenu(
+                      _CollectQuickActions(
                         entry: entry,
                         onChanged: onChangeType,
-                        showStatusLabel: true,
+                        onPlay: onPlay,
+                        onRead: onRead,
                       ),
                     ],
                   ),
@@ -326,6 +260,21 @@ class _CollectListTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CollectQuickActions extends StatelessWidget {
+  const _CollectQuickActions({required this.entry, required this.onChanged,
+    required this.onPlay, required this.onRead});
+  final CollectedBangumi entry;
+  final ValueChanged<CollectType>? onChanged;
+  final VoidCallback? onPlay, onRead;
+  @override
+  Widget build(BuildContext context) => Wrap(crossAxisAlignment: WrapCrossAlignment.center,
+    children: [_CollectEntryMenu(entry: entry, onChanged: onChanged, showStatusLabel: true),
+      IconButton(tooltip: '播放《${CollectLibraryQuery.titleOf(entry)}》', onPressed: onPlay,
+        icon: const Icon(Icons.play_arrow_rounded)),
+      IconButton(tooltip: '阅读《${CollectLibraryQuery.titleOf(entry)}》的轻小说', onPressed: onRead,
+        icon: const Icon(Icons.menu_book_outlined))]);
 }
 
 class _CollectCover extends StatelessWidget {

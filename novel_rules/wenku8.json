@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "type": "novel-xpath",
+  "id": "wenku8",
+  "name": "轻小说文库",
+  "revision": "2026-10-17.1",
+  "language": "zh",
+  "edition": "中文文库版（请确认译本）",
+  "encoding": "gbk",
+  "headers": {"Referer": "https://www.wenku8.net/"},
+  "loginRequiredXPath": "//input[@type='password']",
+  "searchFormat": "html",
+  "searchMethod": "GET",
+  "searchUrl": "https://www.wenku8.net/modules/article/search.php?searchtype=articlename&searchkey=@keyword",
+  "searchBody": {},
+  "search": {
+    "singleDetect": "//a[text()='小说目录']",
+    "singleTitle": "//span[contains(@style,'font-weight: bold')]/b",
+    "singleAuthor": "//td[contains(text(),'小说作者：')]",
+    "singleAuthorRegex": "小说作者：(.*)",
+    "singleCover": "//img[@vspace='0']",
+    "itemsMode": "css",
+    "items": "div[style*='width:373px']",
+    "title": ".//b/a",
+    "titleAttribute": "tiptitle",
+    "link": ".//b/a",
+    "linkAttribute": "href",
+    "author": ".//p[1]",
+    "authorRegex": "^作者:(.*?)/分类:",
+    "cover": ".//div/a/img",
+    "coverAttribute": "src"
+  },
+  "catalog": {
+    "mode": "sequence-css",
+    "nodes": "td.vcss, td.ccss",
+    "volumeClass": "vcss",
+    "detailToCatalog": "//a[text()='小说目录']",
+    "title": ".//a",
+    "link": ".//a",
+    "linkAttribute": "href",
+    "next": "",
+    "nextAttribute": "href"
+  },
+  "content": {
+    "root": "//div[@id='content']",
+    "remove": "//script | //style",
+    "imageAttribute": "src",
+    "next": "",
+    "nextAttribute": "href"
+  }
+}

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
+import 'package:kazumi/novel/novel_service.dart';
 
 import 'package:kazumi/bean/settings/settings_detail_scaffold.dart';
 import 'package:kazumi/bean/settings/settings_list.dart';
@@ -127,6 +128,18 @@ class _WebDavSyncPageState extends State<WebDavSyncPage> {
               title: const Text('同步内容'),
               margin: EdgeInsets.zero,
               tiles: [
+                SettingsTile.switchTile(
+                  leading: Icons.menu_book_outlined,
+                  title: const Text('小说阅读进度与书签'),
+                  description: const Text('自动同步小说版本、书源关联、阅读位置和书签'),
+                  initialValue: GStorage.getSetting(SettingsKeys.webDavEnableNovels),
+                  enabled: enabled && !_busy,
+                  onToggle: (value) => _run(() async {
+                    final next = value ?? !GStorage.getSetting(SettingsKeys.webDavEnableNovels);
+                    await GStorage.putSetting(SettingsKeys.webDavEnableNovels, next);
+                    if (next) await inject<NovelService>().sync();
+                  }),
+                ),
                 SettingsTile.switchTile(
                   leading: Icons.history_rounded,
                   title: const Text('观看记录'),

@@ -16,6 +16,9 @@ import 'package:kazumi/pages/collect/collect_controller.dart';
 import 'package:kazumi/pages/collect/collect_library_view.dart';
 import 'package:kazumi/pages/collect/collect_sync_dialog.dart';
 import 'package:kazumi/services/storage/storage.dart';
+import 'package:kazumi/pages/info/watch_entry.dart';
+import 'package:kazumi/novel/novel_entry.dart';
+import 'package:kazumi/novel/novel_service.dart';
 
 class CollectPage extends StatefulWidget {
   const CollectPage({
@@ -119,6 +122,8 @@ class _CollectPageState extends State<CollectPage> with KazumiDialogOwner {
               ?.copyWith(fontWeight: FontWeight.w700),
         ),
         actions: [
+          IconButton(tooltip: '轻小说书架', icon: const Icon(Icons.menu_book_outlined),
+            onPressed: () => context.pushNamed('/novels/')),
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: Tooltip(
@@ -145,6 +150,8 @@ class _CollectPageState extends State<CollectPage> with KazumiDialogOwner {
             canEdit: (item) =>
                 !_syncDialogOpen && !_pendingIds.contains(item.id),
             onOpen: (item) => context.pushNamed('/info/', arguments: item),
+            onPlay: (item) => WatchEntry.open(context, item),
+            onRead: (item) => NovelEntry.open(context, item, inject<NovelService>()),
             onChangeType: (item, type) => unawaited(_changeType(item, type)),
           ),
         ),

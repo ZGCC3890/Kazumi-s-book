@@ -6,6 +6,7 @@ import 'package:kazumi/bean/dialog/dialog_helper.dart';
 import 'package:kazumi/bean/dialog/update_available_dialog.dart';
 import 'package:kazumi/request/clients/download_http_client.dart';
 import 'package:kazumi/request/config/api_endpoints.dart';
+import 'package:kazumi/request/core/network_exception.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/update/update_download_source.dart';
 import 'package:kazumi/services/update/update_downloader.dart';
@@ -103,6 +104,12 @@ List<String> getUpdateFilePatterns(InstallationType installationType) {
   }
 }
 
+class NoPublishedReleaseException implements Exception {
+  const NoPublishedReleaseException();
+  @override
+  String toString() => "Kazumi's book 仓库尚未发布正式版本";
+}
+
 class AutoUpdater {
   static final AutoUpdater _instance = AutoUpdater._internal();
 
@@ -159,7 +166,13 @@ class AutoUpdater {
   }
 
   Future<Map<String, dynamic>> _latestRelease() async {
-    final raw = await _downloadClient.getPlain(ApiEndpoints.latestAppMirror);
+    late String raw;
+    try {
+      raw = await _downloadClient.getPlain(ApiEndpoints.latestApp);
+    } on NetworkException catch (error) {
+      if (error.statusCode == 404) throw const NoPublishedReleaseException();
+      rethrow;
+    }
     final data = json.decode(raw);
     if (data is! Map) {
       throw Exception('Invalid update response');
@@ -189,6 +202,8 @@ class AutoUpdater {
       } else {
         KazumiDialog.showToast(message: '当前已经是最新版本！');
       }
+    } on NoPublishedReleaseException catch (e) {
+      KazumiDialog.showToast(message: e.toString());
     } catch (e) {
       KazumiDialog.showToast(message: '检查更新失败');
     }

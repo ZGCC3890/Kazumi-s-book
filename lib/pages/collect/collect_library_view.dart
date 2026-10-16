@@ -31,6 +31,8 @@ class CollectLibraryView extends StatefulWidget {
     required this.canEdit,
     required this.layout,
     required this.onLayoutChanged,
+    this.onPlay,
+    this.onRead,
   });
 
   final List<CollectedBangumi> entries;
@@ -40,6 +42,7 @@ class CollectLibraryView extends StatefulWidget {
   final bool Function(BangumiItem) canEdit;
   final CollectLayout layout;
   final ValueChanged<CollectLayout> onLayoutChanged;
+  final ValueChanged<BangumiItem>? onPlay, onRead;
 
   @override
   State<CollectLibraryView> createState() => _CollectLibraryViewState();
@@ -366,6 +369,8 @@ class _CollectLibraryViewState extends State<CollectLibraryView>
             showRating: widget.showRating,
             onOpen: () => widget.onOpen(entries[index].bangumiItem),
             onChangeType: _changeTypeFor(entries[index]),
+            onPlay: widget.onPlay == null ? null : () => widget.onPlay!(entries[index].bangumiItem),
+            onRead: widget.onRead == null ? null : () => widget.onRead!(entries[index].bangumiItem),
           ),
         );
 
@@ -430,6 +435,8 @@ class _CollectLibraryViewState extends State<CollectLibraryView>
         showStatus: type == null,
         onOpen: () => widget.onOpen(entries[index].bangumiItem),
         onChangeType: _changeTypeFor(entries[index]),
+        onPlay: widget.onPlay == null ? null : () => widget.onPlay!(entries[index].bangumiItem),
+        onRead: widget.onRead == null ? null : () => widget.onRead!(entries[index].bangumiItem),
       ),
     );
   }
