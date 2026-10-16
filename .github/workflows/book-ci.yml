@@ -32,7 +32,9 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos --fatal-warnings
-      - run: flutter test
+      - name: Run complete Flutter regression suite
+        timeout-minutes: 5
+        run: flutter test
       - name: Verify live upstream anime search and comments
         run: flutter test test/live/book_services_test.dart --dart-define=BOOK_LIVE=true --reporter expanded
   windows:
