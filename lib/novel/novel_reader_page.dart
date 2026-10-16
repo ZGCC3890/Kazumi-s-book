@@ -31,7 +31,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
   String? _layoutKey, _error;
   String? _saveError;
   late NovelJson _prefs;
-  NovelPosition? _location;
+  NovelPosition? _location, _savedLocation;
   int _chapterIndex = 0, _fragment = 0, _generation = 0;
   bool _busy = true, _chrome = true, _restoring = true, _leaving = false;
   bool _initialSavePending = false,
@@ -76,36 +76,55 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     }
   }
 
-  Future<void> _open() async {
+  Future<void> _open({bool refresh = false}) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
-      _chapters = await service.catalog(widget.book);
+      _chapters = await service.catalog(widget.book, refresh: refresh);
       final position = service.position(widget.editionId);
       if (!mounted) return;
       if (position == null) {
-        await _load(0);
+        await _load(0, refresh: refresh);
         return;
       }
-      final candidates = NovelLocator.candidates(
-        position,
-        widget.book.sourceId,
-        _chapters,
-      );
-      NovelChapter? chapter;
-      if (candidates.length == 1) {
-        chapter = candidates.single;
-      } else {
-        chapter = await _chooseChapter(
-          candidates.isEmpty ? _chapters : candidates,
-          title: '无法唯一对应原进度，请选择章节',
-        );
-        if (chapter == null) {
-          throw StateError('尚未确认章节，已保留原阅读进度');
-        }
-      }
-      await _load(_chapters.indexOf(chapter), restore: position);
+      await _restoreChapter(position, refresh: refresh);
     } catch (error) {
       _fail(error);
     }
+  }
+
+  Future<void> _restoreChapter(
+    NovelPosition position, {
+    bool refresh = false,
+  }) async {
+    final mapped = service.mappedChapter(position, widget.book);
+    final currentMapping = mapped == null
+        ? <NovelChapter>[]
+        : _chapters.where((chapter) => chapter.url == mapped.url).toList();
+    final candidates = mapped == null
+        ? NovelLocator.candidates(position, widget.book.sourceId, _chapters)
+        : currentMapping;
+    final needsConfirmation = candidates.length != 1;
+    final chapter = needsConfirmation
+        ? await _chooseChapter(
+            candidates.isEmpty ? _chapters : candidates,
+            title: mapped != null && currentMapping.isEmpty
+                ? '先前确认的章节已从目录移除，请重新选择'
+                : '无法唯一对应原进度，请选择章节',
+          )
+        : candidates.single;
+    if (chapter == null) {
+      _fail(StateError('尚未确认章节，已保留原阅读进度'));
+      return;
+    }
+    await _load(
+      _chapters.indexOf(chapter),
+      restore: position,
+      confirmMapping: needsConfirmation,
+      refresh: refresh,
+    );
   }
 
   void _fail(Object error) {
@@ -121,6 +140,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     NovelPosition? restore,
     bool refresh = false,
     bool startAtEnd = false,
+    bool confirmMapping = false,
   }) async {
     final generation = ++_generation;
     setState(() {
@@ -183,7 +203,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
         }
         if (proven) offset = found!;
         if (!proven) {
-          final accept = await showDialog<bool>(
+          final decision = await showDialog<String>(
             context: context,
             builder: (ctx) => AlertDialog(
               title: const Text('正文或插图无法准确对应'),
@@ -193,19 +213,41 @@ class _NovelReaderPageState extends State<NovelReaderPage>
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
+                  onPressed: () => Navigator.pop(ctx, 'keep'),
                   child: const Text('保留原进度'),
                 ),
                 FilledButton(
-                  onPressed: () => Navigator.pop(ctx, true),
+                  onPressed: () => Navigator.pop(ctx, 'start'),
                   child: const Text('从本章开始'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'chapter'),
+                  child: const Text('重新选择章节'),
                 ),
               ],
             ),
           );
-          if (accept != true) throw StateError('定位未确认，已保留原阅读进度');
+          if (decision == 'chapter') {
+            final selected = await _chooseChapter(
+              _chapters,
+              title: '选择原位置对应的章节',
+            );
+            if (selected == null) throw StateError('尚未确认章节，已保留原阅读进度');
+            await _load(
+              _chapters.indexOf(selected),
+              restore: restore,
+              confirmMapping: true,
+              refresh: refresh,
+            );
+            return;
+          }
+          if (decision != 'start') throw StateError('定位未确认，已保留原阅读进度');
           fresh = true;
         }
+      }
+      if (!mounted || generation != _generation) return;
+      if (confirmMapping) {
+        await service.confirmChapterMapping(restore!, widget.book, chapter);
       }
       if (!mounted || generation != _generation) return;
       if (fresh) _restoreImageBlock = blocks.first.image ? 0 : null;
@@ -257,12 +299,17 @@ class _NovelReaderPageState extends State<NovelReaderPage>
   Future<bool> _save() async {
     _saveTimer?.cancel();
     _saveTimer = null;
-    if (_location == null) return true;
-    if (_restoring) return false;
+    final position = _location;
+    if (position == null) return true;
     if (service.state.revisions('position/${widget.editionId}').length > 1)
       return false;
+    // A remote revision may arrive while this viewport stays unchanged.
+    // Leaving must not publish this reader's already-saved old position again.
+    if (identical(position, _savedLocation)) return true;
+    if (_restoring) return false;
     try {
-      await service.savePosition(_location!);
+      await service.savePosition(position);
+      _savedLocation = position;
       if (mounted && _saveError != null) setState(() => _saveError = null);
       return true;
     } catch (error) {
@@ -280,6 +327,10 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     if (mounted) setState(() => _leaving = true);
     unawaited(service.syncAutomatically());
     if (mounted) Navigator.pop(context);
+  }
+
+  Future<void> _refresh() async {
+    if (await _save()) await _open(refresh: true);
   }
 
   Future<void> _resolvePosition({bool reopen = false}) async {
@@ -537,19 +588,12 @@ class _NovelReaderPageState extends State<NovelReaderPage>
       ),
     );
     if (selected == null) return;
-    final candidates = NovelLocator.candidates(
-      selected,
-      widget.book.sourceId,
-      _chapters,
-    );
-    final chapter = candidates.length == 1
-        ? candidates.single
-        : await _chooseChapter(
-            candidates.isEmpty ? _chapters : candidates,
-            title: '请选择书签对应章节',
-          );
-    if (chapter != null && await _save()) {
-      await _load(_chapters.indexOf(chapter), restore: selected);
+    if (await _save()) {
+      try {
+        await _restoreChapter(selected);
+      } catch (error) {
+        _fail(error);
+      }
     }
   }
 
@@ -859,6 +903,11 @@ class _NovelReaderPageState extends State<NovelReaderPage>
                   title: Text(widget.book.title),
                   actions: [
                     IconButton(
+                      tooltip: '刷新目录与正文',
+                      onPressed: _busy ? null : _refresh,
+                      icon: const Icon(Icons.refresh),
+                    ),
+                    IconButton(
                       tooltip: '添加书签',
                       onPressed: _busy ? null : _bookmark,
                       icon: const Icon(Icons.bookmark_add_outlined),
@@ -913,7 +962,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
                               children: [
                                 Text(_error!),
                                 TextButton(
-                                  onPressed: _open,
+                                  onPressed: () => _open(refresh: true),
                                   child: const Text('重新加载'),
                                 ),
                               ],

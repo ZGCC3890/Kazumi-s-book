@@ -46,6 +46,11 @@ class NovelLibraryPage extends StatelessWidget {
           ),
         ],
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => NovelEntry.search(context, service, 0, ''),
+        icon: const Icon(Icons.add),
+        label: const Text('添加小说'),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -80,7 +85,7 @@ class NovelLibraryPage extends StatelessWidget {
           if (service.editions.isEmpty)
             const Padding(
               padding: EdgeInsets.all(32),
-              child: Text('从番剧详情或追番卡片点击阅读，确认小说后会出现在这里。'),
+              child: Text('点击“添加小说”搜索书源，也可以从番剧详情或追番卡片关联小说。'),
             ),
           if (service.state.conflicts.isEmpty)
             for (final edition in service.editions)

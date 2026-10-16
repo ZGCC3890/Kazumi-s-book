@@ -40,6 +40,26 @@ void main() {
     expect(book.cover, 'https://mirror.test/cover.jpg');
   });
 
+  test('wenku8 explicit public book URL extracts metadata despite the header login form', () async {
+    final adapter = XPathNovelAdapter(_rule('wenku8'), (url, method, headers, body) async =>
+      const NovelResponse('''<header><input type="password"></header>
+        <span style="font-weight: bold"><b>公开书籍</b></span>
+        <table><tr><td>小说作者：公开作者</td></tr></table><img vspace="0" src="/cover.jpg">''',
+        'https://www.wenku8.net/book/4343.htm'));
+    final book = await adapter.bookFromUrl('https://www.wenku8.net/book/4343.htm');
+    expect(book.title, '公开书籍');
+    expect(book.author, '公开作者');
+    expect(book.url, 'https://www.wenku8.net/book/4343.htm');
+    expect(book.cover, 'https://www.wenku8.net/cover.jpg');
+  });
+
+  test('wenku8 explicit book URL reports a real login redirect even without a password field', () async {
+    final adapter = XPathNovelAdapter(_rule('wenku8'), (url, method, headers, body) async =>
+      const NovelResponse('<h1>需要登录</h1>', 'http://www.wenku8.net/login.php?jumpurl=book'));
+    await expectLater(adapter.bookFromUrl('https://www.wenku8.net/book/4343.htm'),
+      throwsA(isA<StateError>().having((e) => e.message, 'message', contains('登录页'))));
+  });
+
   test('wenku8 detail-to-catalog follows final URL and nearest preceding volume', () async {
     final requests = <String>[];
     final adapter = XPathNovelAdapter(_rule('wenku8'), (url, method, headers, body) async {
@@ -50,7 +70,7 @@ void main() {
       }
       return const NovelResponse('''<table>
       <tr><td class="vcss">第一卷</td></tr>
-      <tr><td class="ccss"><a href="1.htm">第一章 开始</a></td></tr>
+      <tr><td class="ccss"><a href="1.htm">第一章 开始</a></td><td class="ccss">&nbsp;</td></tr>
       <tr><td class="vcss">第二卷</td></tr>
       <tr><td class="ccss"><a href="2.htm">第一章 继续</a></td></tr></table>''',
         'https://cdn.test/novel/42/index.htm');
@@ -61,6 +81,27 @@ void main() {
     expect(chapters.map((c) => c.volume), ['第一卷', '第二卷']);
     expect(chapters.map((c) => c.number), [1, 1]);
     expect(chapters.first.url, 'https://cdn.test/novel/42/1.htm');
+  });
+
+  test('wenku8 public detail remains readable when its header includes a login form', () async {
+    var requests = 0;
+    final adapter = XPathNovelAdapter(_rule('wenku8'), (url, method, headers, body) async {
+      requests++;
+      if (requests == 1) {
+        return const NovelResponse('''<header><form action="/login.php">
+          <input name="username"><input type="password" name="password"></form></header>
+          <a href="/novel/4/4343/index.htm">小说目录</a>''',
+          'https://www.wenku8.net/book/4343.htm');
+      }
+      return const NovelResponse('''<table><tr><td class="vcss">第一卷</td></tr>
+        <tr><td class="ccss"><a href="177990.htm">序章</a></td></tr></table>''',
+        'https://www.wenku8.net/novel/4/4343/index.htm');
+    });
+    final chapters = await adapter.catalog(const NovelBook(sourceId: 'wenku8',
+      url: 'https://www.wenku8.net/book/4343.htm', title: '公开详情测试'));
+    expect(requests, 2);
+    expect(chapters.single.url, 'https://www.wenku8.net/novel/4/4343/177990.htm');
+    expect(chapters.single.title, '序章');
   });
 
   test('wenku8 content retains text and image source order across br boundaries', () async {

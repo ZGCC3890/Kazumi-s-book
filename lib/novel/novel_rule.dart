@@ -23,6 +23,7 @@ typedef NovelFetch =
 
 abstract interface class NovelSourceAdapter {
   Future<List<NovelBook>> search(String keyword);
+  Future<NovelBook> bookFromUrl(String url);
   Future<List<NovelChapter>> catalog(NovelBook book);
   Future<List<NovelBlock>> content(NovelChapter chapter);
 }
@@ -33,6 +34,7 @@ class NovelRule {
   final NovelJson json;
   String get id => json['id'] as String;
   String get name => json['name'] as String;
+  String get directBookUrlPattern => json['directBookUrlPattern'] as String;
   Map<String, String> get headers =>
       Map<String, String>.from(json['headers'] as Map);
   factory NovelRule.decode(String text) {
@@ -137,13 +139,42 @@ class XPathNovelAdapter implements NovelSourceAdapter {
     return uri.toString();
   }
 
-  XPathNode<dom.Node> _root(String raw) {
-    final root = HtmlNodeTree(html.parse(raw).documentElement!);
+  XPathNode<dom.Node> _root(NovelResponse response) {
+    final root = HtmlNodeTree(html.parse(response.body).documentElement!);
+    final loginUrl = rule.json['loginRequiredUrlPattern'] as String;
     final login = rule.json['loginRequiredXPath'] as String;
-    if (login.isNotEmpty && root.queryXPath(login).nodes.isNotEmpty) {
+    if ((loginUrl.isNotEmpty && RegExp(loginUrl).hasMatch(response.url)) ||
+        (login.isNotEmpty && root.queryXPath(login).nodes.isNotEmpty)) {
       throw StateError('书源返回登录页，当前请求未取得公开内容');
     }
     return root;
+  }
+
+  NovelBook _detailBook(XPathNode<dom.Node> root, String url) {
+    final spec = rule.json['search'] as NovelJson;
+    final author = RegExp(
+      spec['singleAuthorRegex'] as String,
+    ).firstMatch(_text(root, spec['singleAuthor'] as String));
+    if (author == null) throw const FormatException('单书详情作者规则未匹配');
+    final title = _text(root, spec['singleTitle'] as String);
+    if (title.isEmpty) throw const FormatException('单书详情缺少书名');
+    return NovelBook(
+      sourceId: rule.id,
+      url: url,
+      title: title,
+      author: author.group(1)!,
+      cover: _link(root, spec['singleCover'] as String, 'src', url),
+    );
+  }
+
+  @override
+  Future<NovelBook> bookFromUrl(String url) async {
+    if (rule.directBookUrlPattern.isEmpty ||
+        !RegExp(rule.directBookUrlPattern).hasMatch(url)) {
+      throw const FormatException('当前书源不支持这个书籍详情页链接');
+    }
+    final response = await fetch(url, 'GET', rule.headers, {});
+    return _detailBook(_root(response), response.url);
   }
 
   @override
@@ -189,32 +220,13 @@ class XPathNovelAdapter implements NovelSourceAdapter {
         );
       }).toList();
     }
-    final root = _root(response.body);
+    final root = _root(response);
     final singleDetect = spec['singleDetect'] as String;
     if (singleDetect.isNotEmpty &&
         root.queryXPath(singleDetect).nodes.isNotEmpty) {
-      final authorRaw = _text(root, spec['singleAuthor'] as String);
-      final author = RegExp(
-        spec['singleAuthorRegex'] as String,
-      ).firstMatch(authorRaw);
-      if (author == null) throw const FormatException('单书详情作者规则未匹配');
-      return [
-        NovelBook(
-          sourceId: rule.id,
-          url: response.url,
-          title: _text(root, spec['singleTitle'] as String),
-          author: author.group(1)!,
-          cover: _link(
-            root,
-            spec['singleCover'] as String,
-            'src',
-            response.url,
-          ),
-        ),
-      ];
+      return [_detailBook(root, response.url)];
     }
-    return html
-        .parse(response.body)
+    return (root.node as dom.Element)
         .querySelectorAll(spec['items'] as String)
         .map((element) {
           final node = HtmlNodeTree(element);
@@ -265,12 +277,12 @@ class XPathNovelAdapter implements NovelSourceAdapter {
     final detailLink = spec['detailToCatalog'] as String;
     if (detailLink.isNotEmpty) {
       final detail = await fetch(url, 'GET', rule.headers, {});
-      url = _link(_root(detail.body), detailLink, 'href', detail.url);
+      url = _link(_root(detail), detailLink, 'href', detail.url);
     }
     while (url.isNotEmpty) {
       if (!visited.add(url)) throw const FormatException('目录分页形成循环');
       final response = await fetch(url, 'GET', rule.headers, {});
-      final root = _root(response.body);
+      final root = _root(response);
       if (spec['mode'] != 'sequence-css') {
         throw const FormatException('目录需要声明 sequence-css 有序卷章结构');
       }
@@ -324,7 +336,7 @@ class XPathNovelAdapter implements NovelSourceAdapter {
     while (url.isNotEmpty) {
       if (!visited.add(url)) throw const FormatException('正文分页形成循环');
       final response = await fetch(url, 'GET', rule.headers, {});
-      final root = _root(response.body);
+      final root = _root(response);
       final remove = spec['remove'] as String;
       if (remove.isNotEmpty) {
         for (final node in root.queryXPath(remove).nodes) {

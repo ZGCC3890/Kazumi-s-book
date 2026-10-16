@@ -322,6 +322,47 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
     label.dispose();
   }
 
+  Future<void> _addUrl() async {
+    final controller = TextEditingController();
+    final url = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('从公开书籍链接添加'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: '书籍详情页 URL',
+            hintText: 'https://www.wenku8.net/book/数字.htm',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('读取详情'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (url == null) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final book = await widget.service.adapter(_source).bookFromUrl(url);
+      if (mounted) await _bind(book);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('查找轻小说')),
@@ -350,7 +391,7 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
                 controller: _query,
                 onSubmitted: (_) => _search(),
                 decoration: InputDecoration(
-                  labelText: '书名或作者，可修改译名搜索',
+                  labelText: '书名或关键词，可修改译名搜索',
                   suffixIcon: IconButton(
                     tooltip: '搜索',
                     onPressed: _busy ? null : _search,
@@ -359,6 +400,12 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
                 ),
               ),
               const SizedBox(height: 8),
+              if (widget.service.rule(_source).directBookUrlPattern.isNotEmpty)
+                TextButton.icon(
+                  onPressed: _busy ? null : _addUrl,
+                  icon: const Icon(Icons.add_link),
+                  label: const Text('从公开书籍链接添加'),
+                ),
               const Text('首次确认作品和版本后，追番卡片上的阅读键会直接续读。'),
             ],
           ),

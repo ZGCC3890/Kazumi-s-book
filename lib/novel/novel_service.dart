@@ -125,6 +125,10 @@ class NovelService extends ChangeNotifier
     notifyListeners();
   }
 
+  String? get ruleCatalogUrl => _box.get('ruleCatalogUrl');
+  Future<void> saveRuleCatalogUrl(String url) =>
+      _box.put('ruleCatalogUrl', url);
+
   void refreshView() => notifyListeners();
   List<NovelEdition> get editions => state
       .keys('edition')
@@ -151,6 +155,64 @@ class NovelService extends ChangeNotifier
     final j = state.value('position/$editionId');
     return j == null ? null : NovelPosition.fromJson(j);
   }
+
+  String _mappingKey(
+    String editionId,
+    String sourceId,
+    String chapterUrl,
+    NovelBook target,
+  ) =>
+      'chapterMap/$editionId/${sha256.convert(utf8.encode(jsonEncode([sourceId, chapterUrl, target.sourceId, target.url])))}';
+
+  @override
+  NovelChapter? mappedChapter(NovelPosition from, NovelBook target) {
+    final value = state.value(
+      _mappingKey(from.editionId, from.sourceId, from.chapter.url, target),
+    );
+    return value == null
+        ? null
+        : NovelChapter.fromJson(value['chapter'] as NovelJson);
+  }
+
+  @override
+  Future<void> confirmChapterMapping(
+    NovelPosition from,
+    NovelBook target,
+    NovelChapter chapter,
+  ) => _commit((s) {
+    final originalBook = NovelBook.fromJson(
+      s.value('source/${from.editionId}/${from.sourceId}')!['book']
+          as NovelJson,
+    );
+    return s
+        .edit(
+          _mappingKey(from.editionId, from.sourceId, from.chapter.url, target),
+          {
+            'editionId': from.editionId,
+            'fromSourceId': from.sourceId,
+            'fromChapter': from.chapter.toJson(),
+            'targetBook': target.toJson(),
+            'chapter': chapter.toJson(),
+          },
+          deviceId,
+        )
+        .edit(
+          _mappingKey(
+            from.editionId,
+            target.sourceId,
+            chapter.url,
+            originalBook,
+          ),
+          {
+            'editionId': from.editionId,
+            'fromSourceId': target.sourceId,
+            'fromChapter': chapter.toJson(),
+            'targetBook': originalBook.toJson(),
+            'chapter': from.chapter.toJson(),
+          },
+          deviceId,
+        );
+  });
 
   @override
   List<NovelJson> bookmarks(String editionId) => state

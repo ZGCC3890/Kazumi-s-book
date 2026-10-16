@@ -8,6 +8,12 @@ abstract interface class NovelReaderStore implements Listenable {
   NovelSyncState get state;
   String? get syncError;
   NovelPosition? position(String editionId);
+  NovelChapter? mappedChapter(NovelPosition from, NovelBook target);
+  Future<void> confirmChapterMapping(
+    NovelPosition from,
+    NovelBook target,
+    NovelChapter chapter,
+  );
   Future<List<NovelChapter>> catalog(NovelBook book, {bool refresh = false});
   Future<List<NovelBlock>> content(
     String sourceId,

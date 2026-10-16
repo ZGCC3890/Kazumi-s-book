@@ -1,0 +1,335 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:dio/dio.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_ce/hive.dart';
+import 'package:kazumi/novel/novel_locator.dart';
+import 'package:kazumi/novel/novel_models.dart';
+import 'package:kazumi/novel/novel_service.dart';
+import 'package:kazumi/novel/novel_webdav_exchange.dart';
+import 'package:kazumi/services/storage/storage.dart';
+import 'package:kazumi/services/sync/webdav.dart';
+import 'package:logger/logger.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+
+const _bookA = NovelBook(sourceId: 'wenku8', url: 'https://fixture.invalid/a', title: '同一文本版本');
+const _bookB = NovelBook(sourceId: 'syosetu', url: 'https://fixture.invalid/b', title: '同一文本版本');
+const _chapterA = NovelChapter(url: 'https://fixture.invalid/a/1', title: '第一章', volume: '第一卷', kind: '正文', number: 1);
+const _chapterB = NovelChapter(url: 'https://fixture.invalid/b/7', title: '不同目录标题', volume: '不同卷名', kind: '正文', number: 7);
+const _text = '这是两个测试书源共享的正文内容，仅用于确认映射、保存、重启以及因果同步。';
+const _novelRoot = '/kazumiSync/novels/v1';
+const _videoSentinel = '/kazumiSync/history/snapshot.json';
+
+NovelPosition _position(String edition, int offset, {String source = 'wenku8', NovelChapter chapter = _chapterA}) =>
+    NovelLocator.capture(editionId: edition, sourceId: source, chapter: chapter,
+      text: _text, offset: offset, updatedAt: offset + 1);
+
+class _TestPaths extends PathProviderPlatform {
+  _TestPaths(this.path);
+  final String path;
+  @override Future<String?> getApplicationSupportPath() async => path;
+}
+
+/// An observable HTTP WebDAV peer. Production webdav_client performs every
+/// OPTIONS/MKCOL/PROPFIND/GET/PUT/MOVE request; no client or transport is mocked.
+class _HttpDav {
+  late final HttpServer server;
+  final files = <String, List<int>>{_videoSentinel: utf8.encode('existing video history sentinel')};
+  final directories = <String>{'/', '/kazumiSync', '/kazumiSync/history'};
+  final requests = <(String, String)>[];
+  final errors = <Object>[];
+  String? failOperation;
+
+  Future<void> start() async {
+    server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    server.listen((request) async {
+      try {
+        await _handle(request);
+      } catch (error) {
+        errors.add(error);
+        request.response.statusCode = HttpStatus.internalServerError;
+        await request.response.close();
+      }
+    });
+  }
+
+  String get url => 'http://127.0.0.1:${server.port}';
+  Set<String> get snapshots => files.keys.where((path) => path.startsWith('$_novelRoot/') &&
+      NovelWebDavExchange.snapshotName.hasMatch(path.split('/').last)).toSet();
+  int get snapshotGets => requests.where((r) => r.$1 == 'GET' && r.$2.startsWith('$_novelRoot/')).length;
+  static String _path(String value) => value.length > 1 && value.endsWith('/') ? value.substring(0, value.length - 1) : value;
+  static String _parent(String value) => value.substring(0, value.lastIndexOf('/')).isEmpty ? '/' : value.substring(0, value.lastIndexOf('/'));
+  static String _xml(String value) => const HtmlEscape(HtmlEscapeMode.element).convert(value);
+  String _entry(String path, bool directory) => '<d:response><d:href>${_xml(directory && path != '/' ? '$path/' : path)}</d:href>'
+      '<d:propstat><d:prop><d:resourcetype>${directory ? '<d:collection/>' : ''}</d:resourcetype>'
+      '<d:getcontentlength>${directory ? 0 : files[path]!.length}</d:getcontentlength>'
+      '</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>';
+
+  Future<void> _handle(HttpRequest request) async {
+    final path = _path(request.uri.path);
+    final method = request.method;
+    requests.add((method, path));
+    final body = await request.fold<List<int>>([], (all, chunk) => all..addAll(chunk));
+    final response = request.response;
+    if (method == failOperation && path.startsWith('$_novelRoot/')) {
+      response.statusCode = HttpStatus.serviceUnavailable;
+      response.write('injected $method failure');
+    } else {
+      switch (method) {
+        case 'OPTIONS':
+          response.statusCode = HttpStatus.ok;
+          response.headers.set('DAV', '1, 2');
+          response.headers.set('Allow', 'OPTIONS, MKCOL, PROPFIND, GET, PUT, MOVE');
+        case 'MKCOL':
+          response.statusCode = directories.add(path) ? HttpStatus.created : HttpStatus.methodNotAllowed;
+        case 'PROPFIND':
+          if (!directories.contains(path)) {
+            response.statusCode = HttpStatus.notFound;
+            break;
+          }
+          response.statusCode = HttpStatus.multiStatus;
+          response.headers.contentType = ContentType('application', 'xml', charset: 'utf-8');
+          // webdav_client skips the first collection response as the collection itself.
+          final children = [...directories.where((p) => p != path && p != '/' && _parent(p) == path),
+            ...files.keys.where((p) => _parent(p) == path)]..sort();
+          response.write('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:">'
+            '${_entry(path, true)}${children.map((p) => _entry(p, directories.contains(p))).join()}'
+            '</d:multistatus>');
+        case 'GET':
+          if (!files.containsKey(path)) {
+            response.statusCode = HttpStatus.notFound;
+            break;
+          }
+          response.statusCode = HttpStatus.ok;
+          response.headers.contentType = ContentType.binary;
+          response.contentLength = files[path]!.length;
+          response.add(files[path]!);
+        case 'PUT':
+          if (!directories.contains(_parent(path))) {
+            response.statusCode = HttpStatus.conflict;
+            break;
+          }
+          files[path] = body;
+          response.statusCode = HttpStatus.created;
+        case 'MOVE':
+          final destination = _path(Uri.parse(request.headers.value('destination')!).path);
+          if (!files.containsKey(path)) {
+            response.statusCode = HttpStatus.notFound;
+            break;
+          }
+          if (files.containsKey(destination)) {
+            response.statusCode = HttpStatus.preconditionFailed;
+            break;
+          }
+          files[destination] = files.remove(path)!;
+          response.statusCode = HttpStatus.created;
+        default:
+          throw StateError('Unexpected WebDAV method $method $path');
+      }
+    }
+    await response.close();
+  }
+
+  Future<void> close() => server.close(force: true);
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  final webDav = WebDav();
+  late Directory root;
+  late Directory caseDirectory;
+  late PathProviderPlatform originalPaths;
+  HttpOverrides? originalHttpOverrides;
+  late _HttpDav remote;
+  NovelService? active;
+
+  Future<void> closeDevice() async {
+    await GStorage.putSetting(SettingsKeys.webDavEnableNovels, false);
+    active?.dispose();
+    active = null;
+    for (final name in ['novel_v1', 'novel_cache_v1', 'novel_rules_v1']) {
+      if (Hive.isBoxOpen(name)) await Hive.box<String>(name).close();
+    }
+    webDav.initialized = false;
+  }
+
+  Future<NovelService> device(String name) async {
+    await closeDevice();
+    final directory = Directory('${caseDirectory.path}/$name');
+    await directory.create(recursive: true);
+    PathProviderPlatform.instance = _TestPaths(directory.path);
+    final service = NovelService(webDav);
+    active = service;
+    await service.init();
+    return service;
+  }
+
+  Future<String> seed(NovelService service) async {
+    await service.importRule(await File('novel_rules/wenku8.json').readAsString());
+    await service.importRule(await File('novel_rules/syosetu.json').readAsString());
+    final edition = await service.bind(animeId: 42, book: _bookA,
+      editionLabel: 'fixture identical text', language: 'zh');
+    await service.bind(animeId: 43, book: _bookB, editionLabel: 'fixture identical text',
+      language: 'zh', existingEditionId: edition);
+    return edition;
+  }
+
+  Future<void> sync(NovelService service) async {
+    await GStorage.putSetting(SettingsKeys.webDavEnableNovels, true);
+    try {
+      await service.sync();
+    } finally {
+      await GStorage.putSetting(SettingsKeys.webDavEnableNovels, false);
+    }
+  }
+
+  setUpAll(() async {
+    Logger.level = Level.off;
+    originalHttpOverrides = HttpOverrides.current;
+    // This suite deliberately uses real loopback HTTP instead of Flutter's
+    // widget-test HttpClient stub. No public source URL is requested.
+    HttpOverrides.global = null;
+    originalPaths = PathProviderPlatform.instance;
+    root = await Directory.systemTemp.createTemp('kazumis_book_integration_');
+    PathProviderPlatform.instance = _TestPaths('${root.path}/settings');
+    Hive.init('${root.path}/settings');
+    await GStorage.init();
+  });
+
+  setUp(() async {
+    await GStorage.resetSettings(SettingsKeys.byGroup(SettingGroup.webdav));
+    caseDirectory = await root.createTemp('case_');
+    remote = _HttpDav();
+    await remote.start();
+    await GStorage.putSetting(SettingsKeys.webDavURL, remote.url);
+    await GStorage.putSetting(SettingsKeys.webDavUsername, 'fixture');
+    await GStorage.putSetting(SettingsKeys.webDavPassword, 'fixture-only');
+    await GStorage.putSetting(SettingsKeys.webDavEnable, true);
+  });
+
+  tearDown(() async {
+    await closeDevice();
+    await remote.close();
+    expect(remote.errors, isEmpty);
+    expect(utf8.decode(remote.files[_videoSentinel]!), 'existing video history sentinel');
+    expect(remote.requests.where((r) => r.$2 == _videoSentinel), isEmpty,
+      reason: 'Novel sync must not read or mutate legacy video files.');
+  });
+
+  tearDownAll(() async {
+    await Hive.close();
+    PathProviderPlatform.instance = originalPaths;
+    HttpOverrides.global = originalHttpOverrides;
+    expect(root.absolute.path.startsWith(Directory.systemTemp.absolute.path), isTrue);
+    expect(root.uri.pathSegments.where((part) => part.isNotEmpty).last,
+      startsWith('kazumis_book_integration_'));
+    await root.delete(recursive: true);
+  });
+
+  test('disk restart preserves position, bookmark, local preferences and both mapping directions', () async {
+    var service = await device('A');
+    final edition = await seed(service);
+    final deviceId = service.deviceId;
+    final original = _position(edition, 5);
+    await service.savePosition(original);
+    await service.addBookmark(original, '跨源书签');
+    await service.confirmChapterMapping(original, _bookB, _chapterB);
+    await service.savePreferences({...service.preferences, 'fontSize': 27.0});
+    await service.saveRuleCatalogUrl('https://fixture.invalid/custom/catalog.json');
+    final bookmarkId = service.bookmarks(edition).single['id'] as String;
+
+    service = await device('A');
+    expect(service.deviceId, deviceId);
+    expect(service.rules.map((r) => r.id).toSet(), {'wenku8', 'syosetu'});
+    expect(service.position(edition)!.textOffset, 5);
+    expect(service.bookmarks(edition).single['note'], '跨源书签');
+    expect(service.preferences['fontSize'], 27.0);
+    expect(service.ruleCatalogUrl, 'https://fixture.invalid/custom/catalog.json');
+    expect(service.boundEditions(42), [edition]);
+    expect(service.boundEditions(43), [edition]);
+    expect(service.mappedChapter(original, _bookB)!.url, _chapterB.url);
+    expect(service.mappedChapter(_position(edition, 5, source: 'syosetu', chapter: _chapterB), _bookA)!.url, _chapterA.url);
+
+    await service.deleteBookmark(bookmarkId);
+    service = await device('A');
+    expect(service.bookmarks(edition), isEmpty);
+    expect(service.state.revisions('bookmark/$bookmarkId').single.value, isNull);
+    expect(remote.requests, isEmpty);
+  });
+
+  test('real HTTP sync persists seen snapshots and resolves two offline devices without touching video data', () async {
+    var service = await device('A');
+    final edition = await seed(service);
+    final deviceA = service.deviceId;
+    await service.savePosition(_position(edition, 4));
+    await service.addBookmark(_position(edition, 4), '同步书签');
+    await service.confirmChapterMapping(_position(edition, 4), _bookB, _chapterB);
+    await sync(service);
+    expect(remote.snapshots, hasLength(1));
+    expect(remote.requests.map((r) => r.$1).toSet(), containsAll(['OPTIONS', 'MKCOL', 'PROPFIND', 'PUT', 'MOVE']));
+
+    service = await device('A');
+    remote.requests.clear();
+    await sync(service);
+    expect(remote.snapshotGets, 0, reason: 'Seen names must survive a disk restart.');
+
+    service = await device('B');
+    expect(service.deviceId, isNot(deviceA));
+    remote.requests.clear();
+    await sync(service);
+    expect(remote.snapshotGets, 1);
+    expect(service.position(edition)!.textOffset, 4);
+    expect(service.bookmarks(edition).single['note'], '同步书签');
+    expect(service.mappedChapter(_position(edition, 4), _bookB)!.url, _chapterB.url);
+    await service.savePosition(_position(edition, 2));
+    await sync(service);
+
+    service = await device('A');
+    await service.savePosition(_position(edition, 8));
+    remote.requests.clear();
+    await sync(service);
+    expect(remote.snapshotGets, 2, reason: 'Only B initial and B edited snapshots are unseen.');
+    final key = 'position/$edition';
+    expect(service.state.revisions(key), hasLength(2));
+    expect(() => service.position(edition), throwsStateError);
+    final selected = service.state.revisions(key).singleWhere((r) => r.value!['textOffset'] == 2);
+    await service.resolve(key, selected);
+    await sync(service);
+
+    service = await device('B');
+    await sync(service);
+    expect(service.state.conflicts, isEmpty);
+    expect(service.position(edition)!.textOffset, 2, reason: 'Explicit earlier progress wins; never take maximum progress.');
+    remote.requests.clear();
+    await sync(service);
+    expect(remote.snapshotGets, 0);
+  });
+
+  for (final operation in ['PUT', 'MOVE']) {
+    test('$operation failure preserves old published state and newer local progress across restart', () async {
+      var service = await device('A');
+      final edition = await seed(service);
+      await service.savePosition(_position(edition, 8));
+      await sync(service);
+      final oldSnapshot = remote.snapshots.single;
+      final oldBytes = List<int>.of(remote.files[oldSnapshot]!);
+      await service.savePosition(_position(edition, 2));
+      remote.failOperation = operation;
+      await expectLater(sync(service), throwsA(isA<DioException>()));
+      expect(remote.snapshots, {oldSnapshot});
+      expect(remote.files[oldSnapshot], oldBytes);
+      expect(service.position(edition)!.textOffset, 2);
+      expect(service.syncError, isNotNull);
+
+      service = await device('A');
+      expect(service.position(edition)!.textOffset, 2);
+      remote.failOperation = null;
+      await sync(service);
+      expect(remote.snapshots, hasLength(2));
+      expect(remote.files[oldSnapshot], oldBytes);
+      expect(service.syncError, isNull);
+      expect(remote.requests.where((r) => r.$1 == 'DELETE'), isEmpty);
+    });
+  }
+}

@@ -415,9 +415,8 @@ class _CollectLibraryViewState extends State<CollectLibraryView>
     final textScale = (scaler.scale(14) / 14).clamp(1.0, double.infinity);
     final minWidth =
         (contentWidth < 600 ? 136.0 : 172.0) + 32 * (textScale - 1);
-    final columns = portrait
-        ? 3
-        : ((contentWidth + spacing) / (minWidth + spacing)).floor().clamp(1, 6);
+    final columns = ((contentWidth + spacing) / (minWidth + spacing))
+        .floor().clamp(1, portrait ? 3 : 6);
     final width = (contentWidth - spacing * (columns - 1)) / columns;
     return SliverGrid.builder(
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(

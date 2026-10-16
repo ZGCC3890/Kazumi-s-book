@@ -4,7 +4,7 @@
 
 独立的番剧与轻小说阅读软件，基于 [Predidit/Kazumi](https://github.com/Predidit/Kazumi) 的 GPL-3.0 源码继续开发。Android 标识为 `com.zgcc.kazumisbook`，Windows 使用独立可执行文件和数据目录；应用更新仅检查本仓库 Releases。
 
-当前开发分支：[`feature/novel-reader`](https://github.com/ZGCC3890/Kazumi-s-book/tree/feature/novel-reader)。[实施方案](docs/novel/Kazumi-轻小说实施方案.md)、[Astra 审查记录](docs/novel/Kazumi-架构审查记录.md)、[独立小说规则](novel_rules/README.md)。进度以方案中的里程碑和验证记录为准。
+当前开发分支：[`feature/novel-reader`](https://github.com/ZGCC3890/Kazumi-s-book/tree/feature/novel-reader)。[使用与维护](docs/novel/使用与维护.md)、[实施方案](docs/novel/Kazumi-轻小说实施方案.md)、[Astra 审查记录](docs/novel/Kazumi-架构审查记录.md)、[独立小说规则](novel_rules/README.md)。进度以方案中的里程碑和验证记录为准。
 
 以下保留上游项目介绍与署名。
 

@@ -41,6 +41,27 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter build windows --release
+      - name: Verify Windows identity and native startup
+        shell: pwsh
+        run: |
+          $executable = (Resolve-Path 'build/windows/x64/runner/Release/kazumis_book.exe').Path
+          $versionInfo = (Get-Item -LiteralPath $executable).VersionInfo
+          if ($versionInfo.ProductName -ne "Kazumi's book" -or $versionInfo.CompanyName -ne 'ZGCC3890') {
+            throw 'Unexpected Windows product identity.'
+          }
+          $bookProcess = Start-Process -FilePath $executable -WorkingDirectory (Split-Path $executable) -WindowStyle Hidden -PassThru
+          try {
+            Start-Sleep -Seconds 15
+            $bookProcess.Refresh()
+            if ($bookProcess.HasExited) { throw "Native startup exited: $($bookProcess.ExitCode)" }
+            $dataDirectory = Join-Path $env:APPDATA "ZGCC3890/Kazumi's book/hive"
+            if (!(Test-Path -LiteralPath (Join-Path $dataDirectory 'setting.hive'))) {
+              throw 'Independent application settings directory was not initialized.'
+            }
+            Write-Output 'Native process started and created its independent settings directory.'
+          } finally {
+            if (!$bookProcess.HasExited) { Stop-Process -Id $bookProcess.Id }
+          }
       - shell: pwsh
         run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath Kazumis_book_windows.zip
       - uses: actions/upload-artifact@v4
@@ -63,6 +84,16 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter build apk --debug --target-platform android-arm64
+      - name: Verify independent Android application ID
+        shell: bash
+        run: |
+          aapt_tools=("$ANDROID_HOME"/build-tools/*/aapt)
+          metadata=$("${aapt_tools[0]}" dump badging build/app/outputs/flutter-apk/app-debug.apk)
+          if [[ "$metadata" != *"package: name='com.zgcc.kazumisbook'"* ]]; then
+            echo 'Unexpected Android application ID.'
+            exit 1
+          fi
+          echo 'Verified com.zgcc.kazumisbook in the compiled APK.'
       - uses: actions/upload-artifact@v4
         with:
           name: Kazumis-book-Android-development

@@ -9,10 +9,12 @@
   "encoding": "utf-8",
   "headers": {"Referer": "https://syosetu.com/"},
   "loginRequiredXPath": "",
+  "loginRequiredUrlPattern": "",
   "searchFormat": "json",
   "searchMethod": "GET",
   "searchUrl": "https://api.syosetu.com/novelapi/api/?out=json&lim=20&of=t-n-w&word=@keyword",
   "searchBody": {},
+  "directBookUrlPattern": "",
   "search": {
     "singleDetect": "",
     "items": "$[1:]",

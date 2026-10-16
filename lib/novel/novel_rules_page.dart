@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:kazumi/request/clients/plugin_site_client.dart';
 import 'novel_models.dart';
+import 'novel_rule.dart';
 import 'novel_service.dart';
 
 class NovelRulesPage extends StatefulWidget {
@@ -17,12 +18,19 @@ class NovelRulesPage extends StatefulWidget {
 }
 
 class _NovelRulesPageState extends State<NovelRulesPage> {
-  final _catalogUrl = TextEditingController(
-    text: NovelRulesPage.defaultCatalog,
-  );
+  late final TextEditingController _catalogUrl;
+  String? _loadedCatalogUrl;
   List<NovelJson> _catalog = [];
   bool _busy = false;
   String? _error;
+  @override
+  void initState() {
+    super.initState();
+    _catalogUrl = TextEditingController(
+      text: widget.service.ruleCatalogUrl ?? NovelRulesPage.defaultCatalog,
+    );
+  }
+
   @override
   void dispose() {
     _catalogUrl.dispose();
@@ -46,9 +54,12 @@ class _NovelRulesPageState extends State<NovelRulesPage> {
   }
 
   Future<void> _loadCatalog() => _run(() async {
-    final j = jsonDecode(await _get(_catalogUrl.text.trim())) as NovelJson;
+    final url = _catalogUrl.text.trim();
+    final j = jsonDecode(await _get(url)) as NovelJson;
     if (j['version'] != 1) throw const FormatException('不支持的规则索引版本');
     _catalog = List<NovelJson>.from(j['rules'] as List);
+    _loadedCatalogUrl = url;
+    await widget.service.saveRuleCatalogUrl(url);
   });
   Future<void> _paste() async {
     final controller = TextEditingController();
@@ -149,9 +160,13 @@ class _NovelRulesPageState extends State<NovelRulesPage> {
                     ? null
                     : () => _run(() async {
                         final url = Uri.parse(
-                          _catalogUrl.text.trim(),
+                          _loadedCatalogUrl!,
                         ).resolve(entry['file'] as String).toString();
-                        await widget.service.importRule(await _get(url));
+                        final raw = await _get(url);
+                        if (NovelRule.decode(raw).id != entry['id']) {
+                          throw const FormatException('规则文件 id 与索引条目不一致');
+                        }
+                        await widget.service.importRule(raw);
                       }),
                 child: Text(
                   widget.service.rules.any((r) => r.id == entry['id'])

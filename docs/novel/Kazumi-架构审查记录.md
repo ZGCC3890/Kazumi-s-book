@@ -139,6 +139,66 @@
 
 修正复测通过：图片恢复现在同时核验唯一哈希与图片前规范化文本长度。移动图片会先要求确认，且确认前不保存错误位置。另将窗口/字号重排测试覆盖滚动、分页两模式，均保持原锚点 53。生产阅读页共 9 项全部通过，结合 3 项布局契约测试为 `+12: All tests passed!`，日志 `work/novel-all-reader-tests.log`。
 
+### A10 章节映射及进度拖动回归
+
+生产 `NovelReaderStore` 增加 `mappedChapter` / `confirmChapterMapping`，阅读位置与书签共用 `_restoreChapter`。新增 4 项生产阅读页测试全部通过：人工选章后回到原源位置再次打开无需重新选章；旧源书签复用同一映射；已映射目标从目录移除时明确重新询问并保留旧进度；实际拖动本章进度 Slider 后保存新的可见文本锚点。
+
+测试替身返回反序列化的新 Chapter 对象，确保 Reader 以 URL 在当前目录定位，而非依赖对象引用。该替身只模拟映射存储，不能替代 Service 的 Hive 重启、双向映射因果实体或真实 WebDAV 验证。当前生产阅读页共 13 项通过，日志 `work/novel-reader-mapping-tests.log`。仓库测试总数为 53（23 领域 + 9 交换 + 8 规则 + 13 阅读页），另有 3 项工作区布局契约实验。
+
+后续新增拆章候选纠正用例：旧映射指向第一章但锚点在第二章，Reader 明确显示定位不匹配；用户点“重新选择章节”并选第二章后，准确恢复 offset 7，确认前没有写入错误位置。第 14 项通过，同日志记录 `+14: All tests passed!`。当前映射仍以章节为粒度；一对多拆章可能需要再次确认，后续若升级为位置相关映射须另行设计，不能把当前行为宣传成拆合章全自动精准恢复。
+
+### A11 真实 Service / Hive / HTTP WebDAV 集成测试
+
+新增 `test/novel_service_integration_test.dart`，4 项测试使用生产 `NovelService`、真实 Hive 文件关闭重开、两个独立设备目录以及 loopback HTTP 服务；生产 `webdav_client` 实际执行 OPTIONS/MKCOL/PROPFIND/GET/PUT/MOVE，不替换 client/transport。覆盖本地位置/书签/删除墓碑/外观/双向映射重启，已见快照重启后的增量 GET，两个离线设备冲突与显式回读选择，以及 PUT/MOVE 失败后旧远端快照与本地位置保留。旧视频快照 sentinel 必须从未被读写。
+
+当前静态检查 `dart analyze test/novel_service_integration_test.dart` 为 No issues found，日志 `work/novel-service-integration-analyze.log`；尚未运行，待第二轮 CI。测试服务的 collection self 响应、临时文件和失败状态均可观测；它不代表所有商业 WebDAV 服务的实现兼容性。
+
+同一磁盘重启场景增加自定义规则索引 URL 的保存/重开断言，不增加测试项数；规则页使用成功加载时的索引 URL 解析相对下载地址，并检查索引 ID 与下载规则 ID 一致。新断言的运行结果随第二轮 CI 记录。
+
+### CI 和范围复核
+
+首轮提交 `143256f` 已经完整 CI 验证：[run 38945602888](https://github.com/ZGCC3890/Kazumi-s-book/actions/runs/38945602888) / checks job `117123810541`，262 项 Flutter 测试全部通过，分析通过。Windows/Android 原生包构建当时仍运行；后续映射及 A11 测试不在该首轮结论内。本地 MSVC 缺失仍如前记录，但不能据此说完整应用测试始终未运行。
+
+范围复核：外观设置按设备本地保存，云端同步只覆盖作品关联、位置、书签及恢复映射；交互式规则测试工作台为可选维护增强。自动同步以已有轮询和前台恢复满足基础触发要求，不把新增网络状态监听库当作独立硬要求。上游维护使用 `dev/sync-upstream.ps1` 直接合入产品分支，main 保持官方镜像；不要求新增仓库、账号系统或评论功能。
+
+首轮 CI 最终状态：`143256f` 的 checks、Windows、Android 三个 job 均 success。Windows release ZIP artifact `12066986462` 约 43 MB，Android debug arm64 APK artifact `12066307689` 约 89.6 MB。原生构建已经通过；桌面/手机安装共存、真实源匿名访问和真实跨设备服务仍未验收。第二提交新增业务与测试须重新等待对应 CI，不能复用首轮结果。
+
+### A03 追番卡片实际布局回归
+
+实施者新增 `test/book_collect_actions_test.dart`，直接渲染生产 `CollectLibraryView` 的 4 种情况：360px 海报卡、360px 海报卡配 2 倍文字、360px 列表配 2 倍文字、1440px 列表。首轮实际发现新按钮导致底部溢出 44/76px，根因是竖屏固定 3 列而忽略卡片最小宽度。按最小宽度和文字缩放计算列数、竖屏最多 3 列/横屏最多 6 列后，4 项全部通过；play/read 按钮分别触发各自回调且不误触卡片详情。日志 `work/collect-widget-tests.log`。这验证卡片渲染和事件隔离，视频选源及播放仍需完整应用路径验证。
+
+第二批累计新增 13 项仓库测试：Reader 映射/进度/重新选章 5 项、真实 Service/Hive/HTTP 4 项、追番卡片 4 项。前者与卡片已在独立 harness 跑过，真实 Service 集成仅静态分析通过，均等待第二提交的完整 CI 结果。书架“添加小说”入口已加入，支持独立搜索且无需关联动画，真实绑定路径待集成。
+
+### A12 匿名公开详情被登录框检测误判
+
+最新匿名请求日志 `work/public-source-probe.log` 表明：文库8 `/book/4343.htm`、`/novel/4/4343/index.htm`、`/novel/4/4343/177990.htm` 均 HTTP 200；搜索虽最终状态 200，实际最终地址为 `login.php`。公开详情页页眉也有 password 字段，导致原 `loginRequiredXPath=//input[@type='password']` 把公开内容判为登录页。
+
+第 9 项规则 fixture 在公开详情中保留页眉登录表单，真实执行 catalog 时复现 `书源返回登录页` 错误，未继续请求目录，日志 `work/novel-public-detail-test.log`。要求依据明确的最终响应 URL 登录路径识别，而非页面任何密码框；真实登录重定向仍须报错。此轮 HTTP 证据不等于生产 adapter、图片或目标设备阅读全部通过；syosetu API 本机仍为 Apache 403。
+
+修正复测通过：`_root(NovelResponse)` 按规则的 `loginRequiredUrlPattern` 核对最终 URL；新增显式 `bookFromUrl` 和能力 URL 模式。公开详情页眉登录框、直接 URL 详情及真正 login.php 重定向都由新增回归覆盖，规则测试总数 11，全部通过，日志 `work/novel-rule-tests.log`。
+
+### A13 真实目录补齐单元格及图文样本验证
+
+匿名捕获的文库8目录有 24 个 `td.ccss`，其中 1 个仅含 `&nbsp;`。生产 adapter 把所有单元格都当章节，实际抛缺少链接异常，证据 `work/novel-captured-parse.log`（首轮）及 `work/novel-public-catalog-structure.log`。在既有目录 fixture 加入该空单元格复现后，规则改成只选 `td.vcss, td.ccss a`，字段以 `.` 读取章节链接；不吞掉解析异常、不把空节点伪造章节。11 项规则全测再次通过。
+
+真实解析结果：无 Cookie Python 捕获公开详情、目录、正文、插图章，再交给生产 `XPathNovelAdapter`，得到书名/作者、23 章、93 文本块、13 插图块；图片顺序与原 DOM `#content img` 顺序一致。日志 `work/novel-captured-parse.log` 明确 `productionTransportProven:false`。首图由匿名 Python 请求取得 HTTP 200、`image/jpeg`、480755 字节，文件头为 JPEG，SHA256 `1f865d0e0170b658c57192ce5f982ebd12dba19b6d7711f892c084e935ee7c4c`，日志 `work/novel-public-image-capture.log`。
+
+Dart HttpClient 在直连及观测到的系统代理路径均返回 Cloudflare 403，采用生产浏览器 UA/语言仍如此；根因未确认，不改传输或引入访问检查备用路线。上述样本/图片成功只证明公开资源和解析逻辑，不宣称应用已能联网读该站。第二批规则新增 3 项，加上 A14 回归后第二提交新增测试共 17 项，完整 CI 结果另记。
+
+第二轮 CI 增加待验证的原生检查：Windows 构建后读取 EXE ProductName/CompanyName，启动 15 秒检查进程存活及 `APPDATA/ZGCC3890/Kazumi's book/hive/setting.hive` 创建，再结束该测试进程；Android 用 aapt 核验 APK applicationId `com.zgcc.kazumisbook`。这些检查尚未执行成功；即使通过，也只证明标识、启动和独立目录，不替代真实 UI、阅读或双版本并行使用验收。
+
+### A14 未移动退出覆盖已同步进度
+
+真实 ReaderPage 回归先保存本地 offset 53，再通过 fake store 从该因果状态写入远端 offset 9 并通知；修订仍为唯一值，读者未滚动直接返回。修复前保存调用从 1 次增长到 2 次，旧 53 覆盖新 9，日志 `work/novel-reader-remote-overwrite-red.log`。根因是 Reader 退出总提交 `_location`，而 Service 的当前值已经被远端改变，不能代替会话内“此位置是否已保存”的判断。
+
+修复在冲突/恢复检查之后，按不可变位置对象记录本 Reader 已成功提交的快照；相同对象不重复写入，实际移动产生新对象仍保存，失败不标记成功，异步完成记录捕获的快照而非可能已改变的当前值。未取最大进度。原磁盘失败测试改为先实际滚动制造未保存位置，再验证失败阻止退出。完整 Reader 15 项通过，日志 `work/novel-reader-remote-overwrite-green.log`；新增用例明确远端回读 9 保留，待第二轮完整 CI。
+
+### A15 连载目录与正文显式刷新
+
+Service 已有强制刷新参数，但 Reader 原未暴露操作，缓存目录无法主动取得连载新增章。新增“刷新目录与正文”，先保存再将 refresh=true 传至目录、当前正文及恢复过程中手动重新选择的章节；错误页重试同样强制刷新。已保存不可变位置的去重位于冲突检查之后、恢复中检查之前，刷新失败可退出而不重复写旧位置。
+
+新增实际 ReaderPage 用例：刷新 fake 返回第二章和前插正文，验证两个调用都收到 refresh=true，目录显示第二章，原 quote 保持、offset 按插入文本的标准化长度平移、正文 digest 更新。另一用例让正文刷新抛网络错误，验证页面显示具体错误、返回成功且保存调用数不增长。完整 Reader 17 项通过，日志 `work/novel-reader-refresh-tests.log`。第二提交新增测试总数随这两项增至 19，完整应用测试结果仍等第二轮 CI。
+
 ## 验证状态说明
 
 “源码审查通过”只说明所检查代码满足架构约束；“自动验证通过”必须列出执行命令/结果；“待设备测试”不能改写成“完成”。真实书源、真实跨设备同步和阅读器排版恢复需分别记录实际运行证据。
