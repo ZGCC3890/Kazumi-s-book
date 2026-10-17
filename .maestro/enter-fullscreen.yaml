@@ -1,0 +1,10 @@
+appId: com.zgcc.kazumisbook
+---
+# Used after 00-upgrade-seed has acknowledged the system's fullscreen guide.
+- tapOn:
+    point: "50%,50%"
+    text: "全屏"
+    waitToSettleTimeoutMs: 100
+- extendedWaitUntil:
+    visible: "下一集"
+    timeout: 2000

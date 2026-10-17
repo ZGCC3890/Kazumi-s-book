@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/novel/novel_models.dart';
+import '../lib/novel/novel_locator.dart';
 import '../lib/novel/novel_rule.dart';
 
 NovelRule _rule(String id) => NovelRule.decode(File('novel_rules/$id.json').readAsStringSync());
@@ -8,6 +9,13 @@ const _chapter = NovelChapter(url: 'https://initial.test/chapter',
     title: '第一章', volume: '第一卷', kind: 'chapter', number: 1);
 
 void main() {
+  test('owned English chapter titles retain nullable catalog numbers', () {
+    for (final title in ['Chapter 1', 'Chapter 2', 'Chapter 3']) {
+      expect(NovelLocator.numberOf(title), isNull);
+    }
+    expect(NovelLocator.numberOf('第3章'), 3);
+  });
+
   test('wenku8 cards use full tiptitle, author and GBK query encoding', () async {
     String? requested;
     final adapter = XPathNovelAdapter(_rule('wenku8'), (url, method, headers, body) async {

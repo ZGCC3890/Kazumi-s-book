@@ -27,7 +27,7 @@ if stage == 'inject':
     assert len(revisions) == 1
     remote = copy.deepcopy(revisions[0]['value'])
     remote['chapter'].update(url=remote['chapter']['url'].replace('/2.html', '/3.html'),
-                             title='Chapter 3', number=3)
+                             title='Chapter 3', number=None)
     assert remote['chapter']['url'].endswith('/3.html')
     remote.update(textOffset=0, quote='Chapter 3 opening paragraph.', prefix='', suffix='',
                   chapterDigest='', imageHash=None, updatedAt=1792219000000)

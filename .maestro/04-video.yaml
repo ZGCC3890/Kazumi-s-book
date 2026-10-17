@@ -142,24 +142,41 @@ appId: com.zgcc.kazumisbook
     when:
       true: ${LAYOUT == 'phone'}
     commands:
-      # 00-upgrade-seed already acknowledged Android's fullscreen guidance.
-      - tapOn:
-          point: "50%,50%"
-          text: "全屏"
-          waitToSettleTimeoutMs: 100
-      - extendedWaitUntil:
-          visible: "下一集"
-          timeout: 2000
+      - runFlow: enter-fullscreen.yaml
 - tapOn:
     point: "50%,50%"
     text: "暂停"
     waitToSettleTimeoutMs: 100
 - assertVisible: "播放"
 - takeScreenshot: build/android-ui/video-paused
+# Match the verified diagnostic sequence: leave fullscreen while paused,
+# resume in the compact player, then enter fullscreen for the next action.
+# Keeping all three actions in one 4-second control window races auto-hide.
+- runFlow:
+    when:
+      true: ${LAYOUT == 'phone'}
+    commands:
+      - back
+      - assertVisible: "Episode 1，当前选集"
+      - runFlow:
+          when:
+            notVisible: "播放"
+          commands:
+            - tapOn:
+                point: "50%,25%"
+                waitToSettleTimeoutMs: 100
 - tapOn:
     point: "50%,50%"
     text: "播放"
     waitToSettleTimeoutMs: 100
+- runFlow:
+    when:
+      true: ${LAYOUT == 'phone'}
+    commands:
+      - extendedWaitUntil:
+          visible: "暂停"
+          timeout: 2000
+      - runFlow: enter-fullscreen.yaml
 - tapOn:
     point: "50%,50%"
     text: "下一集"
