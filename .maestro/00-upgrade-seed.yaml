@@ -32,6 +32,8 @@ env:
     visible: "(?s).*Fixture Source A.*"
     timeout: 30000
 - back
+- tapOn: "(?s).*追番.*"
+- tapOn: "(?s).*书架.*"
 - tapOn: "搜索小说"
 - tapOn: "书名"
 - inputText: "Fixture"
@@ -53,13 +55,21 @@ env:
 - tapOn: "目录"
 - tapOn: "(?s).*Chapter 2.*"
 - assertVisible: ".*Chapter 2 opening.*"
+- tapOn:
+    point: "50%,50%"
+- swipe:
+    start: "2%,80%"
+    end: "2%,30%"
+    duration: 600
+- tapOn:
+    point: "50%,50%"
 - tapOn: "添加书签"
 - tapOn: "备注（可留空）"
 - inputText: "LegacyBookmark2"
 - hideKeyboard
 - tapOn: "保存"
 - takeScreenshot: build/android-ui/upgrade-old-reader
-- back
+- tapOn: "返回"
 - tapOn: "加入书架"
 - back
 - runFlow: 03-sync.yaml

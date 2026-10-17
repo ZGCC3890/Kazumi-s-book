@@ -675,6 +675,73 @@ void main() {
     expect(store.saved, hasLength(writes));
   });
 
+  testWidgets('reader controls reflow without losing position and restore orientation on exit', (tester) async {
+    final platformCalls = <MethodCall>[];
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      platformCalls.add(call);
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(SystemChannels.platform, null));
+    final text = String.fromCharCodes(List.generate(800, (i) => 0x4e00 + i));
+    final store = _ReaderStore({_one.url: [NovelBlock.text(text)]},
+        initial: _position(_one, text, 53));
+    await _open(tester, store);
+    await tester.tap(find.byTooltip('阅读设置'));
+    await tester.pumpAndSettle();
+    for (var index = 0; index < 4; index++) {
+      final slider = find.byType(Slider).at(index);
+      await tester.ensureVisible(slider);
+      await tester.pumpAndSettle();
+      final bounds = tester.getRect(slider);
+      await tester.tapAt(bounds.center.translate(bounds.width * .2, 0));
+      await tester.pumpAndSettle();
+    }
+    expect(store.prefs['fontSize'], greaterThan(20));
+    expect(store.prefs['lineHeight'], greaterThan(1.8));
+    expect(store.prefs['margin'], greaterThan(24));
+    expect(store.prefs['brightness'], greaterThan(0));
+    final font = find.byType(DropdownButton<String>);
+    await tester.ensureVisible(font);
+    await tester.pumpAndSettle();
+    await tester.tap(font);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('衬线字体').last);
+    await tester.pumpAndSettle();
+    expect(store.prefs['font'], 'serif');
+    for (final label in ['左右翻页', '滚动', '竖屏', '横屏', '跟随系统', '竖屏']) {
+      final control = find.text(label);
+      await tester.ensureVisible(control);
+      await tester.pumpAndSettle();
+      await tester.tap(control);
+      await tester.pumpAndSettle();
+    }
+    final orientations = platformCalls.where((c) =>
+        c.method == 'SystemChrome.setPreferredOrientations').map((c) => c.arguments).toList();
+    expect(orientations, [
+      ['DeviceOrientation.portraitUp'],
+      ['DeviceOrientation.landscapeLeft', 'DeviceOrientation.landscapeRight'],
+      <String>[],
+      ['DeviceOrientation.portraitUp'],
+    ]);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(store.saved.map((position) => position.textOffset).toSet(), {53});
+    final dimming = find.byWidgetPredicate((widget) => widget is DecoratedBox &&
+        widget.position == DecorationPosition.foreground &&
+        widget.decoration is BoxDecoration &&
+        (widget.decoration as BoxDecoration).color?.a == store.prefs['brightness']);
+    expect(dimming, findsOneWidget);
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(find.byType(NovelReaderPage), findsNothing);
+    expect(dimming, findsNothing);
+    expect(platformCalls.where((c) => c.method == 'SystemChrome.setPreferredOrientations').last.arguments,
+        isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('dragging chapter progress saves the newly visible text anchor', (tester) async {
     final store = _ReaderStore({_one.url: List.generate(100, (i) => NovelBlock.text('第$i段可见阅读正文。'))});
     await _open(tester, store);

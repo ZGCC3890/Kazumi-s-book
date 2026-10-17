@@ -121,7 +121,7 @@ class AutoUpdater {
 
   List<InstallationType> _detectAvailableInstallationTypes() {
     if (Platform.isWindows) {
-      return [InstallationType.windowsMsix, InstallationType.windowsPortable];
+      return [InstallationType.windowsPortable];
     }
     if (Platform.isLinux) {
       return [InstallationType.linuxDeb, InstallationType.linuxTar];

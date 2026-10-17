@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dio/dio.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:kazumi/main.dart' as app;
 import 'package:kazumi/novel/novel_reader_page.dart';
@@ -14,27 +15,33 @@ import 'package:kazumi/novel/novel_service.dart';
 import 'package:kazumi/pages/player/player_item.dart';
 import 'package:kazumi/pages/settings/settings_page.dart';
 import 'package:kazumi/pages/video/video_page.dart';
+import 'package:kazumi/request/core/dio_factory.dart';
+import 'package:kazumi/request/config/api_endpoints.dart';
+import 'package:kazumi/bean/dialog/update_available_dialog.dart';
+import 'package:kazumi/services/update/auto_updater.dart';
 
 Future<void> until(WidgetTester tester, bool Function() ready, String reason) async {
   final deadline = DateTime.now().add(const Duration(seconds: 60));
   while (!ready() && DateTime.now().isBefore(deadline)) {
     await tester.pump(const Duration(milliseconds: 200));
+    expect(tester.takeException(), isNull, reason: reason);
   }
   expect(ready(), isTrue, reason: reason);
 }
 
 Future<void> visible(WidgetTester tester, Finder finder) =>
-    until(tester, () => finder.evaluate().isNotEmpty, finder.toString());
+    until(tester, () => finder.evaluate().isNotEmpty, finder.describeMatch(Plurality.zero));
 
 Future<void> click(WidgetTester tester, Finder finder) async {
   await visible(tester, finder);
-  await tester.ensureVisible(finder.first);
-  await tester.tap(finder.first);
+  await tester.ensureVisible(finder.last);
+  await tester.pump(const Duration(milliseconds: 200));
+  await tester.tap(finder.last);
   await tester.pump(const Duration(milliseconds: 450));
 }
 
 Future<void> text(WidgetTester tester, String value) =>
-    click(tester, find.text(value).last);
+    click(tester, find.text(value));
 
 Future<void> screenshot(WidgetTester tester, String name) async {
   await tester.pump();
@@ -129,6 +136,80 @@ void main() {
     await click(tester, find.descendant(of: find.byType(NavigationRail),
         matching: find.byIcon(Icons.settings_outlined)));
     await click(tester, find.byTooltip('全部设置'));
+    await text(tester, '同步设置');
+    await text(tester, '设置 WebDAV');
+    await text(tester, '连接你的云盘');
+    for (final entry in {
+      '服务器地址': 'http://127.0.0.1:8765/dav',
+      '用户名': 'fixture',
+      '密码或应用授权码': 'fixture',
+    }.entries) {
+      final field = find.byWidgetPredicate((widget) => widget is TextField &&
+          widget.decoration?.labelText == entry.key);
+      await visible(tester, field);
+      await tester.ensureVisible(field);
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.enterText(field, entry.value);
+    }
+    await text(tester, '保存并测试');
+    await visible(tester, find.text('连接成功，配置已保存'));
+    await text(tester, '返回同步设置');
+    await text(tester, '启用 WebDAV');
+    await text(tester, '小说阅读进度与书签');
+    await visible(tester, find.text('小说阅读进度与书签已同步'));
+    final davHttp = HttpClient();
+    try {
+      final request = await davHttp.getUrl(Uri.parse('http://127.0.0.1:8765/fixture-state'));
+      final response = await request.close();
+      expect(response.statusCode, 200);
+      final fixture = jsonDecode(await utf8.decoder.bind(response).join()) as Map<String, dynamic>;
+      final files = fixture['files'] as Map<String, dynamic>;
+      final heads = files.keys.where((name) => RegExp(
+          r'^/dav/kazumiSync/novels/[0-9a-f]{32}-[0-9a-f]{64}\.json$').hasMatch(name));
+      expect(heads, hasLength(1));
+      expect(files.keys.any((name) => name.contains('/v1/')), isFalse);
+      expect(jsonDecode(files[heads.single] as String), jsonDecode(novels.state.encode()));
+    } finally {
+      davHttp.close(force: true);
+    }
+    await screenshot(tester, 'webdav-novel-sync');
+    final updateRequests = <String>[];
+    final updater = DioFactory.downloadDio;
+    const zipName = 'Kazumis-book-Windows-999.0.0.zip';
+    final release = InterceptorsWrapper(onRequest: (options, handler) {
+      updateRequests.add(options.uri.toString());
+      if (options.uri.toString() == ApiEndpoints.latestApp) {
+        handler.resolve(Response<String>(requestOptions: options, statusCode: 200,
+          data: jsonEncode({
+            'tag_name': '999.0.0', 'body': 'Owned Windows update fixture',
+            'html_url': '${ApiEndpoints.sourceUrl}/releases/tag/999.0.0',
+            'published_at': '2026-10-17T00:00:00Z',
+            'assets': [{
+              'name': zipName,
+              'browser_download_url': 'http://127.0.0.1:8765/$zipName',
+              'digest': 'sha256:${List.filled(64, '0').join()}',
+            }],
+          })));
+      } else {
+        handler.next(options);
+      }
+    });
+    updater.interceptors.add(release);
+    try {
+      await text(tester, '关于');
+      await text(tester, '检查更新');
+      await visible(tester, find.byType(UpdateAvailableDialog));
+      final update = tester.widget<UpdateAvailableDialog>(find.byType(UpdateAvailableDialog)).updateInfo;
+      expect(update.availableInstallationTypes, [InstallationType.windowsPortable]);
+      expect(update.recommendedInstallationType, InstallationType.windowsPortable);
+      expect(getUpdateAssetForType(update.assets, update.recommendedInstallationType)?['name'], zipName);
+      await screenshot(tester, 'windows-zip-update');
+      await text(tester, '稍后');
+      expect(find.byType(UpdateAvailableDialog), findsNothing);
+      expect(updateRequests, [ApiEndpoints.latestApp]);
+    } finally {
+      updater.interceptors.remove(release);
+    }
     await text(tester, '规则管理');
     final http = HttpClient();
     final request = await http.getUrl(Uri.parse('http://127.0.0.1:8765/video-rule.json'));

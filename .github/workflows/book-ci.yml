@@ -77,6 +77,15 @@ jobs:
           } finally {
             Stop-Process -Id $fixture.Id -ErrorAction SilentlyContinue
           }
+      - name: Retain native application log on an operation failure
+        if: failure()
+        shell: pwsh
+        run: |
+          $applicationLog = Join-Path $env:APPDATA "ZGCC3890/Kazumi's book/logs/kazumi_logs.log"
+          if (Test-Path -LiteralPath $applicationLog -PathType Leaf) {
+            New-Item -ItemType Directory -Path build/windows-ui -Force | Out-Null
+            Copy-Item -LiteralPath $applicationLog -Destination build/windows-ui/application.log
+          }
       - name: Clear only the isolated native test profile
         if: always()
         shell: pwsh

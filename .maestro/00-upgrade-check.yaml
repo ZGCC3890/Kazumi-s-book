@@ -9,7 +9,7 @@ appId: com.zgcc.kazumisbook
 - tapOn: "(?s).*书架.*"
 - tapOn: "(?s).*葬送的芙莉莲.*"
 - extendedWaitUntil:
-    visible: ".*Chapter 2 opening.*"
+    visible: ".*Chapter 2 paragraph.*"
     timeout: 30000
 - tapOn:
     point: "50%,50%"

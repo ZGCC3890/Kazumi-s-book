@@ -131,7 +131,7 @@ class _WebDavSyncPageState extends State<WebDavSyncPage> {
                 SettingsTile.switchTile(
                   leading: Icons.menu_book_outlined,
                   title: const Text('小说阅读进度与书签'),
-                  description: const Text('自动同步小说版本、书源关联、阅读位置和书签'),
+                  description: const Text('自动同步小说书架、书源关联、阅读位置和书签'),
                   initialValue: GStorage.getSetting(SettingsKeys.webDavEnableNovels),
                   enabled: enabled && !_busy,
                   onToggle: (value) => _run(() async {

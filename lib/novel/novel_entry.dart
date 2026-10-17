@@ -18,6 +18,7 @@ class NovelEntry {
   ) async {
     await showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       builder: (_) => ListenableBuilder(
         listenable: service,
         builder: (_, _) => SafeArea(child: ListView(
@@ -118,7 +119,7 @@ class NovelEntry {
     if (!context.mounted) return;
     final book = service.selectedBook(editionId);
     if (book == null) throw StateError('这本小说尚未选择书源');
-    await Navigator.of(context).push<void>(
+    await Navigator.of(context, rootNavigator: true).push<void>(
       MaterialPageRoute(
         builder: (readerContext) => NovelReaderPage(
           service: service,
@@ -175,6 +176,7 @@ class NovelEntry {
   }) async {
     final selected = await showAdaptiveBottomSheet<String>(
       context: context,
+      useRootNavigator: true,
       maxHeightFactor: .88,
       builder: (_) => NovelSearchPage(
         service: service,
@@ -537,7 +539,7 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
 
   Future<void> _manageRules() async {
     final owner = ModalRoute.of(context)!;
-    await Navigator.of(context).push<void>(MaterialPageRoute(
+    await Navigator.of(context, rootNavigator: true).push<void>(MaterialPageRoute(
       builder: (_) => NovelRulesPage(service: widget.service),
     ));
     if (mounted && owner.isActive) await _prepare();

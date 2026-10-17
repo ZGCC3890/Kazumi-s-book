@@ -8,6 +8,9 @@ import 'package:hive_ce/hive.dart';
 import 'package:kazumi/novel/novel_book_cover.dart';
 import 'package:kazumi/novel/novel_library_page.dart';
 import 'package:kazumi/novel/novel_models.dart';
+import 'package:kazumi/novel/novel_rule.dart';
+import 'package:kazumi/novel/novel_rules_page.dart';
+import 'package:kazumi/novel/novel_entry.dart';
 import 'package:kazumi/novel/novel_service.dart';
 import 'package:kazumi/novel/novel_sync_state.dart';
 import 'package:kazumi/pages/menu/menu.dart';
@@ -39,6 +42,10 @@ class _Library extends NovelService {
   _Library(this.bytes) : super(WebDav());
   final Uint8List bytes;
   final images = <(String, String)>[];
+  @override
+  List<NovelRule> get rules => const [];
+  @override
+  Future<void> ensureDefaultRules() async {}
   @override
   Future<List<BangumiItem>> relatedAnime(NovelBook book,
       {String? editionId, bool refresh = false}) async => [BangumiItem.fromJson({
@@ -156,6 +163,21 @@ void main() {
           expect(nav.selectedIndex, 2);
           expect(nav.destinations, hasLength(4));
         }
+        await tester.tap(find.byTooltip('小说规则'));
+        await tester.pumpAndSettle();
+        expect(find.byType(NovelRulesPage), findsOneWidget);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(find.byType(NovelLibraryPage), findsOneWidget,
+            reason: 'System back from novel rules must restore the same bookshelf.');
+        expect(find.byType(NovelRulesPage), findsNothing);
+        await tester.tap(find.text('搜索小说'));
+        await tester.pumpAndSettle();
+        expect(find.byType(NovelSearchPage), findsOneWidget);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(find.byType(NovelLibraryPage), findsOneWidget,
+            reason: 'System back from source selection must restore the same bookshelf.');
         await tester.tap(find.byIcon(Icons.favorite));
         await tester.pumpAndSettle();
         expect(find.byType(CollectPage), findsOneWidget);

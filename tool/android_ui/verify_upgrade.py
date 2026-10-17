@@ -27,7 +27,7 @@ elif stage == 'upgraded':
             if key.startswith('position/'):
                 old_position = old_revisions[0]['value']
                 new_position = upgraded_entities[key][0]['value']
-                for field in ('editionId', 'sourceId', 'chapter'):
+                for field in ('editionId', 'sourceId', 'chapter', 'textOffset', 'quote', 'prefix', 'suffix', 'chapterDigest'):
                     assert new_position[field] == old_position[field], f'Upgrade changed original position {field}'
                 for device, counter in old_revisions[0]['clock'].items():
                     assert upgraded_entities[key][0]['clock'][device] >= counter
@@ -43,6 +43,7 @@ for raw in heads.values():
     assert {'LegacyBookmark1', 'LegacyBookmark2'} <= marks, 'Upgrade lost a native bookmark'
     positions = [revisions[0]['value'] for key, revisions in entities.items() if key.startswith('position/')]
     assert positions and all(p['chapter']['title'] == 'Chapter 2' for p in positions), 'Upgrade lost native chapter-two progress'
+    assert all(p['textOffset'] > 0 for p in positions), 'Baseline/upgrade did not retain a nonzero text anchor'
     assert any(key.startswith('shelf/') and revisions[0]['value'] is not None
                for key, revisions in entities.items()), 'Upgrade lost bookshelf membership'
 print(f'Native upgrade {stage}: verified signed app data, both bookmarks, chapter two and shelf.')

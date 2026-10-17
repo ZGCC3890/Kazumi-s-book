@@ -36,7 +36,7 @@ class NovelLibraryPage extends StatelessWidget {
           IconButton(
             tooltip: '小说规则',
             icon: const Icon(Icons.rule_folder_outlined),
-            onPressed: () => Navigator.of(context).push<void>(
+            onPressed: () => Navigator.of(context, rootNavigator: true).push<void>(
               MaterialPageRoute(
                 builder: (_) => NovelRulesPage(service: service),
               ),

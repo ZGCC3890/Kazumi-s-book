@@ -1,5 +1,8 @@
 import 'dart:io';
+import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -28,6 +31,30 @@ import 'package:kazumi/pages/settings/sync/webdav_sync_page.dart';
 import 'package:kazumi/pages/settings/theme_settings_page.dart';
 import 'package:kazumi/pages/settings/update_settings.dart';
 import 'package:kazumi/services/storage/storage.dart';
+import 'package:kazumi/request/core/dio_factory.dart';
+import 'package:kazumi/request/config/api_endpoints.dart';
+import 'package:kazumi/bean/dialog/update_available_dialog.dart';
+
+class _ReleaseResponse implements HttpClientAdapter {
+  _ReleaseResponse(this.status, this.version);
+  final int status;
+  final String version;
+  final requests = <Uri>[];
+  @override
+  Future<ResponseBody> fetch(RequestOptions options,
+      Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
+    requests.add(options.uri);
+    return ResponseBody.fromString(jsonEncode({
+      'tag_name': version,
+      'body': 'Owned update fixture',
+      'html_url': 'https://github.com/ZGCC3890/Kazumi-s-book/releases/tag/$version',
+      'published_at': '2026-10-17T00:00:00Z',
+      'assets': <dynamic>[],
+    }), status, headers: {Headers.contentTypeHeader: ['application/json']});
+  }
+  @override
+  void close({bool force = false}) {}
+}
 
 class _Paths extends PathProviderPlatform {
   _Paths(this.path);
@@ -70,6 +97,7 @@ Future<void> _open(WidgetTester tester, {bool wide = false}) async {
     navigatorObservers: [KazumiDialog.observer, rootRouteObserver],
     provide: (scope) => scope.addChangeNotifier<ThemeProvider>(ThemeProvider.new),
     child: Builder(builder: (context) => MaterialApp.router(
+      scaffoldMessengerKey: rootScaffoldMessengerKey,
       routerConfig: ModularApp.routerConfigOf(context),
     )),
   ));
@@ -215,6 +243,41 @@ void main() {
     await _back(tester);
     await _tap(tester, '更新设置');
     expect(tester.widgetList<Switch>(find.byType(Switch)).first.value, isTrue);
+  }, timeout: const Timeout(Duration(seconds: 45)));
+
+  for (final response in [
+    (200, ApiEndpoints.version, '当前已经是最新版本！'),
+    (404, '0.0.0', "Kazumi's book 仓库尚未发布正式版本"),
+    (500, '0.0.0', '检查更新失败'),
+  ]) {
+    testWidgets('production about update reports HTTP ${response.$1} as ${response.$3}', (tester) async {
+      final adapter = _ReleaseResponse(response.$1, response.$2);
+      DioFactory.downloadDio.httpClientAdapter = adapter;
+      addTearDown(DioFactory.reset);
+      await _open(tester);
+      await _tap(tester, '关于');
+      await _tap(tester, '检查更新');
+      expect(find.text(response.$3), findsOneWidget);
+      expect(find.byType(UpdateAvailableDialog), findsNothing);
+      expect(adapter.requests.map((uri) => uri.toString()), [
+        'https://api.github.com/repos/ZGCC3890/Kazumi-s-book/releases/latest',
+      ]);
+    }, timeout: const Timeout(Duration(seconds: 45)));
+  }
+
+  testWidgets('production about update can defer a new release without downloading', (tester) async {
+    final adapter = _ReleaseResponse(200, '999.0.0');
+    DioFactory.downloadDio.httpClientAdapter = adapter;
+    addTearDown(DioFactory.reset);
+    await _open(tester);
+    await _tap(tester, '关于');
+    await _tap(tester, '检查更新');
+    expect(find.byType(UpdateAvailableDialog), findsOneWidget);
+    expect(find.textContaining('999.0.0'), findsWidgets);
+    await _tap(tester, '稍后');
+    expect(find.byType(UpdateAvailableDialog), findsNothing);
+    expect(find.text('检查更新'), findsOneWidget);
+    expect(adapter.requests, hasLength(1), reason: 'Deferring must never download an installer.');
   }, timeout: const Timeout(Duration(seconds: 45)));
 
   testWidgets('production sync summary recognizes novels alone and disabling does not change other content', (tester) async {
