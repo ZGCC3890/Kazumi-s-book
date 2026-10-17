@@ -1,0 +1,66 @@
+appId: com.zgcc.kazumisbook
+---
+- runFlow: set-layout.yaml
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+- extendedWaitUntil:
+    visible: "同意并继续"
+    timeout: 10000
+- tapOn: {text: "同意并继续", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "继续", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "继续", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "开始使用", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "仍然继续", waitToSettleTimeoutMs: 100}
+- extendedWaitUntil:
+    visible: "热门番组"
+    timeout: 10000
+- tapOn: {text: "搜索", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "番剧", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "小说", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "小说规则", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "添加规则", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "(?s).*从剪贴板导入.*", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "规则内容", waitToSettleTimeoutMs: 100}
+- inputText: "http://10.0.2.2:8765/account/rule.json"
+- hideKeyboard
+- tapOn: {text: "导入规则", index: 1, waitToSettleTimeoutMs: 100}
+- tapOn: {text: "(?s).*Fixture Account.*", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "书源用户名", waitToSettleTimeoutMs: 100}
+- inputText: "fixture-reader"
+- tapOn: {text: "密码", waitToSettleTimeoutMs: 100}
+- inputText: "fixture-password"
+- hideKeyboard
+- tapOn: {text: "登录并验证", waitToSettleTimeoutMs: 100}
+- assertNotVisible: "书源用户名"
+- stopApp
+- runScript: scripts/expire-account.js
+- launchApp
+- extendedWaitUntil:
+    visible: "热门番组"
+    timeout: 10000
+- tapOn: {text: "搜索", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "番剧", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "小说", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "搜索小说书名", waitToSettleTimeoutMs: 100}
+- inputText: "Fixture"
+- tapOn: {text: "搜索", waitToSettleTimeoutMs: 100}
+- extendedWaitUntil:
+    visible: "(?s).*葬送的芙莉莲.*"
+    timeout: 2000
+- runScript: scripts/assert-account-renewed.js
+- tapOn: {text: "小说规则", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "(?s).*Fixture Account.*", waitToSettleTimeoutMs: 100}
+- assertVisible: "fixture-reader"
+- tapOn: {text: "验证当前会话", waitToSettleTimeoutMs: 100}
+- assertVisible: "当前登录会话验证成功"
+- takeScreenshot: build/android-ui/account-renewed-after-restart
+- tapOn: {text: "清除登录", waitToSettleTimeoutMs: 100}
+- assertVisible: "已清除本机账号密码和登录会话"
+- tapOn: {text: "取消", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "(?s).*Fixture Account.*", waitToSettleTimeoutMs: 100}
+- assertNotVisible: "fixture-reader"
+- tapOn: {text: "登录并验证", waitToSettleTimeoutMs: 100}
+- assertVisible: "(?s).*请填写书源用户名和密码.*"
+- tapOn: {text: "取消", waitToSettleTimeoutMs: 100}

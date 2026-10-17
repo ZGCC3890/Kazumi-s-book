@@ -7,7 +7,7 @@ import struct
 import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 from video_frames import probe
 
 BASE = "http://10.0.2.2:8765"
@@ -37,6 +37,14 @@ def video_rule():
                                   "episodesPath": "$.episodes[*]", "episodeNamePath": "$.name", "episodeUrlPath": "$.url"})
 
 
+def account_rule():
+    rule = novel_rule('L')
+    rule.update(name='Fixture Account', loginRequiredUrlPattern=re.escape(BASE) + '/account/required',
+        login=dict(url=BASE + '/account/login', usernameField='username', passwordField='password',
+                   fields={}, verifyUrl=BASE + '/account/verify', verifySelector='#logout'))
+    return rule
+
+
 def png():
     def chunk(kind, value):
         return struct.pack(">I", len(value)) + kind + value + struct.pack(">I", zlib.crc32(kind + value))
@@ -57,6 +65,18 @@ class Handler(BaseHTTPRequestHandler):
     def dav_path(self):
         path = urlsplit(self.path).path.rstrip('/')
         return path if path == '/dav' or path.startswith('/dav/') else None
+
+    def do_POST(self):
+        if urlsplit(self.path).path != '/account/login':
+            return self.send('Unknown POST', 'text/plain', 404)
+        fields = parse_qs(self.rfile.read(int(self.headers['Content-Length'])).decode())
+        if fields != {'username': ['fixture-reader'], 'password': ['fixture-password']}:
+            return self.send('Invalid account', 'text/plain')
+        self.server.account_logins += 1
+        self.send_response(200)
+        self.send_header('Set-Cookie', f'account={self.server.account_generation}; Path=/; HttpOnly')
+        self.send_header('Content-Length', '0')
+        self.end_headers()
 
     def do_OPTIONS(self):
         if self.dav_path() is None:
@@ -130,6 +150,24 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlsplit(self.path).path
+        if path == '/account/rule.json':
+            return self.send(json.dumps(account_rule()), 'application/json')
+        if path == '/account/expire':
+            self.server.account_generation += 1
+            return self.send('expired', 'text/plain')
+        if path == '/account/state':
+            return self.send(json.dumps({'logins': self.server.account_logins}), 'application/json')
+        if path == '/account/verify' or path.startswith('/novels/L/'):
+            authenticated = self.headers.get('Cookie') == f'account={self.server.account_generation}'
+            if path == '/account/verify':
+                return self.send('<a id="logout">Logout</a>' if authenticated else '<form>Login</form>')
+            if not authenticated:
+                self.send_response(302)
+                self.send_header('Location', '/account/required')
+                self.send_header('Content-Length', '0')
+                return self.end_headers()
+        if path == '/account/required':
+            return self.send('<form>Login required</form>')
         if self.dav_path() is not None:
             content = self.server.files.get(self.dav_path())
             if content is None:
@@ -147,7 +185,7 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/cover.png", "/illustration.png"):
             return self.send(png(), "image/png")
         parts = path.strip("/").split("/")
-        if len(parts) == 3 and parts[0] == "novels" and parts[1] in ("A", "B", "C"):
+        if len(parts) == 3 and parts[0] == "novels" and parts[1] in ("A", "B", "C", "L"):
             letter, page = parts[1:]
             if page == "search":
                 return self.send(f'<a class="search-book" href="/novels/{letter}/book.html">'
@@ -207,6 +245,8 @@ def main():
     server.output = args.output
     server.files = {}
     server.directories = {'/dav'}
+    server.account_generation = 1
+    server.account_logins = 0
     server.serve_forever()
 
 

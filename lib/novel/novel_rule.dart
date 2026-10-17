@@ -24,7 +24,7 @@ typedef NovelFetch =
 class NovelLoginRequired implements Exception {
   const NovelLoginRequired();
   @override
-  String toString() => '此书源搜索需要首次登录，登录会话只保存在这台设备';
+  String toString() => '此书源需要登录，请在书源账号中登录并保存本机账号';
 }
 
 abstract interface class NovelSourceAdapter {

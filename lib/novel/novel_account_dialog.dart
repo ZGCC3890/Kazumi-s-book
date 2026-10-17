@@ -25,6 +25,26 @@ class _NovelAccountDialogState extends State<NovelAccountDialog> {
   bool _busy = false;
   String? _message;
   @override
+  void initState() {
+    super.initState();
+    if (widget.rule.json['login'] != null) _load();
+  }
+  Future<void> _load() async {
+    _busy = true;
+    try {
+      final account = await widget.service.accountCredentials(widget.rule.id);
+      if (!mounted) return;
+      if (account != null) {
+        _username.text = account.username;
+        _password.text = account.password;
+      }
+    } catch (error) {
+      _message = error.toString();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+  @override
   void dispose() { _username.dispose(); _password.dispose(); super.dispose(); }
   Future<void> _run(String action) async {
     final owner = ModalRoute.of(context)!;
@@ -40,9 +60,10 @@ class _NovelAccountDialogState extends State<NovelAccountDialog> {
           _message = '当前登录会话验证成功';
         case 'logout':
           await widget.service.logout(widget.rule.id);
+          if (!mounted || !owner.isActive) return;
           _username.clear();
           _password.clear();
-          _message = '已清除本机登录会话';
+          _message = '已清除本机账号密码和登录会话';
         case 'login':
           if (_username.text.trim().isEmpty || _password.text.isEmpty) {
             throw const FormatException('请填写书源用户名和密码');
@@ -70,7 +91,7 @@ class _NovelAccountDialogState extends State<NovelAccountDialog> {
           TextButton.icon(onPressed: _busy ? null : () => _run('website'),
             icon: const Icon(Icons.open_in_new), label: const Text('打开书源网站 / 注册')),
           if (supportsLogin) ...[
-            const Text('账号名和登录会话只保存在本机，密码不保存。修改账号后重新登录并验证，不参与云同步。'),
+            const Text('首次登录成功后，账号密码加密保存在本机，会话过期时自动登录。修改后重新登录并验证；清除登录会删除保存的密码。账号密码不参与云同步。'),
             TextField(controller: _username, enabled: !_busy, autocorrect: false,
               decoration: const InputDecoration(labelText: '书源用户名')),
             TextField(controller: _password, enabled: !_busy, obscureText: true,

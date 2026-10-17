@@ -14,6 +14,7 @@ import 'package:kazumi/main.dart' as app;
 import 'package:kazumi/novel/novel_book_cover.dart';
 import 'package:kazumi/novel/novel_reader_page.dart';
 import 'package:kazumi/novel/novel_service.dart';
+import 'package:kazumi/novel/novel_accounts.dart';
 import 'package:kazumi/pages/player/player_item.dart';
 import 'package:kazumi/pages/settings/settings_page.dart';
 import 'package:kazumi/pages/video/video_page.dart';
@@ -126,6 +127,37 @@ void main() {
       of: find.byType(AlertDialog), matching: find.byType(RepaintBoundary)).first);
     await text(tester, '取消');
     await visible(tester, find.text('Fixture Source A'));
+    final accountHttp = Dio();
+    await Clipboard.setData(const ClipboardData(text: 'http://127.0.0.1:8765/account/rule.json'));
+    await text(tester, '添加规则');
+    await text(tester, '从剪贴板导入');
+    await text(tester, '导入规则');
+    await text(tester, 'Fixture Account');
+    await type(tester, find.widgetWithText(TextField, '书源用户名'), 'fixture-reader');
+    await type(tester, find.widgetWithText(TextField, '密码'), 'fixture-password');
+    await text(tester, '登录并验证');
+    await visible(tester, find.text('Fixture Source A'));
+    final accountService = inject<NovelService>();
+    final stored = await const NovelCredentialStore().read(accountService.rule('fixture-l'));
+    expect(stored!.password, 'fixture-password');
+    final encryptedFiles = await Directory('${profile.path}/support').list(recursive: true).where((file) =>
+      file is File && file.path.contains('flutter_secure_storage')).cast<File>().toList();
+    expect(encryptedFiles, isNotEmpty);
+    for (final file in encryptedFiles) {
+      expect(latin1.decode(await file.readAsBytes()), isNot(contains('fixture-password')));
+    }
+    await accountHttp.get('http://127.0.0.1:8765/account/expire');
+    expect((await accountService.adapter('fixture-l').search('Fixture')).single.title, '葬送的芙莉莲');
+    expect((await accountHttp.get('http://127.0.0.1:8765/account/state')).data['logins'], 2);
+    await text(tester, 'Fixture Account');
+    expect(tester.widget<TextField>(find.widgetWithText(TextField, '密码')).controller!.text, 'fixture-password');
+    await text(tester, '验证当前会话');
+    await visible(tester, find.text('当前登录会话验证成功'));
+    await text(tester, '清除登录');
+    expect(await const NovelCredentialStore().read(accountService.rule('fixture-l')), isNull);
+    await text(tester, '取消');
+    await accountService.removeRule('fixture-l');
+    accountHttp.close();
     await back(tester);
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('小说搜索'), findsOneWidget);

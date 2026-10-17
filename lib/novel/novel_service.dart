@@ -16,6 +16,7 @@ import 'novel_reader_store.dart';
 import 'novel_http_session.dart';
 import 'novel_anime_resolver.dart';
 import 'novel_ai.dart';
+import 'novel_accounts.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 
 class NovelService extends ChangeNotifier implements NovelReaderStore {
@@ -48,6 +49,8 @@ class NovelService extends ChangeNotifier implements NovelReaderStore {
   late Box<String> _box, _cache, _rules;
   late String deviceId;
   late NovelHttpSession _http;
+  final _credentials = const NovelCredentialStore();
+  late NovelAccounts _accounts;
   @override
   NovelSyncState state = NovelSyncState();
   Map<String, List<String>> _seen = {};
@@ -79,6 +82,7 @@ class NovelService extends ChangeNotifier implements NovelReaderStore {
       () => DioFactory.pluginDio,
       '$path/novel_sessions',
     );
+    _accounts = NovelAccounts(_http, _credentials);
     final storedId = _box.get('deviceId');
     deviceId = storedId ?? newId();
     if (storedId == null) await _box.put('deviceId', deviceId);
@@ -94,20 +98,22 @@ class NovelService extends ChangeNotifier implements NovelReaderStore {
 
   List<NovelRule> get rules => _rules.values.map(NovelRule.decode).toList();
   NovelRule rule(String id) => rules.singleWhere((r) => r.id == id);
-  NovelSourceAdapter adapter(String id) => XPathNovelAdapter(
-    rule(id),
-    (url, method, headers, body) =>
-        _http.fetch(rule(id), url, method, headers, body),
-  );
+  NovelSourceAdapter adapter(String id) {
+    final source = rule(id);
+    return NovelAuthenticatedSource(XPathNovelAdapter(source,
+      (url, method, headers, body) => _http.fetch(source, url, method, headers, body)),
+      source, _accounts);
+  }
 
   String accountName(String sourceId) => _box.get('account/$sourceId') ?? '';
+  Future<NovelAccount?> accountCredentials(String sourceId) => _credentials.read(rule(sourceId));
   Future<void> login(String sourceId, String username, String password) async {
-    await _http.login(rule(sourceId), username, password);
+    await _accounts.login(rule(sourceId), NovelAccount(username, password));
     await _box.put('account/$sourceId', username);
   }
   Future<void> verifyAccount(String sourceId) => _http.verify(rule(sourceId));
   Future<void> logout(String sourceId) async {
-    await _http.logout(rule(sourceId));
+    await _accounts.logout(rule(sourceId));
     await _box.delete('account/$sourceId');
   }
   @override
@@ -115,7 +121,8 @@ class NovelService extends ChangeNotifier implements NovelReaderStore {
     final key = 'image/$sourceId/$url';
     final cached = _cache.get(key);
     if (cached != null) return base64Decode(cached);
-    final bytes = await _http.image(rule(sourceId), url);
+    final source = rule(sourceId);
+    final bytes = await _accounts.execute(source, () => _http.image(source, url));
     await _cache.put(key, base64Encode(bytes));
     return bytes;
   }

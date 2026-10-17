@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:kazumi/novel/novel_locator.dart';
 import 'package:kazumi/novel/novel_models.dart';
@@ -206,6 +207,7 @@ void main() {
   });
 
   setUp(() async {
+    FlutterSecureStorage.setMockInitialValues({});
     await GStorage.resetSettings(SettingsKeys.byGroup(SettingGroup.webdav));
     caseDirectory = await root.createTemp('case_');
     remote = _HttpDav();
@@ -235,7 +237,7 @@ void main() {
     await root.delete(recursive: true);
   });
 
-  test('AI configuration and source account names remain local across restart and sync', () async {
+  test('AI configuration and source credentials remain local across restart and sync', () async {
     var service = await device('private-config');
     await seed(service);
     const config = NovelAiSettings(enabled: true, endpoint: 'https://api.test',
@@ -257,19 +259,23 @@ void main() {
     });
     DioFactory.pluginDio.interceptors.add(interceptor);
     try {
-      await service.login('wenku8', 'fixture-user', 'not-persisted-password');
+      await service.login('wenku8', 'fixture-user', 'local-fixture-password');
       await service.verifyAccount('wenku8');
       expect(service.accountName('wenku8'), 'fixture-user');
+      expect((await service.accountCredentials('wenku8'))!.password, 'local-fixture-password');
       service = await device('private-config');
       expect(service.aiSettings.toJson(), config.toJson());
       expect(service.accountName('wenku8'), 'fixture-user');
+      expect((await service.accountCredentials('wenku8'))!.password, 'local-fixture-password');
       await sync(service);
       final payloads = remote.files.values.map((bytes) => utf8.decode(bytes)).join();
       expect(payloads, isNot(contains('private-fixture-token')));
       expect(payloads, isNot(contains('fixture-user')));
-      expect(Hive.box<String>('novel_v1').values.join(), isNot(contains('not-persisted-password')));
+      expect(payloads, isNot(contains('local-fixture-password')));
+      expect(Hive.box<String>('novel_v1').values.join(), isNot(contains('local-fixture-password')));
       await service.logout('wenku8');
       expect(service.accountName('wenku8'), '');
+      expect(await service.accountCredentials('wenku8'), isNull);
       final before = service.aiSettings.toJson();
       await expectLater(service.saveAiSettings(const NovelAiSettings(enabled: true)), throwsFormatException);
       expect(service.aiSettings.toJson(), before);

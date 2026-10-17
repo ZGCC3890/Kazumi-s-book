@@ -2,6 +2,8 @@
     <application
         android:label="Kazumi's book"
         android:name="${applicationName}"
+        android:fullBackupContent="@xml/book_backup_rules"
+        android:dataExtractionRules="@xml/book_data_extraction_rules"
         android:usesCleartextTraffic="true"
         android:requestLegacyExternalStorage="true"
         android:icon="@mipmap/ic_launcher"

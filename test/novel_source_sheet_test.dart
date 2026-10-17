@@ -11,6 +11,7 @@ import 'package:kazumi/bean/dialog/adaptive_bottom_sheet.dart';
 import 'package:kazumi/services/sync/webdav.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 import 'package:kazumi/novel/novel_ai.dart';
+import 'package:kazumi/novel/novel_accounts.dart';
 import 'package:dio/dio.dart';
 
 class _Adapter implements NovelSourceAdapter {
@@ -45,6 +46,7 @@ class _Adapter implements NovelSourceAdapter {
 class _Service extends NovelService {
   _Service() : super(WebDav());
   @override String accountName(String sourceId) => '';
+  @override Future<NovelAccount?> accountCredentials(String sourceId) async => null;
   bool aiEnabled = false;
   @override NovelAiSettings get aiSettings => NovelAiSettings(enabled: aiEnabled, token: 'test-token');
   @override Future<List<String>> suggestTitles(String title, {required bool toAnime,

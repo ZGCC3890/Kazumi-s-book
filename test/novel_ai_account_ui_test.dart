@@ -10,6 +10,7 @@ import 'package:kazumi/novel/novel_ai_page.dart';
 import 'package:kazumi/novel/novel_account_dialog.dart';
 import 'package:kazumi/novel/novel_rule.dart';
 import 'package:kazumi/novel/novel_service.dart';
+import 'package:kazumi/novel/novel_accounts.dart';
 import 'package:kazumi/services/sync/webdav.dart';
 
 class _Launcher extends UrlLauncherPlatform {
@@ -31,6 +32,8 @@ class _Service extends NovelService {
   Object? failure;
   List<String> candidates = ['候选名称'];
   Completer<List<String>>? pending;
+  Completer<NovelAccount?>? pendingAccount;
+  Completer<void>? pendingLogout;
   CancelToken? cancel;
   @override Future<void> saveAiSettings(NovelAiSettings value) async {
     value.validate(); settings = value; saves++;
@@ -45,6 +48,8 @@ class _Service extends NovelService {
   @override List<NovelRule> get rules => ['wenku8', 'linovel'].map((id) =>
     NovelRule.decode(File('novel_rules/$id.json').readAsStringSync())).toList();
   @override String accountName(String sourceId) => username;
+  @override Future<NovelAccount?> accountCredentials(String sourceId) async =>
+    pendingAccount == null ? NovelAccount(username, 'saved-password') : pendingAccount!.future;
   @override Future<void> verifyAccount(String sourceId) async {
     verifications++;
     if (failure != null) throw failure!;
@@ -54,7 +59,10 @@ class _Service extends NovelService {
     if (failure != null) throw failure!;
     username = name;
   }
-  @override Future<void> logout(String sourceId) async { username = ''; }
+  @override Future<void> logout(String sourceId) async {
+    if (pendingLogout != null) await pendingLogout!.future;
+    username = '';
+  }
 }
 
 Future<void> _home(WidgetTester tester, _Service service, {bool account = false, String source = 'wenku8',
@@ -147,6 +155,7 @@ void main() {
   testWidgets('source account edits, verifies and clears only its local session', (tester) async {
     await _home(tester, service, account: true);
     expect(find.text('previous-user'), findsOneWidget);
+    expect(tester.widget<TextField>(find.widgetWithText(TextField, '密码')).controller!.text, 'saved-password');
     await tester.tap(find.text('验证当前会话'));
     await tester.pumpAndSettle();
     expect(find.text('当前登录会话验证成功'), findsOneWidget);
@@ -186,5 +195,38 @@ void main() {
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(find.byType(NovelAccountDialog), findsNothing);
+  });
+  for (final outcome in ['empty', 'error', 'closed']) {
+    testWidgets('saved account loading handles $outcome', (tester) async {
+      service.pendingAccount = Completer<NovelAccount?>();
+      await _home(tester, service, account: true);
+      expect(tester.widget<TextField>(find.widgetWithText(TextField, '密码')).enabled, false);
+      if (outcome == 'closed') {
+        await tester.pumpWidget(const SizedBox());
+        expect(find.byType(NovelAccountDialog), findsNothing);
+      }
+      if (outcome == 'error') {
+        service.pendingAccount!.completeError(StateError('credential store error'));
+      } else {
+        service.pendingAccount!.complete(null);
+      }
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      if (outcome == 'error') expect(find.textContaining('credential store error'), findsOneWidget);
+      if (outcome == 'empty') expect(tester.widget<TextField>(find.widgetWithText(TextField, '密码')).controller!.text, isEmpty);
+    });
+  }
+  testWidgets('system back during account clearing does not touch disposed fields', (tester) async {
+    service.pendingLogout = Completer<void>();
+    await _home(tester, service, account: true);
+    await tester.tap(find.text('清除登录'));
+    await tester.pump();
+    Navigator.of(tester.element(find.byType(NovelAccountDialog))).pop();
+    await tester.pumpAndSettle();
+    expect(find.byType(NovelAccountDialog), findsNothing);
+    service.pendingLogout!.complete();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(service.username, isEmpty);
   });
 }

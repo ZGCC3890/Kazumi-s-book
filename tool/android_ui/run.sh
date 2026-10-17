@@ -88,3 +88,4 @@ python3 tool/android_ui/exercise_conflict.py cancelled
 maestro test -e LAYOUT="$1" .maestro/07-conflict-resolve.yaml >> build/android-ui/maestro.log 2>&1
 python3 tool/android_ui/exercise_conflict.py resolved
 curl --fail --silent http://127.0.0.1:8765/fixture-state > build/android-ui/webdav-final-state.json
+maestro test -e LAYOUT="$1" .maestro/08-accounts.yaml >> build/android-ui/maestro.log 2>&1

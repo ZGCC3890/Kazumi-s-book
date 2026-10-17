@@ -32,6 +32,16 @@ env:
     point: "50%,50%"
     text: "仍然继续"
     waitToSettleTimeoutMs: 100
+# The baseline release checks the newer published version on first launch.
+- extendedWaitUntil:
+    visible: "发现新版本"
+    timeout: 10000
+- tapOn:
+    text: "不再自动检查"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    text: "稍后"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "热门番组"
     timeout: 10000

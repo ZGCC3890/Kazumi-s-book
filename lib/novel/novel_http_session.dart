@@ -7,7 +7,7 @@ import 'package:html/parser.dart' as html;
 import 'novel_models.dart';
 import 'novel_rule.dart';
 
-/// Source-specific sessions stay on this device. Passwords are never persisted.
+/// Source-specific HTTP cookies stay on this device; credentials are managed separately.
 class NovelHttpSession {
   NovelHttpSession(this._client, this.directory);
   final Dio Function() _client;
@@ -118,6 +118,8 @@ class NovelHttpSession {
 
   Future<void> login(NovelRule rule, String username, String password) async {
     final spec = rule.json['login'] as NovelJson;
+    // Verification must belong to this login, not a previous account's cookie.
+    await logout(rule);
     await fetch(rule, spec['url'] as String, 'POST', rule.headers, {
       ...Map<String, String>.from(spec['fields'] as Map),
       spec['usernameField'] as String: username,

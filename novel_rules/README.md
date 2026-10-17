@@ -15,9 +15,9 @@
 
 在小说搜索或书架打开“小说规则”，使用“添加规则”从仓库、剪贴板或文件导入；支持规则 URL、单个 JSON 和 JSON 数组。已安装规则可重新获取或删除，仓库地址可在规则管理设置中修改。
 
-点击已安装规则，或从菜单打开“书源账号与网站”，可以访问书源网站注册。声明 `login` 协议的规则提供用户名、密码、登录验证、当前会话验证及清除登录；密码不保存，账号名和 Cookie 仅保留在本机。没有登录协议的规则明确显示匿名访问状态，不将浏览器登录视为客户端已登录。
+点击已安装规则，或从菜单打开“书源账号与网站”，可以访问书源网站注册。声明 `login` 协议的规则提供用户名、密码、登录验证、当前会话验证及清除登录。首次登录成功后，账号密码通过系统安全存储加密保存在本机；会话过期时使用保存的账号自动登录，并继续原请求。清除登录会删除保存的账号密码和 Cookie。没有登录协议的规则明确显示匿名访问状态，不将浏览器登录视为客户端已登录。
 
-轻小说文库使用 `https://www.wenku8.net/`。在搜索的“书源状态”中打开“书源账号”登录；客户端通过首页退出链接确认会话有效。搜索间隔须遵守站点要求，间隔不足 5 秒时会显示站点提示，等待后可重试。会话按书源保存在本机，密码不保存，规则与 WebDAV 均不携带个人会话。
+轻小说文库使用 `https://www.wenku8.net/`。在搜索的“书源状态”中打开“书源账号”登录；客户端通过首页退出链接确认会话有效。搜索间隔须遵守站点要求，间隔不足 5 秒时会显示站点提示，等待后可重试。账号密码和会话按书源保存在本机，规则与 WebDAV 均不携带个人登录信息。密码失效或站点要求额外验证时会显示实际错误，需要重新打开书源账号处理。
 
 小説家になろう搜索 API：[官方文档](https://dev.syosetu.com/man/api/)。目录和正文选择器参考 [narou-mod 维护者的解析配置](https://github.com/iuill/narou-mod/blob/release/preset/parsers/ncode.syosetu.com.yaml) 中的当前页面结构；本规则仅使用显式指定的一套结构。
 
@@ -27,7 +27,7 @@
 - `id` 是书源稳定标识；`revision` 用于维护说明。客户端以完整规则内容摘要区分目录和正文缓存，更新选择器后不会继续使用旧解析结果。
 - `encoding` 必须声明 `utf-8` 或 `gbk`；GBK 同时用于搜索参数和响应解码。
 - 可选 `websiteUrl` 指定 HTTP(S) 网站或注册页面。未声明时，网站入口使用 `headers.Referer` 的站点根地址；未设置 Referer 时使用搜索地址的站点根地址。
-- 可选 `login` 定义表单登录的 `url`、`usernameField`、`passwordField`、固定表单 `fields`，以及登录后的 `verifyUrl` 和 `verifySelector`。客户端以验证页面中的指定 CSS 节点确认会话；验证失败会显示实际错误，不保存密码。
+- 可选 `login` 定义表单登录的 `url`、`usernameField`、`passwordField`、固定表单 `fields`，以及登录后的 `verifyUrl` 和 `verifySelector`。客户端以验证页面中的指定 CSS 节点确认会话；验证成功后保存本机账号密码，失败会显示实际错误。已保存的凭据绑定登录和验证地址，规则更改这些地址后需要用户重新登录确认。
 - `search` 定义结果节点、书名、链接、作者和封面。HTML 必须声明 `itemsMode: css`，`items` 是选择整张结果卡片的 CSS 选择器；卡片内字段使用向下的相对 XPath，不在失败时切换解析模式。`titleAttribute` 可读取未截断的标题属性；`authorRegex` 非空时必须包含捕获组。JSON 的 `urlTemplate` 仅替换 `@value`，`linkTransform` 可指定 `lowercase`。
 - HTML `singleDetect` 非空时可识别搜索重定向到单书详情的响应，并通过 `singleTitle` / `singleAuthor` / `singleAuthorRegex` / `singleCover` 提取唯一作品；作品地址取 HTTP 最终响应 URL。`loginRequiredUrlPattern` 匹配最终 URL 时报告登录页错误；`loginRequiredXPath` 用于唯一的登录页面结构。`errorXPath` 指定站点错误提示节点，匹配到非空文本时以该提示报告失败，不将错误页解析为空结果。
 - `directBookUrlPattern` 声明允许直接添加的书籍详情 URL；非空且匹配时，用户可明确选择“从公开书籍链接添加”，使用同一详情字段解析作品。空字符串表示该书源没有声明此能力。这是独立入口，不是搜索失败后的隐式备用路径。
