@@ -77,9 +77,15 @@ appId: com.zgcc.kazumisbook
 - extendedWaitUntil:
     visible: "暂停"
     timeout: 30000
-- extendedWaitUntil:
-    visible: ".*00:(0[1-9]|1[0-9]) / 00:20.*"
-    timeout: 15000
+- runFlow: assert-video-progress.yaml
+- runFlow:
+    when:
+      true: ${LAYOUT == 'phone'}
+    commands:
+      - tapOn: "全屏"
+      - extendedWaitUntil:
+          visible: "下一集"
+          timeout: 30000
 - tapOn: "暂停"
 - assertVisible: "播放"
 - takeScreenshot: build/android-ui/video-paused
@@ -88,9 +94,7 @@ appId: com.zgcc.kazumisbook
 - extendedWaitUntil:
     visible: ".*Episode 2.*"
     timeout: 30000
-- extendedWaitUntil:
-    visible: ".*00:(0[1-9]|1[0-9]) / 00:20.*"
-    timeout: 15000
+- runFlow: assert-video-progress.yaml
 - assertNotVisible: "暂时无法播放"
 - takeScreenshot: build/android-ui/video-second-episode
 - back

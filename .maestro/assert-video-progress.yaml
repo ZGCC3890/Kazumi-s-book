@@ -1,0 +1,16 @@
+appId: com.zgcc.kazumisbook
+---
+- runFlow:
+    when:
+      true: ${LAYOUT == 'phone'}
+    commands:
+      - extendedWaitUntil:
+          visible: ".*00:(0[1-9]|1[0-9]) / 00:20.*"
+          timeout: 15000
+- runFlow:
+    when:
+      true: ${LAYOUT == 'tablet'}
+    commands:
+      - extendedWaitUntil:
+          visible: "^(?:[5-9]|[1-9][0-9])%, Progress bar$"
+          timeout: 15000
