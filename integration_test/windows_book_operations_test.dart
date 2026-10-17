@@ -26,6 +26,7 @@ Future<void> until(WidgetTester tester, bool Function() ready, String reason) as
     await tester.pump(const Duration(milliseconds: 200));
     expect(tester.takeException(), isNull, reason: reason);
   }
+  if (!ready()) debugDumpApp();
   expect(ready(), isTrue, reason: reason);
 }
 
@@ -65,6 +66,7 @@ void main() {
     expect(Platform.environment['GITHUB_ACTIONS'], 'true',
         reason: 'This native flow requires a fresh isolated CI user profile.');
     app.main();
+    await text(tester, '暂不创建');
     for (final label in ['同意并继续', '继续', '开始使用', '仍然继续']) {
       await text(tester, label);
     }
@@ -85,7 +87,7 @@ void main() {
     await text(tester, '从剪贴板导入');
     await text(tester, '导入规则');
     await visible(tester, find.text('Fixture Source A'));
-    await tester.pageBack();
+    await click(tester, find.byType(BackButton));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.enterText(find.byType(TextField).first, 'Fixture');
     await click(tester, find.byTooltip('搜索'));
@@ -115,10 +117,10 @@ void main() {
     await until(tester, () => novels.position(reader.editionId)!.chapter.title == 'Chapter 2',
         'Directory selection must save chapter two');
     await screenshot(tester, 'reader-chapter-two');
-    await tester.pageBack();
+    await click(tester, find.byType(BackButton));
     await text(tester, '加入书架');
     await visible(tester, find.text('小说搜索'));
-    await tester.pageBack();
+    await click(tester, find.byType(BackButton));
     await tester.pump(const Duration(milliseconds: 300));
     await click(tester, find.descendant(of: find.byType(NavigationRail),
         matching: find.byIcon(Icons.favorite_border)));
@@ -132,7 +134,7 @@ void main() {
         'Bookshelf must resume chapter two');
     await screenshot(tester, 'reader-resumed');
     await tester.tapAt(size.center(Offset.zero));
-    await tester.pageBack();
+    await click(tester, find.byType(BackButton));
     await click(tester, find.descendant(of: find.byType(NavigationRail),
         matching: find.byIcon(Icons.settings_outlined)));
     await click(tester, find.byTooltip('全部设置'));
@@ -223,7 +225,7 @@ void main() {
     await text(tester, '导入规则');
     await visible(tester, find.text('Fixture Video'));
     for (var back = 0; back < 3 && find.byType(SettingsPage).evaluate().isNotEmpty; back++) {
-      await tester.pageBack();
+      await click(tester, find.byType(BackButton));
       await tester.pump(const Duration(milliseconds: 300));
     }
     expect(find.byType(SettingsPage), findsNothing);

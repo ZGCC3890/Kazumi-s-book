@@ -31,6 +31,7 @@ class WatchEntry {
     state.bangumiItem = item;
     await showAdaptiveBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       maxHeightFactor: .88,
       builder: (_) => SourceSheet(infoController: state),
     );

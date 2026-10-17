@@ -132,6 +132,7 @@ class NovelLibraryPage extends StatelessWidget {
                         ),
                       PopupMenuButton<String>(
                         tooltip: '小说操作',
+                        useRootNavigator: true,
                         itemBuilder: (_) => const [
                           PopupMenuItem(value: 'source', child: Text('更换书源')),
                         ],

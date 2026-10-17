@@ -69,6 +69,7 @@ class NovelEntry {
     if (ids.length > 1) {
       final selected = await showModalBottomSheet<String>(
         context: context,
+        useRootNavigator: true,
         builder: (ctx) => ListenableBuilder(
           listenable: service,
           builder: (_, _) => SafeArea(

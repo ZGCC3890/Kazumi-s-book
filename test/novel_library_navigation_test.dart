@@ -22,6 +22,7 @@ import 'package:kazumi/repositories/collect_crud_repository.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/services/sync/webdav.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
+import 'package:kazumi/modules/collect/collect_module.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
 const _book = NovelBook(
@@ -68,6 +69,17 @@ class _Library extends NovelService {
   }
 }
 
+class _Collection extends CollectCrudRepository {
+  @override
+  List<CollectedBangumi> getAllCollectibles() => [CollectedBangumi(
+    BangumiItem.fromJson({
+      'id': 42, 'type': 2, 'name': '已入架的小说', 'name_cn': '已入架的小说',
+      'rating': {'rank': 1, 'score': 8.0, 'total': 1},
+      'images': <String, String>{},
+    }), DateTime(2026), 1,
+  )];
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory root;
@@ -98,6 +110,11 @@ void main() {
         tester.view.devicePixelRatio = 1;
         tester.view.physicalSize = size;
         final service = _Library(cover);
+        service.state = NovelSyncState()
+            .edit('edition/e', const NovelEdition('e', 'w', '中文', 'zh').toJson(), 'a')
+            .edit('edition/e2', const NovelEdition('e2', 'w', '中文', 'zh').toJson(), 'a')
+            .edit('anime/42', {'animeId': 42, 'editionIds': ['e', 'e2']}, 'a');
+        final repository = _Collection();
         addTearDown(() async {
           await tester.pumpWidget(const SizedBox.shrink());
           service.dispose();
@@ -108,7 +125,7 @@ void main() {
           register: (c) {
             c.addSingleton<NovelService>(() => service);
             c.addSingleton<CollectController>(
-              () => CollectController(CollectCrudRepository()),
+              () => CollectController(repository),
             );
             c.route(
               '/tab/',
@@ -178,10 +195,26 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(NovelLibraryPage), findsOneWidget,
             reason: 'System back from source selection must restore the same bookshelf.');
+        await tester.tap(find.byTooltip('小说操作'));
+        await tester.pumpAndSettle();
+        expect(find.text('更换书源'), findsOneWidget);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(find.byType(NovelLibraryPage), findsOneWidget,
+            reason: 'System back from book actions must restore the same bookshelf.');
         await tester.tap(find.byIcon(Icons.favorite));
         await tester.pumpAndSettle();
         expect(find.byType(CollectPage), findsOneWidget);
         expect(find.byType(NovelLibraryPage), findsNothing);
+        await tester.tap(find.byTooltip('阅读《已入架的小说》的轻小说'));
+        await tester.pumpAndSettle();
+        expect(find.text('选择小说'), findsOneWidget);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(find.text('选择小说'), findsNothing);
+        expect(find.byType(CollectPage), findsOneWidget,
+            reason: 'System back from linked books must restore anime collection.');
+        expect(find.text('page:popular'), findsNothing);
         expect(tester.takeException(), isNull);
       },
     );
