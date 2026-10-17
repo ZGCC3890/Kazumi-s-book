@@ -13,7 +13,8 @@ appId: com.zgcc.kazumisbook
     visible: ".*Chapter 2 paragraph.*"
     timeout: 30000
 - tapOn:
-    point: "50%,50%"
+    text: ".*Chapter 2 paragraph.*"
+    index: 0
 - tapOn: "书签"
 - assertVisible: "(?s).*LegacyBookmark1.*"
 - assertVisible: "(?s).*LegacyBookmark2.*"

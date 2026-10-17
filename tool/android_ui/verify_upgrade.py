@@ -49,7 +49,7 @@ elif stage == 'upgraded':
         assert len(upgraded_entities[key]) == 1, f'Upgrade introduced a conflict: {key}'
         current = upgraded_entities[key][0]
         if key.startswith('position/'):
-            for field in ('editionId', 'sourceId', 'chapter', 'textOffset', 'quote', 'prefix', 'suffix', 'chapterDigest'):
+            for field in ('editionId', 'sourceId', 'chapter', 'textOffset', 'quote', 'prefix', 'suffix', 'chapterDigest', 'imageHash'):
                 assert current['value'][field] == original['value'][field], f'Upgrade changed original position {field}'
             assert dominates(current, original), f'Upgrade lost original causal history: {key}'
         else:
