@@ -1,0 +1,85 @@
+appId: com.zgcc.kazumisbook
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "热门番组"
+    timeout: 60000
+- tapOn: "搜索"
+- tapOn: "搜索类型"
+- tapOn: "小说"
+- tapOn: "搜索小说书名"
+- inputText: "Fixture"
+- tapOn: "搜索"
+- extendedWaitUntil:
+    visible: ".*Fixture Book.*"
+    timeout: 60000
+- tapOn:
+    text: ".*Fixture Book.*"
+    index: 0
+- extendedWaitUntil:
+    visible: ".*Chapter 1 opening.*"
+    timeout: 60000
+- assertNotVisible: "阅读设置"
+- takeScreenshot: build/android-ui/reader-hidden-controls
+- tapOn: "小说插图，点击放大"
+- assertVisible: "关闭插图"
+- takeScreenshot: build/android-ui/reader-illustration
+- tapOn: "关闭插图"
+- swipe:
+    start: "50%,80%"
+    end: "50%,30%"
+    duration: 600
+- tapOn:
+    point: "50%,50%"
+- assertVisible: "阅读设置"
+- tapOn: "添加书签"
+- tapOn: "取消"
+- tapOn: "书签"
+- assertVisible: "还没有书签"
+- back
+- tapOn: "添加书签"
+- tapOn: "备注（可留空）"
+- inputText: "Bookmark1"
+- hideKeyboard
+- tapOn: "保存"
+- tapOn: "书签"
+- assertVisible: "Bookmark1"
+- tapOn: "删除书签"
+- assertVisible: "还没有书签"
+- back
+- tapOn: "阅读设置"
+- tapOn: "护眼"
+- scrollUntilVisible:
+    element: "左右翻页"
+    direction: DOWN
+- tapOn: "左右翻页"
+- tapOn: "滚动"
+- scrollUntilVisible:
+    element: "系统字体"
+    direction: DOWN
+- tapOn: "系统字体"
+- tapOn: "衬线字体"
+- scrollUntilVisible:
+    element: "跟随系统"
+    direction: DOWN
+- tapOn: "跟随系统"
+- takeScreenshot: build/android-ui/reader-settings
+- back
+- tapOn: "目录"
+- tapOn: ".*Chapter 2.*"
+- assertVisible: ".*Chapter 2 opening.*"
+- takeScreenshot: build/android-ui/reader-chapter-two
+- tapOn: "阅读进度"
+- assertVisible: "阅读进度"
+- back
+- back
+- assertVisible: "加入书架？"
+- tapOn: "加入书架"
+- back
+- tapOn: "追番"
+- tapOn: "书架"
+- assertVisible: ".*Fixture Book.*"
+- takeScreenshot: build/android-ui/bookshelf-added
+- tapOn: ".*Fixture Book.*"
+- assertVisible: ".*Chapter 2 opening.*"
+- takeScreenshot: build/android-ui/reader-resumed

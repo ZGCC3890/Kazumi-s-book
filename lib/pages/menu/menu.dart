@@ -182,6 +182,7 @@ class _ScaffoldMenu extends State<ScaffoldMenu> with RouteAware {
               backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
               groupAlignment: 1,
               leading: FloatingActionButton(
+                tooltip: '搜索',
                 elevation: 0,
                 heroTag: null,
                 onPressed: () => context.pushNamed('/search/'),

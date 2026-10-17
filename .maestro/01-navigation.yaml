@@ -1,0 +1,119 @@
+appId: com.zgcc.kazumisbook
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+- extendedWaitUntil:
+    visible: "同意并继续"
+    timeout: 60000
+- tapOn: "同意并继续"
+- tapOn: "继续"
+- tapOn: "继续"
+- tapOn: "开始使用"
+- tapOn: "仍然继续"
+- extendedWaitUntil:
+    visible: "热门番组"
+    timeout: 60000
+- takeScreenshot: build/android-ui/home
+- tapOn: "搜索"
+- assertVisible: "番剧搜索"
+- tapOn: "搜索番剧名称"
+- inputText: "Frieren"
+- tapOn: "搜索"
+- extendedWaitUntil:
+    visible: ".*芙莉莲.*"
+    timeout: 60000
+- takeScreenshot: build/android-ui/anime-search
+- tapOn: "搜索类型"
+- tapOn: "小说"
+- assertVisible: "小说搜索"
+- assertVisible: "搜索小说书名"
+- tapOn: "小说规则"
+- assertVisible: "我的规则"
+- tapOn: "添加规则"
+- tapOn: "从剪贴板导入"
+- tapOn: "规则内容"
+- inputText: "http://10.0.2.2:8765/novels/rules.json"
+- hideKeyboard
+- tapOn: "导入规则"
+- assertVisible: "Fixture Source A"
+- assertVisible: "Fixture Source C"
+- takeScreenshot: build/android-ui/installed-novel-rules
+- back
+- tapOn: "搜索小说书名"
+- inputText: "Fixture"
+- tapOn: "搜索"
+- extendedWaitUntil:
+    visible: ".*Fixture Book.*"
+    timeout: 60000
+- takeScreenshot: build/android-ui/novel-search
+- back
+- tapOn: "追番"
+- assertVisible: "书架"
+- tapOn: "书架"
+- assertVisible: "搜索小说"
+- takeScreenshot: build/android-ui/bookshelf
+- tapOn: "我的"
+- tapOn: "设置"
+- assertVisible: "播放设置"
+- takeScreenshot: build/android-ui/settings
+- tapOn: "播放设置"
+- assertVisible: "播放设置"
+- back
+- tapOn: "弹幕设置"
+- assertVisible: "弹幕设置"
+- back
+- tapOn: "操作设置"
+- assertVisible: "操作设置"
+- back
+- tapOn: "规则管理"
+- assertVisible: "添加规则"
+- back
+- tapOn: "下载设置"
+- assertVisible: "下载设置"
+- back
+- scrollUntilVisible:
+    element: "外观设置"
+    direction: DOWN
+- tapOn: "外观设置"
+- assertVisible: "外观设置"
+- takeScreenshot: build/android-ui/theme-settings
+- back
+- scrollUntilVisible:
+    element: "界面设置"
+    direction: DOWN
+- tapOn: "界面设置"
+- assertVisible: "界面设置"
+- back
+- scrollUntilVisible:
+    element: "同步设置"
+    direction: DOWN
+- tapOn: "同步设置"
+- assertVisible: "WebDAV"
+- takeScreenshot: build/android-ui/sync-settings
+- back
+- scrollUntilVisible:
+    element: "网络设置"
+    direction: DOWN
+- tapOn: "网络设置"
+- assertVisible: "网络设置"
+- back
+- scrollUntilVisible:
+    element: "更新设置"
+    direction: DOWN
+- tapOn: "更新设置"
+- assertVisible: "更新设置"
+- back
+- scrollUntilVisible:
+    element: "存储与日志"
+    direction: DOWN
+- tapOn: "存储与日志"
+- assertVisible: "存储与日志"
+- back
+- scrollUntilVisible:
+    element: "关于"
+    direction: DOWN
+- tapOn: "关于"
+- assertVisible: ".*Kazumi.*book.*"
+- takeScreenshot: build/android-ui/about

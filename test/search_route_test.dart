@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:kazumi/navigation.dart';
+import 'package:kazumi/modules/search/search_history_module.dart';
 import 'package:kazumi/novel/novel_service.dart';
 import 'package:kazumi/pages/menu/menu.dart';
 import 'package:kazumi/pages/popular/popular_controller.dart';
@@ -31,6 +32,44 @@ class _Paths extends PathProviderPlatform {
 class _Popular extends PopularController {
   @override
   Future<void> queryBangumiByTrend({String type = 'add'}) async {}
+}
+
+// Keep this route test about production DI/navigation. Filesystem persistence
+// is exercised by integration tests and the installed Android app flows.
+class _Collect extends Fake implements ICollectRepository {
+  @override
+  bool getPrivateMode() => false;
+}
+
+class _History implements ISearchHistoryRepository {
+  final values = <SearchHistory>[];
+  @override
+  List<SearchHistory> getAllHistories() => List.of(values);
+  @override
+  Future<bool> saveHistory(String keyword) async {
+    values.add(SearchHistory(keyword, values.length + 1));
+    return true;
+  }
+
+  @override
+  Future<void> deleteDuplicates(String keyword) async =>
+      values.removeWhere((value) => value.keyword == keyword);
+  @override
+  bool isHistoryFull(int maxCount) => values.length >= maxCount;
+  @override
+  Future<void> deleteOldest() async {
+    values.removeAt(0);
+  }
+
+  @override
+  Future<void> deleteHistory(SearchHistory history) async {
+    values.remove(history);
+  }
+
+  @override
+  Future<void> clearAllHistories() async {
+    values.clear();
+  }
 }
 
 class _Bangumi implements HttpClientAdapter {
@@ -78,8 +117,8 @@ Future<void> _open(
   addTearDown(() async => tester.pumpWidget(const SizedBox.shrink()));
   final module = createModule(
     register: (c) {
-      c.addSingleton<ICollectRepository>(CollectRepository.new);
-      c.addSingleton<ISearchHistoryRepository>(SearchHistoryRepository.new);
+      c.addSingleton<ICollectRepository>(_Collect.new);
+      c.addSingleton<ISearchHistoryRepository>(_History.new);
       c.addSingleton<NovelService>(() => novels);
       c.module(
         createModule(
