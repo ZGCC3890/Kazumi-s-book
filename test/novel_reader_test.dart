@@ -23,6 +23,8 @@ class _ReaderStore extends ChangeNotifier implements NovelReaderStore {
   final Uint8List? imageBytes;
   final List<NovelPosition> saved = [];
   final List<String> requested = [];
+  List<NovelChapter>? chapters;
+  final List<String> imageRequests = [];
   final Map<String, NovelChapter> mappings = {};
   final List<NovelJson> marks = [];
   final List<String> deletedBookmarks = [];
@@ -81,6 +83,7 @@ class _ReaderStore extends ChangeNotifier implements NovelReaderStore {
   }
   @override Future<List<NovelChapter>> catalog(NovelBook book, {bool refresh = false}) async {
     catalogRefreshes.add(refresh);
+    if (chapters != null) return chapters!;
     final available = refresh && refreshedBlocks != null ? refreshedBlocks! : blocks;
     return [_one, if (available.containsKey(_two.url)) _two];
   }
@@ -90,7 +93,10 @@ class _ReaderStore extends ChangeNotifier implements NovelReaderStore {
     if (refresh && failContentRefresh) throw StateError('simulated refresh network failure');
     return (refresh && refreshedBlocks != null ? refreshedBlocks! : blocks)[chapter.url]!;
   }
-  @override Future<Uint8List> image(String sourceId, String url) async => imageBytes!;
+  @override Future<Uint8List> image(String sourceId, String url) async {
+    imageRequests.add(url);
+    return imageBytes!;
+  }
   @override Future<void> savePosition(NovelPosition position) async {
     if (failSave) throw StateError('simulated disk write failure');
     saved.add(position);
@@ -920,6 +926,53 @@ void main() {
         isEmpty);
     expect(tester.takeException(), isNull);
   });
+
+  for (final mode in ['scroll', 'page']) {
+  for (final size in [const Size(480, 800), const Size(1280, 800)]) {
+  testWidgets('$mode gallery opening and hiding preserves the exact reading anchor at $size', (tester) async {
+    final bytes = await tester.runAsync(() async {
+      final image = await createTestImage(width: 32, height: 48);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      return data!.buffer.asUint8List();
+    });
+    const art = NovelChapter(url: 'art', title: '插图', volume: '第一卷', kind: '插图');
+    const other = NovelChapter(url: 'other', title: '第三章', volume: '第二卷', kind: '正文');
+    final text = String.fromCharCodes(List.generate(1200, (i) => 0x4e00 + i));
+    final store = _ReaderStore({_one.url: [NovelBlock.text(text)],
+      art.url: const [NovelBlock.image('image')], other.url: [NovelBlock.text(text)]},
+      initial: _position(_one, text, 53), imageBytes: bytes!);
+    store.chapters = [_one, art, other];
+    store.prefs['mode'] = mode;
+    await _open(tester, store, size: size, scale: 2);
+    expect(store.requested, [_one.url]);
+    await tester.tap(find.byTooltip('显示插图栏'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('本卷插图 1，点击放大'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('关闭插图'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('隐藏插图栏'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('显示插图栏'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(store.saved.map((p) => p.textOffset).toSet(), {53});
+    expect(store.requested, [_one.url, art.url]);
+    expect(store.imageRequests, ['image']);
+    await tester.tap(find.text('目录'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(other.title));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('显示插图栏'), findsNothing);
+    expect(find.byTooltip('隐藏插图栏'), findsNothing);
+    expect(find.text('本卷插图'), findsNothing);
+    expect(store.saved.last.chapter.url, other.url);
+    expect(store.saved.last.textOffset, 0);
+    expect(tester.takeException(), isNull);
+  });
+  }
+  }
 
   testWidgets('illustration pinch zoom closes without changing the reading anchor', (tester) async {
     final bytes = await tester.runAsync(() async {

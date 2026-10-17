@@ -84,7 +84,8 @@ appId: com.zgcc.kazumisbook
       - tapOn:
           text: "立即同步小说"
           waitToSettleTimeoutMs: 100
-      - extendedWaitUntil:
-          visible: "小说阅读进度与书签已同步"
+      - scrollUntilVisible:
+          element: "(?s)^小说阅读进度与书签已同步.*$"
+          direction: DOWN
           timeout: 15000
 - takeScreenshot: build/android-ui/novel-sync-enabled

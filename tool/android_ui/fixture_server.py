@@ -193,7 +193,11 @@ class Handler(BaseHTTPRequestHandler):
                     '<div class="book-cover"><img src="/cover.png"></div></a>')
             if page == "book.html":
                 return self.send('<h1 class="book-title">葬送的芙莉莲</h1><h2 class="volume-title">Volume 1</h2>'
-                    + ''.join(f'<div class="chapter"><a href="/novels/{letter}/{i}.html">Chapter {i}</a></div>' for i in range(1, 4)))
+                    + ''.join(f'<div class="chapter"><a href="/novels/{letter}/{i}.html">Chapter {i}</a></div>' for i in range(1, 4))
+                    + ('<div class="chapter"><a href="/novels/A/illustrations.html">插图</a></div>' if letter == 'A' else ''))
+            if letter == 'A' and page == 'illustrations.html':
+                return self.send('<div class="article-text"><p>Owned illustration gallery.</p>'
+                    + ''.join(f'<img src="/illustration.png?index={i}">' for i in range(1, 9)) + '</div>')
             if page in ("1.html", "2.html", "3.html"):
                 chapter = int(page[0])
                 return self.send('<div class="article-text">'

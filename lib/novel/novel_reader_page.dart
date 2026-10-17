@@ -7,6 +7,8 @@ import 'novel_locator.dart';
 import 'novel_models.dart';
 import 'novel_reader_store.dart';
 import 'novel_conflicts.dart';
+import 'novel_illustrations.dart';
+import 'novel_image_viewer.dart';
 
 class NovelReaderPage extends StatefulWidget {
   const NovelReaderPage({
@@ -48,6 +50,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
   int? _restoreImageBlock;
   late String _normalizedText, _chapterDigest, _serviceStatus;
   final Map<int, String> _imageHashes = {};
+  late final NovelIllustrations _illustrations;
   String get _text => _blocks.where((b) => !b.image).map((b) => b.value).join();
   // The former standalone night preset now uses paper white in app light mode.
   int get _dayTheme => _prefs['theme'] == 3 ? 0 : _prefs['theme'] as int;
@@ -56,6 +59,10 @@ class _NovelReaderPageState extends State<NovelReaderPage>
   void initState() {
     super.initState();
     _prefs = service.preferences;
+    _illustrations = NovelIllustrations(
+      (chapter, refresh) => service.content(widget.book.sourceId, chapter, refresh: refresh),
+      (url) => service.image(widget.book.sourceId, url),
+    );
     _serviceStatus = _status;
     WidgetsBinding.instance.addObserver(this);
     service.addListener(_serviceChanged);
@@ -77,6 +84,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     WidgetsBinding.instance.removeObserver(this);
     _scroll?.dispose();
     _pages?.dispose();
+    _illustrations.dispose();
     super.dispose();
   }
 
@@ -199,6 +207,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
         ..clear()
         ..addAll(images);
       _chapterIndex = index;
+      _illustrations.select(_chapters, index, refresh: refresh);
       _restoreImageBlock = null;
       var fresh = restore == null;
       var offset = 0;
@@ -764,34 +773,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
         label: '小说插图，点击放大',
         button: true,
         child: InkWell(
-          onTap: () => showDialog<void>(
-            context: context,
-            builder: (ctx) => Dialog.fullscreen(
-              backgroundColor: Colors.black,
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: InteractiveViewer(
-                      minScale: .5,
-                      maxScale: 5,
-                      child: Image.memory(bytes, fit: BoxFit.contain),
-                    ),
-                  ),
-                  SafeArea(
-                    child: Align(
-                      alignment: Alignment.topRight,
-                      child: IconButton(
-                        tooltip: '关闭插图',
-                        color: Colors.white,
-                        onPressed: () => Navigator.pop(ctx),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          onTap: () => showNovelImage(context, bytes),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Image.memory(bytes, fit: BoxFit.contain),
@@ -972,6 +954,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
                       onPressed: _busy ? null : _bookmark,
                       icon: const Icon(Icons.bookmark_add_outlined),
                     ),
+                    NovelIllustrationToggle(gallery: _illustrations, enabled: !_busy),
                     IconButton(
                       tooltip: '阅读设置',
                       onPressed: _busy ? null : _settings,
@@ -983,6 +966,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
           body: SafeArea(
             child: Column(
               children: [
+                if (!_busy) NovelIllustrationBar(gallery: _illustrations),
                 if (conflict)
                   MaterialBanner(
                     content: const Text('多设备进度有冲突，自动保存已暂停。'),

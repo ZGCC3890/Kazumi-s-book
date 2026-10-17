@@ -195,6 +195,18 @@ void main() {
     await until(tester, () => novels.position(reader.editionId)!.textOffset > beforeKey,
         'Native Windows PageDown must advance reading');
     await tester.tapAt(size.center(Offset.zero));
+    await tester.pump(const Duration(milliseconds: 700));
+    final galleryAnchor = novels.position(reader.editionId)!.textOffset;
+    await click(tester, find.byTooltip('显示插图栏'));
+    await visible(tester, find.bySemanticsLabel('本卷插图 1，点击放大'));
+    await screenshot(tester, 'reader-gallery-strip');
+    await tester.drag(find.byKey(const ValueKey('novel-illustration-strip')), const Offset(-1200, 0));
+    await click(tester, find.bySemanticsLabel('本卷插图 8，点击放大'));
+    await visible(tester, find.byType(InteractiveViewer));
+    await screenshot(tester, 'reader-gallery-zoom');
+    await click(tester, find.byTooltip('关闭插图'));
+    await click(tester, find.byTooltip('隐藏插图栏'));
+    expect(novels.position(reader.editionId)!.textOffset, galleryAnchor);
     await click(tester, find.byTooltip('添加书签'));
     await type(tester, find.byType(TextField).last, 'WindowsBookmark');
     await text(tester, '保存');

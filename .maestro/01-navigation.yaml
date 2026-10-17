@@ -297,6 +297,14 @@ appId: com.zgcc.kazumisbook
 - assertVisible: "WebDAV"
 - takeScreenshot: build/android-ui/sync-settings
 - runFlow: back-to-settings.yaml
+- runFlow:
+    when:
+      true: ${LAYOUT == 'tablet'}
+    commands:
+      - swipe:
+          from:
+            text: "界面设置"
+          direction: UP
 - scrollUntilVisible:
     element: "(?s).*网络设置.*"
     direction: DOWN

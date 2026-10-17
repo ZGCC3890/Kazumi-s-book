@@ -72,6 +72,17 @@ appId: com.zgcc.kazumisbook
     waitToSettleTimeoutMs: 100
     point: "50%,50%"
 - assertVisible: "阅读设置"
+- tapOn: {text: "显示插图栏", waitToSettleTimeoutMs: 100}
+- assertVisible: "本卷插图 1，点击放大"
+- takeScreenshot: build/android-ui/reader-gallery-strip
+- swipe: {from: {id: ".*novel-illustration-strip.*", point: "85%,50%"}, direction: LEFT, duration: 400, waitToSettleTimeoutMs: 100}
+- swipe: {from: {id: ".*novel-illustration-strip.*", point: "85%,50%"}, direction: LEFT, duration: 400, waitToSettleTimeoutMs: 100}
+- tapOn: {text: "本卷插图 8，点击放大", waitToSettleTimeoutMs: 100}
+- assertVisible: "关闭插图"
+- takeScreenshot: build/android-ui/reader-gallery-zoom
+- tapOn: {text: "关闭插图", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "隐藏插图栏", waitToSettleTimeoutMs: 100}
+- assertNotVisible: "本卷插图 1，点击放大"
 - tapOn:
     point: "50%,50%"
     text: "添加书签"
