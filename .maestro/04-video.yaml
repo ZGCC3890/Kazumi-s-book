@@ -27,7 +27,7 @@ appId: com.zgcc.kazumisbook
 - hideKeyboard
 - tapOn: "开始测试"
 - extendedWaitUntil:
-    visible: ".*葬送的芙莉莲.*"
+    visible: "(?s).*葬送的芙莉莲.*"
     timeout: 30000
 - takeScreenshot: build/android-ui/video-rule-test
 - back
@@ -43,10 +43,10 @@ appId: com.zgcc.kazumisbook
 - inputText: "Frieren"
 - tapOn: "搜索"
 - extendedWaitUntil:
-    visible: ".*芙莉莲.*"
+    visible: "(?s).*芙莉莲.*"
     timeout: 60000
 - tapOn:
-    text: ".*芙莉莲.*"
+    text: "(?s).*芙莉莲.*"
     index: 0
 - extendedWaitUntil:
     visible: "开始观看"
