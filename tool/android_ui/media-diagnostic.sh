@@ -17,7 +17,7 @@ expected = next(line.split()[0] for line in prior.read_text().splitlines() if li
 assert hashlib.sha256(Path('diagnostic-apk/app-x86_64-release.apk').read_bytes()).hexdigest() == expected
 PY
 test "$(adb shell getprop ro.build.fingerprint | tr -d '\r')" = 'google/sdk_gphone64_x86_64/emu64xa:14/UE1A.230829.050/12077443:userdebug/dev-keys'
-emulator -version > build/media-diagnostic/emulator-version.txt 2>&1
+"$ANDROID_HOME/emulator/emulator" -version > build/media-diagnostic/emulator-version.txt 2>&1
 cp "$ANDROID_HOME/system-images/android-34/google_apis/x86_64/package.xml" build/media-diagnostic/system-image-package.xml
 adb shell wm size 480x900
 adb shell wm density 160
