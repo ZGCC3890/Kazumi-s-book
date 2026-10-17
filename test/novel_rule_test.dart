@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/novel/novel_models.dart';
-import '../lib/novel/novel_locator.dart';
-import '../lib/novel/novel_rule.dart';
+import 'package:kazumi/novel/novel_models.dart';
+import 'package:kazumi/novel/novel_locator.dart';
+import 'package:kazumi/novel/novel_rule.dart';
 
 NovelRule _rule(String id) => NovelRule.decode(File('novel_rules/$id.json').readAsStringSync());
 const _chapter = NovelChapter(url: 'https://initial.test/chapter',
@@ -16,14 +16,14 @@ void main() {
     expect(NovelLocator.numberOf('第3章'), 3);
   });
 
-  test('wenku8 cards use full tiptitle, author and GBK query encoding', () async {
+  test('wenku8 raw HTML uses full title, author and GBK query encoding', () async {
     String? requested;
     final adapter = XPathNovelAdapter(_rule('wenku8'), (url, method, headers, body) async {
       requested = url;
       expect(method, 'GET');
       expect(headers['Referer'], 'https://www.wenku8.net/');
       return const NovelResponse('''<div style="width:373px;height:136px"><div><a><img src="/cover.jpg"></a></div>
-        <div><b><a href="/book/42.htm" tiptitle="完整的轻小说标题">完整的…</a></b>
+        <div><b><a href="/book/42.htm" title="完整的轻小说标题">完整的…</a></b>
         <p>作者:测试作者/分类:连载</p></div></div>''', 'https://mirror.test/results');
     });
     final books = await adapter.search('中文');
@@ -33,6 +33,21 @@ void main() {
     expect(books.single.author, '测试作者');
     expect(books.single.url, 'https://mirror.test/book/42.htm');
     expect(books.single.cover, 'https://mirror.test/cover.jpg');
+  });
+
+  test('wenku8 reports the actual search interval error instead of no books', () async {
+    final adapter = XPathNovelAdapter(_rule('wenku8'), (url, method, headers, body) async =>
+      const NovelResponse('''<div class="blocktitle">出现错误！</div>
+        <div style="padding:10px"><br>错误原因：对不起，两次搜索的间隔时间不得少于 5 秒<br></div>''',
+        'https://www.wenku8.net/modules/article/search.php'));
+    await expectLater(adapter.search('辉夜'), throwsA(isA<StateError>().having(
+      (e) => e.message, 'site error', contains('两次搜索的间隔时间不得少于 5 秒'))));
+  });
+
+  test('wenku8 login verification does not consume a search', () {
+    final login = _rule('wenku8').json['login'] as Map;
+    expect(login['verifyUrl'], 'https://www.wenku8.net/');
+    expect(login['verifySelector'], 'a[href="/logout.php"]');
   });
 
   test('wenku8 single-result redirect returns the actual detail URL', () async {

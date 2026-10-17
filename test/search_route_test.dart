@@ -21,6 +21,7 @@ import 'package:kazumi/pages/popular/popular_page.dart';
 import 'package:kazumi/pages/search/image_search_page.dart';
 import 'package:kazumi/pages/search/search_module.dart';
 import 'package:kazumi/pages/search/search_page.dart';
+import 'package:kazumi/pages/search/search_controller.dart';
 import 'package:kazumi/repositories/collect_repository.dart';
 import 'package:kazumi/repositories/search_history_repository.dart';
 import 'package:kazumi/request/core/dio_factory.dart';
@@ -72,7 +73,7 @@ class _RulesService extends NovelService {
   @override Future<void> savePosition(NovelPosition position) async { saved = position; }
   @override Future<String> chapterReadIdentity(String editionId, NovelBook book,
       NovelChapter chapter, NovelPosition? restoredFrom) async => chapter.url;
-  @override Future<void> syncAutomatically() async {}
+  @override Future<void> retrySync() async {}
 }
 
 class _NovelSource extends Fake implements NovelSourceAdapter {
@@ -87,8 +88,9 @@ class _NovelSource extends Fake implements NovelSourceAdapter {
 // Keep this route test about production DI/navigation. Filesystem persistence
 // is exercised by integration tests and the installed Android app flows.
 class _Collect extends Fake implements ICollectRepository {
+  bool private = false;
   @override
-  bool getPrivateMode() => false;
+  bool getPrivateMode() => private;
 }
 
 class _History implements ISearchHistoryRepository {
@@ -252,6 +254,32 @@ void main() {
     await root.delete(recursive: true);
   });
 
+  test('novels and anime persist to one bounded history and respect private mode', () async {
+    final collect = _Collect();
+    final controller = SearchPageController(collect, SearchHistoryRepository());
+    await controller.rememberSearch('辉夜小说');
+    await Future<void>.delayed(const Duration(milliseconds: 2));
+    await controller.searchBangumi('辉夜番剧', type: 'init');
+    expect(controller.searchHistories.map((item) => item.keyword), ['辉夜番剧', '辉夜小说']);
+    for (var i = 0; i < 10; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 2));
+      await controller.rememberSearch('小说$i');
+    }
+    expect(controller.searchHistories, hasLength(10));
+    expect(controller.searchHistories.any((item) => item.keyword == '辉夜小说'), isFalse);
+    await Future<void>.delayed(const Duration(milliseconds: 2));
+    await controller.rememberSearch('小说4');
+    expect(controller.searchHistories, hasLength(10));
+    expect(controller.searchHistories.first.keyword, '小说4');
+    final stored = controller.searchHistories.map((item) => item.keyword).toList();
+    collect.private = true;
+    await controller.rememberSearch('无痕小说');
+    collect.private = false;
+    await controller.rememberSearch('   ');
+    final reopened = SearchPageController(collect, SearchHistoryRepository())..loadSearchHistories();
+    expect(reopened.searchHistories.map((item) => item.keyword), stored);
+  });
+
   for (final size in [const Size(480, 900), const Size(1280, 800)]) {
     testWidgets(
       'actual home/menu search opens, searches, switches and reopens $size',
@@ -332,8 +360,13 @@ void main() {
       await tester.tap(submit);
       await tester.pumpAndSettle();
       expect(service.source.queries, ['Fixture']);
+      expect(find.text('Fixture novel'), findsOneWidget);
+      await tester.tap(find.text('Fixture novel'));
+      await tester.pumpAndSettle();
       expect(find.text('Author A'), findsOneWidget);
-      await tester.tap(find.text('Author A'));
+      await tester.tap(find.text('选择书源阅读'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('novel-source-linovel-https://test/book')));
       await tester.pumpAndSettle();
       expect(service.selected?.title, 'Fixture novel');
       expect(find.byType(NovelReaderPage), findsOneWidget);

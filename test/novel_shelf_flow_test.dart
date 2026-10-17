@@ -138,7 +138,7 @@ class _Service extends NovelService {
   }
 
   @override
-  Future<void> syncAutomatically() async {}
+  Future<void> retrySync() async {}
 }
 
 Future<void> _start(

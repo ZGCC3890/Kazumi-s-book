@@ -351,6 +351,40 @@ void main() {
     expect(service.state.value('shelf/$edition')!['animeId'], 42);
   });
 
+  test('shelf deletion persists locally, syncs as a tombstone, and allows re-adding with progress intact', () async {
+    var service = await device('A');
+    final edition = await seed(service);
+    await service.addToShelf(edition);
+    await service.savePosition(_position(edition, 7));
+    await service.addBookmark(_position(edition, 7), '保留的书签');
+    await sync(service);
+    service = await device('B');
+    await sync(service);
+    expect(service.isShelved(edition), isTrue);
+    service = await device('A');
+    final calls = remote.requests.length;
+    await service.removeFromShelf(edition);
+    expect(service.isShelved(edition), isFalse);
+    expect(service.state.revisions('shelf/$edition').single.value, isNull);
+    expect(service.position(edition)!.textOffset, 7);
+    expect(service.bookmarks(edition).single['note'], '保留的书签');
+    expect(remote.requests.length, calls);
+    service = await device('A');
+    expect(service.isShelved(edition), isFalse);
+    expect(service.position(edition)!.textOffset, 7);
+    await sync(service);
+    service = await device('B');
+    await sync(service);
+    expect(service.isShelved(edition), isFalse);
+    expect(service.position(edition)!.textOffset, 7);
+    await service.addToShelf(edition);
+    await sync(service);
+    service = await device('A');
+    await sync(service);
+    expect(service.isShelved(edition), isTrue);
+    expect(service.bookmarks(edition).single['note'], '保留的书签');
+  });
+
   test('interrupted default rule install reports failure without partial registry and retries', () async {
     remote.files['/rules/catalog.json'] = utf8.encode(jsonEncode({'version': 1, 'rules': [
       {'id': 'wenku8', 'file': 'wenku8.json', 'replaces': <String>[]},
@@ -368,7 +402,10 @@ void main() {
 
   test('known previous default upgrades but custom rules and old v1 catalogs remain supported', () async {
     final current = jsonDecode(await File('novel_rules/wenku8.json').readAsString()) as Map<String, dynamic>;
-    final old = Map<String, dynamic>.from(current)..remove('login');
+    final old = jsonDecode(jsonEncode(current)) as Map<String, dynamic>;
+    old.remove('login');
+    old.remove('errorXPath');
+    old['search']['titleAttribute'] = 'tiptitle';
     old['revision'] = '2026-10-17.2';
     old['headers'] = {'Referer': 'https://www.wenku8.net/'};
     var service = await device('old-default');
@@ -391,6 +428,36 @@ void main() {
     await service.saveRuleCatalogUrl('${remote.url}/rules/catalog.json');
     await service.ensureDefaultRules();
     expect(service.rules.single.name, '本机自定义文库');
+  });
+
+  test('installed 0.1.2 default rule upgrades once while preserving source removal choices', () async {
+    final service = await device('installed-012');
+    final old = jsonDecode(await File('novel_rules/wenku8.json').readAsString()) as Map<String, dynamic>;
+    old.remove('errorXPath');
+    old['revision'] = '2026-10-17.3';
+    old['search']['titleAttribute'] = 'tiptitle';
+    old['login']['verifyUrl'] = 'https://www.wenku8.net/modules/article/search.php?searchtype=articlename&searchkey=%C4%A7%C5%AE';
+    old['login']['verifySelector'] = "div[style*='width:373px']";
+    await service.importRule(jsonEncode(old));
+    await Hive.box<String>('novel_v1').put('defaultRulesInstalled', '2');
+    await service.removeRule('syosetu');
+    final oldHash = sha256.convert(utf8.encode(service.rule('wenku8').encode())).toString();
+    final index = jsonDecode(await File('novel_rules/catalog.json').readAsString()) as Map<String, dynamic>;
+    expect((index['rules'] as List).singleWhere((r) => r['id'] == 'wenku8')['replaces'], contains(oldHash));
+    remote.files['/rules/catalog.json'] = utf8.encode(jsonEncode(index));
+    for (final id in ['wenku8', 'linovel', 'lightnovel']) {
+      remote.files['/rules/$id.json'] = await File('novel_rules/$id.json').readAsBytes();
+    }
+    await service.saveRuleCatalogUrl('${remote.url}/rules/catalog.json');
+    expect(service.needsDefaultRules, isTrue);
+    await service.ensureDefaultRules();
+    expect(service.rule('wenku8').json['search']['titleAttribute'], 'title');
+    expect(service.rule('wenku8').json['login']['verifyUrl'], 'https://www.wenku8.net/');
+    expect(service.needsDefaultRules, isFalse);
+    expect(service.rules.any((rule) => rule.id == 'syosetu'), isFalse);
+    final requests = remote.requests.length;
+    await service.ensureDefaultRules();
+    expect(remote.requests.length, requests);
   });
 
   test('cross-source chapter identity remains stable after reopening the target source', () async {

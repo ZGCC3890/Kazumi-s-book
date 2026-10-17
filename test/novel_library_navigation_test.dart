@@ -46,6 +46,17 @@ class _Library extends NovelService {
   _Library(this.bytes) : super(WebDav());
   final Uint8List bytes;
   final images = <(String, String)>[];
+  final removed = <String>{};
+  bool failRemove = false;
+  int shelfCount = 1, syncCalls = 0;
+  @override
+  Future<void> sync() async { syncCalls++; }
+  @override
+  Future<void> removeFromShelf(String id) async {
+    if (failRemove) throw StateError('删除写入失败');
+    removed.add(id);
+    notifyListeners();
+  }
   @override
   List<NovelRule> get rules => const [];
   @override
@@ -61,7 +72,9 @@ class _Library extends NovelService {
       })];
   @override
   List<NovelEdition> get shelfEditions => [
-    const NovelEdition('e', 'w', '中文', 'zh'),
+    for (var i = 0; i < shelfCount; i++)
+      if (!removed.contains(i == 0 ? 'e' : 'e$i'))
+        NovelEdition(i == 0 ? 'e' : 'e$i', 'w', '中文', 'zh'),
   ];
   @override
   NovelWork work(String id) => const NovelWork('w', '已入架的小说', '作者');
@@ -283,6 +296,67 @@ void main() {
     }
     expect(service.images, hasLength(1));
     expect(find.bySemanticsLabel('已入架的小说封面'), findsOneWidget);
+  });
+
+  testWidgets('bookshelf uses a cover grid and deletes only after confirming; errors remain visible', (tester) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final service = _Library(cover)..shelfCount = 2;
+    addTearDown(service.dispose);
+    await tester.pumpWidget(MaterialApp(home: NovelLibraryPage(service: service)));
+    await tester.pumpAndSettle();
+    final covers = find.byType(NovelBookCover);
+    expect(covers, findsNWidgets(2));
+    expect(tester.getTopLeft(covers.first).dy, tester.getTopLeft(covers.last).dy);
+    expect(tester.getSize(covers.first).width, greaterThan(100));
+    Future<void> removeMenu() async {
+      await tester.tap(find.byTooltip('小说操作').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('删除书籍'));
+      await tester.pumpAndSettle();
+    }
+    await removeMenu();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(service.removed, isEmpty);
+    service.failRemove = true;
+    await removeMenu();
+    await tester.tap(find.text('删除'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('删除写入失败'), findsOneWidget);
+    expect(service.removed, isEmpty);
+    service.failRemove = false;
+    await removeMenu();
+    await tester.tap(find.text('删除'));
+    await tester.pumpAndSettle();
+    expect(service.removed, {'e'});
+    expect(covers, findsOneWidget);
+    expect(service.syncCalls, 0);
+    await tester.tap(find.byTooltip('同步小说'));
+    await tester.pumpAndSettle();
+    expect(service.syncCalls, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('enabling bookshelf cloud sync waits for the manual button', (tester) async {
+    final service = _Library(cover);
+    addTearDown(service.dispose);
+    await tester.runAsync(() async {
+      await GStorage.putSetting(SettingsKeys.webDavEnable, true);
+      await GStorage.putSetting(SettingsKeys.webDavEnableNovels, false);
+    });
+    addTearDown(() => tester.runAsync(() => GStorage.resetSettings(SettingsKeys.byGroup(SettingGroup.webdav))));
+    await tester.pumpWidget(MaterialApp(home: NovelLibraryPage(service: service)));
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => tester.tap(find.text('WebDAV 手动同步阅读进度与书签')));
+    await tester.pumpAndSettle();
+    expect(GStorage.getSetting(SettingsKeys.webDavEnableNovels), isTrue);
+    expect(service.syncCalls, 0);
+    await tester.tap(find.byTooltip('同步小说'));
+    await tester.pumpAndSettle();
+    expect(service.syncCalls, 1);
   });
   testWidgets('unrelated conflicts remain visible without hiding the normal bookshelf', (tester) async {
     final service = _Library(cover);

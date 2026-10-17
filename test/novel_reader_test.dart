@@ -111,7 +111,7 @@ class _ReaderStore extends ChangeNotifier implements NovelReaderStore {
     _state = _state.resolve(key, selected, 'test-device', expectedToken: expectedToken);
     notifyListeners();
   }
-  @override Future<void> syncAutomatically() async {}
+  @override Future<void> retrySync() async {}
 }
 
 NovelPosition _position(NovelChapter chapter, String text, int offset) => NovelLocator.capture(

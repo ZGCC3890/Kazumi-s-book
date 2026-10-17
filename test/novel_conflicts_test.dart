@@ -45,7 +45,7 @@ class _Store extends ChangeNotifier implements NovelReaderStore {
   @override Future<void> addBookmark(NovelPosition position, String note) async => throw UnimplementedError();
   @override Future<void> deleteBookmark(String id) async => throw UnimplementedError();
   @override List<NovelJson> bookmarks(String editionId) => [];
-  @override Future<void> syncAutomatically() async {}
+  @override Future<void> retrySync() async {}
 }
 
 Future<void> _open(WidgetTester tester, _Store store,

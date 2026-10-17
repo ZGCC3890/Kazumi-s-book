@@ -18,7 +18,18 @@ appId: com.zgcc.kazumisbook
     point: "50%,50%"
     text: "阅读轻小说"
     waitToSettleTimeoutMs: 100
-- assertVisible: "选择小说书源"
+- assertVisible: "小说搜索"
+- extendedWaitUntil:
+    visible:
+      id: ".*novel-search-result-0.*"
+    timeout: 2000
+- tapOn:
+    id: ".*novel-search-result-0.*"
+    waitToSettleTimeoutMs: 100
+- assertVisible: "小说详情"
+- tapOn:
+    text: "选择书源阅读"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "(?s).*Author B.*"
     timeout: 2000

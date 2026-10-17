@@ -19,7 +19,7 @@
       "id": "wenku8",
       "name": "轻小说文库",
       "file": "wenku8.json",
-      "replaces": ["40aba948869a14d213e2118f4540433551cff596253addbc756931453a5a2aa1"],
+      "replaces": ["40aba948869a14d213e2118f4540433551cff596253addbc756931453a5a2aa1", "a8aa21ac103fa469d4e892dc6584540361d0e75d02c623104bacc4623b781968"],
       "description": "支持分卷目录、正文和插图。搜索首次登录本人账号，本机会话持久保存。公开书籍链接可直接阅读。"
     },
     {

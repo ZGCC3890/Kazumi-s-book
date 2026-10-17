@@ -4,6 +4,7 @@ import 'package:hive_ce/hive.dart';
 import 'package:kazumi/request/apis/bangumi_api.dart';
 import 'package:kazumi/request/core/dio_factory.dart';
 import 'package:kazumi/services/storage/storage.dart';
+import 'package:kazumi/services/network/system_proxy_service.dart';
 import 'package:kazumi/novel/novel_anime_resolver.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
@@ -26,6 +27,8 @@ void main() {
       HttpOverrides.global = null;
       Hive.init(root.path);
       await GStorage.init();
+      // Match the app's startup proxy snapshot without starting its registry watcher.
+      SystemProxyService.refresh();
       try {
         expect(GStorage.getSetting(SettingsKeys.bangumiAcceleration), 'direct');
         for (final query in ['无职转生', '葬送的芙莉莲']) {
@@ -40,6 +43,9 @@ void main() {
         final linked = await NovelAnimeResolver().forTitle('葬送的芙莉莲');
         expect(linked, isNotEmpty);
         expect(linked.every((item) => NovelAnimeResolver.matches('葬送的芙莉莲', item)), true);
+        final kaguya = await NovelAnimeResolver().forTitle(
+          '辉夜姬想让人告白(辉夜大小姐想让我告白)');
+        expect(kaguya.map((item) => item.id), contains(248175));
         print('LIVE novel anime links: ${linked.map((e) => e.id).join(",")}');
         expect(comments.commentList, isNotEmpty);
         expect(comments.total, greaterThan(0));

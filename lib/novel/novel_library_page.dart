@@ -6,11 +6,27 @@ import 'novel_service.dart';
 import 'novel_book_cover.dart';
 import 'novel_anime_link.dart';
 import 'novel_conflicts.dart';
+import 'novel_cover_grid.dart';
+import 'novel_models.dart';
 
 class NovelLibraryPage extends StatelessWidget {
   const NovelLibraryPage({super.key, required this.service, this.title});
   final NovelService service;
   final Widget? title;
+
+  Future<void> _remove(BuildContext context, NovelEdition edition) async {
+    final confirmed = await showDialog<bool>(context: context, builder: (dialogContext) => AlertDialog(
+      title: const Text('删除书籍'),
+      content: const Text('将这本书移出书架，保留本地阅读进度与书签。手动同步后，其他设备的书架也会更新。'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('取消')),
+        TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('删除')),
+      ],
+    ));
+    if (confirmed == true && context.mounted) {
+      await _run(context, () => service.removeFromShelf(edition.id));
+    }
+  }
   Future<void> _run(
     BuildContext context,
     Future<void> Function() action,
@@ -60,15 +76,14 @@ class NovelLibraryPage extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         children: [
           SwitchListTile(
-            title: const Text('WebDAV 自动同步阅读进度与书签'),
-            subtitle: const Text('复用已有云盘配置。阅读时自动保存本地；有网络时自动同步。'),
+            title: const Text('WebDAV 手动同步阅读进度与书签'),
+            subtitle: const Text('阅读时保存到本地；点击右上角“同步小说”与云盘合并。'),
             value: GStorage.getSetting(SettingsKeys.webDavEnableNovels),
             onChanged: (value) => _run(context, () async {
               if (value && !GStorage.getSetting(SettingsKeys.webDavEnable)) {
                 throw StateError('请先在设置 → 多设备同步中配置并启用 WebDAV');
               }
               await GStorage.putSetting(SettingsKeys.webDavEnableNovels, value);
-              if (value) await service.sync();
               service.refreshView();
             }),
           ),
@@ -96,58 +111,55 @@ class NovelLibraryPage extends StatelessWidget {
             ),
           for (final key in service.state.conflicts)
             Card(child: NovelConflictTile(store: service, recordKey: key)),
-            for (final edition in service.shelfEditions.where((edition) =>
-                NovelConflicts.displayKeys(service.state, edition.id).isEmpty))
-              if (NovelConflicts.workDeleted(service.state, edition.id))
-                Card(child: ListTile(
-                  leading: const Icon(Icons.info_outline),
-                  title: const Text('作品信息已删除'),
-                  subtitle: const Text('书源与阅读进度仍保留，点击继续阅读'),
-                  onTap: () => _run(context,
-                      () => NovelEntry.read(context, service, edition.id)),
-                ))
-              else
-              Card(
-                child: ListTile(
-                  leading: NovelConflicts.sourceKeys(service.state, edition.id).isNotEmpty
-                      ? const Tooltip(message: '这本书的书源有冲突，请点击选择', child: Icon(Icons.merge))
-                      : NovelBookCover(
-                    service: service,
-                    book: service.selectedBook(edition.id),
-                  ),
-                  title: Text(service.work(edition.workId).title),
-                  subtitle: Text(service.work(edition.workId).author),
-                  onTap: () => _run(context, () async {
-                    await NovelEntry.read(context, service, edition.id);
-                  }),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (NovelConflicts.sourceKeys(service.state, edition.id).isEmpty &&
-                          service.selectedBook(edition.id) != null)
-                        NovelAnimeLink(
-                          service: service,
-                          book: service.selectedBook(edition.id)!,
-                          editionId: edition.id,
-                        ),
-                      PopupMenuButton<String>(
-                        tooltip: '小说操作',
-                        useRootNavigator: true,
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(value: 'source', child: Text('更换书源')),
-                        ],
-                        onSelected: (value) => NovelEntry.search(
-                          context, service, 0,
-                          service.work(edition.workId).title,
-                          editionId: edition.id,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+          _books(context),
         ],
       ),
     ),
   );
+
+  Widget _books(BuildContext context) {
+    final editions = service.shelfEditions.where((edition) =>
+        NovelConflicts.displayKeys(service.state, edition.id).isEmpty).toList();
+    return NovelCoverGrid(itemCount: editions.length, actionHeight: 48,
+      itemBuilder: (context, index, width) {
+        final edition = editions[index];
+        final deleted = NovelConflicts.workDeleted(service.state, edition.id);
+        final sourceConflict = NovelConflicts.sourceKeys(service.state, edition.id).isNotEmpty;
+        final book = sourceConflict ? null : service.selectedBook(edition.id);
+        final name = deleted ? '作品信息已删除' : service.work(edition.workId).title;
+        return Card(margin: EdgeInsets.zero, clipBehavior: Clip.antiAlias, child: Column(children: [
+          Expanded(child: InkWell(
+            onTap: () => _run(context, () => NovelEntry.read(context, service, edition.id)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (sourceConflict)
+                SizedBox(height: width * 1.45, child: const Tooltip(
+                  message: '这本书的书源有冲突，请点击选择', child: Icon(Icons.merge)))
+              else
+                NovelBookCover(service: service, book: book, width: width, height: width * 1.45),
+              Padding(padding: const EdgeInsets.all(8), child: Text(name,
+                style: Theme.of(context).textTheme.titleSmall,
+                maxLines: 2, overflow: TextOverflow.ellipsis)),
+            ]),
+          )),
+          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+            if (book != null)
+              NovelAnimeLink(service: service, book: book, editionId: edition.id),
+            PopupMenuButton<String>(
+              tooltip: '小说操作', useRootNavigator: true,
+              itemBuilder: (_) => [
+                if (!deleted) const PopupMenuItem(value: 'source', child: Text('更换书源')),
+                const PopupMenuItem(value: 'remove', child: Text('删除书籍')),
+              ],
+              onSelected: (value) async {
+                if (value == 'remove') {
+                  await _remove(context, edition);
+                } else {
+                  await NovelEntry.search(context, service, 0, name, editionId: edition.id);
+                }
+              },
+            ),
+          ]),
+        ]));
+      });
+  }
 }

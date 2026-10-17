@@ -1,10 +1,8 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:kazumi/request/core/dio_factory.dart';
@@ -19,9 +17,7 @@ import 'novel_http_session.dart';
 import 'novel_anime_resolver.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 
-class NovelService extends ChangeNotifier
-    with WidgetsBindingObserver
-    implements NovelReaderStore {
+class NovelService extends ChangeNotifier implements NovelReaderStore {
   NovelService(this.webDav);
   final WebDav webDav;
   final _writes = AsyncSerialQueue();
@@ -33,7 +29,6 @@ class NovelService extends ChangeNotifier
   @override
   NovelSyncState state = NovelSyncState();
   Map<String, List<String>> _seen = {};
-  Timer? _syncTimer, _poll;
   @override
   String? syncError;
   String? syncNotice;
@@ -71,12 +66,6 @@ class NovelService extends ChangeNotifier
         (k, v) => MapEntry(k, List<String>.from(v as List)),
       );
     }
-    WidgetsBinding.instance.addObserver(this);
-    _poll = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) => syncAutomatically(),
-    );
-    unawaited(syncAutomatically());
   }
 
   List<NovelRule> get rules => _rules.values.map(NovelRule.decode).toList();
@@ -119,7 +108,7 @@ class NovelService extends ChangeNotifier
 
   /// Install the separate rule repository once. Deletions remain intentional;
   /// a failed download is reported to the caller and can be retried.
-  bool get needsDefaultRules => _box.get('defaultRulesInstalled') != '2';
+  bool get needsDefaultRules => _box.get('defaultRulesInstalled') != '3';
 
   Future<void> ensureDefaultRules() {
     if (!needsDefaultRules) return Future.value();
@@ -175,7 +164,7 @@ class NovelService extends ChangeNotifier
         final first = (catalog['rules'] as List).where((entry) => _rules.containsKey(entry['id'])).firstOrNull;
         if (first != null) await selectSource(first['id'] as String);
       }
-      await _box.put('defaultRulesInstalled', '2');
+      await _box.put('defaultRulesInstalled', '3');
       await _box.flush();
     });
     notifyListeners();
@@ -247,6 +236,9 @@ class NovelService extends ChangeNotifier
       'animeId': animeId,
     }, deviceId),
   );
+
+  Future<void> removeFromShelf(String editionId) =>
+      _commit((s) => s.edit('shelf/$editionId', null, deviceId));
 
   List<int> animeIdsForEdition(String editionId) => state
       .keys('anime')
@@ -390,7 +382,6 @@ class NovelService extends ChangeNotifier
 
   Future<void> _commit(
     NovelSyncState Function(NovelSyncState) change, {
-    bool local = true,
     Map<String, List<String>>? seen,
   }) => _writes.run(() async {
     final next = change(state);
@@ -404,7 +395,6 @@ class NovelService extends ChangeNotifier
     state = next;
     if (seen != null) _seen = seen;
     notifyListeners();
-    if (local) _scheduleSync();
   });
 
   Future<String> bind({
@@ -541,17 +531,8 @@ class NovelService extends ChangeNotifier
   bool get syncEnabled =>
       GStorage.getSetting(SettingsKeys.webDavEnable) &&
       GStorage.getSetting(SettingsKeys.webDavEnableNovels);
-  void _scheduleSync() {
-    if (!syncEnabled || _syncTimer != null) return;
-    _syncTimer = Timer(const Duration(seconds: 15), () {
-      _syncTimer = null;
-      unawaited(syncAutomatically());
-    });
-  }
-
   @override
-  Future<void> syncAutomatically() async {
-    if (!syncEnabled || syncing) return;
+  Future<void> retrySync() async {
     try {
       await sync();
     } catch (error) {
@@ -593,7 +574,6 @@ class NovelService extends ChangeNotifier
         merge: (remote, names) async {
           await _commit(
             (s) => s.merge(remote),
-            local: false,
             seen: {
               ...(Map<String, List<String>>.from(_seen)..remove(legacyScope)),
               scope: names.toList()..sort(),
@@ -605,7 +585,6 @@ class NovelService extends ChangeNotifier
       if (published != null) {
         await _commit(
           (s) => s,
-          local: false,
           seen: {
             ..._seen,
             scope: {...?_seen[scope], published}.toList()..sort(),
@@ -625,19 +604,4 @@ class NovelService extends ChangeNotifier
     }
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed ||
-        state == AppLifecycleState.paused) {
-      unawaited(syncAutomatically());
-    }
-  }
-
-  @override
-  void dispose() {
-    _syncTimer?.cancel();
-    _poll?.cancel();
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
 }

@@ -7,7 +7,7 @@ import 'novel_rule.dart';
 import 'novel_reader_page.dart';
 import 'novel_service.dart';
 import 'novel_search_query.dart';
-import 'novel_anime_link.dart';
+import 'novel_search_results.dart';
 import 'novel_rules_page.dart';
 import 'novel_conflicts.dart';
 
@@ -232,7 +232,6 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
   final Map<String, String> _errors = {};
   final Map<String, int> _sourceRequests = {};
   final Set<String> _loading = {}, _loginRequired = {};
-  final Set<String> _expanded = {};
   int _generation = 0;
   String _submittedQuery = '';
   bool _busy = false;
@@ -289,7 +288,6 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
           _results.remove(rule.id);
           _errors.remove(rule.id);
           _loginRequired.remove(rule.id);
-          _expanded.remove(rule.id);
           _loading.add(rule.id);
         }
       });
@@ -317,7 +315,6 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
       _results.clear();
       _errors.clear();
       _loginRequired.clear();
-      _expanded.clear();
       _loading
         ..clear()
         ..addAll(widget.service.rules.map((r) => r.id));
@@ -546,11 +543,23 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
     if (mounted && owner.isActive) await _prepare();
   }
 
+  Future<void> _openDetails(NovelSearchResult result) async {
+    final owner = ModalRoute.of(context)!;
+    final generation = _generation;
+    final selected = await Navigator.of(context, rootNavigator: true).push<NovelBook>(
+      MaterialPageRoute(builder: (_) => NovelSearchDetailPage(
+        service: widget.service, result: result)),
+    );
+    if (selected != null && mounted && owner.isCurrent && generation == _generation) {
+      await _bind(selected);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => widget.embedded ? _content() : Scaffold(
     appBar: AppBar(
       automaticallyImplyLeading: false,
-      title: const Text('选择小说书源'),
+      title: const Text('小说搜索'),
       actions: [
         IconButton(
           tooltip: '管理小说规则',
@@ -620,7 +629,24 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
                         child: const Text('重试获取书源')),
                   ]),
                 ),
-              for (final rule in widget.service.rules) ...[
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: NovelSearchGrid(
+                  service: widget.service,
+                  results: NovelSearchResult.group([
+                    for (final rule in widget.service.rules) ...?_results[rule.id],
+                  ]),
+                  onOpen: _busy ? null : _openDetails,
+                ),
+              ),
+              ExpansionTile(
+                title: const Text('书源状态'),
+                subtitle: Text(_loading.isNotEmpty
+                    ? '${_loading.length} 个书源正在搜索…'
+                    : _errors.isNotEmpty
+                    ? '${_errors.length} 个书源未完成，展开查看原因'
+                    : '搜索完成'),
+                children: [for (final rule in widget.service.rules) ...[
                 ListTile(
                   dense: true,
                   title: Text(
@@ -685,30 +711,9 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
                           },
                         ),
                 ),
-                for (final book in (_results[rule.id] ?? <NovelBook>[]).take(
-                  _expanded.contains(rule.id) ? _results[rule.id]!.length : 1))
-                  ListTile(
-                    title: Text(book.title),
-                    subtitle: Text(book.author),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        NovelAnimeLink(service: widget.service, book: book),
-                        const Icon(Icons.menu_book_outlined),
-                      ],
-                    ),
-                    onTap: _busy ? null : () => _bind(book),
-                  ),
-                if ((_results[rule.id]?.length ?? 0) > 1)
-                  TextButton(
-                    onPressed: () => setState(() {
-                      if (!_expanded.add(rule.id)) _expanded.remove(rule.id);
-                    }),
-                    child: Text(_expanded.contains(rule.id)
-                      ? '收起全部条目' : '展开全部 ${_results[rule.id]!.length} 个结果'),
-                  ),
                 const Divider(height: 1),
-              ],
+              ]],
+              ),
             ],
   );
 }

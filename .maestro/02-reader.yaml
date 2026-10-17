@@ -26,13 +26,20 @@ appId: com.zgcc.kazumisbook
     text: "搜索"
     waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
-    visible: "(?s).*葬送的芙莉莲.*"
+    visible:
+      id: ".*novel-search-result-0.*"
     timeout: 2000
 - tapOn:
     point: "50%,50%"
     waitToSettleTimeoutMs: 100
-    text: "(?s).*葬送的芙莉莲.*"
-    index: 0
+    id: ".*novel-search-result-0.*"
+- assertVisible: "小说详情"
+- tapOn:
+    text: "选择书源阅读"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    text: "(?s).*Fixture Source A.*"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: ".*Chapter 1 opening.*"
     timeout: 2000
@@ -214,6 +221,16 @@ appId: com.zgcc.kazumisbook
     waitToSettleTimeoutMs: 100
 - assertVisible: "(?s).*葬送的芙莉莲.*"
 - takeScreenshot: build/android-ui/bookshelf-added
+- tapOn:
+    text: "小说操作"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    text: "删除书籍"
+    waitToSettleTimeoutMs: 100
+- assertVisible: "删除书籍"
+- tapOn:
+    text: "取消"
+    waitToSettleTimeoutMs: 100
 - tapOn:
     point: "50%,50%"
     text: "(?s).*葬送的芙莉莲.*"

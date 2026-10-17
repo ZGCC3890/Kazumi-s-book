@@ -129,6 +129,23 @@ Future<void> _open(
 
 void main() {
   group('novel to anime resolution', () {
+    test('published novel names match verified anime aliases but not other Kaguya works', () {
+      final anime = _anime(248175, '辉夜大小姐想让我告白～天才们的恋爱头脑战～', aliases: [
+        '辉夜姬想让人告白～天才们的恋爱头脑战～',
+      ]);
+      for (final title in [
+        '辉夜姬想让人告白(辉夜大小姐想让我告白)',
+        '辉夜大小姐想让我告白小说版 ～秀知院学园的七大不可思议～',
+        '辉夜姬想让人告白 小說版',
+      ]) {
+        expect(NovelAnimeResolver.matches(title, anime), isTrue, reason: title);
+      }
+      expect(NovelAnimeResolver.matches('辉夜魔王式!', anime), isFalse);
+      expect(NovelAnimeResolver.matches('超时空辉夜姬', anime), isFalse);
+      expect(NovelAnimeResolver.matches('御徒町辉夜姬骑士团', anime), isFalse);
+      expect(NovelAnimeResolver.matches('辉夜大小姐想让我告白',
+        _anime(135218, '辉夜大小姐想让我告白', type: 1)), isFalse);
+    });
     test(
       'identical normalized titles share an in-flight search and success cache',
       () async {

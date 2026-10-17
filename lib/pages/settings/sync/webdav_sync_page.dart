@@ -131,21 +131,13 @@ class _WebDavSyncPageState extends State<WebDavSyncPage> {
                 SettingsTile.switchTile(
                   leading: Icons.menu_book_outlined,
                   title: const Text('小说阅读进度与书签'),
-                  description: const Text('自动同步小说书架、书源关联、阅读位置和书签'),
+                  description: const Text('阅读时保存在本地；点击“立即同步小说”后与云盘合并'),
                   initialValue: GStorage.getSetting(SettingsKeys.webDavEnableNovels),
                   enabled: enabled && !_busy,
                   onToggle: (value) => _run(() async {
                     final next = value ?? !GStorage.getSetting(SettingsKeys.webDavEnableNovels);
                     await GStorage.putSetting(SettingsKeys.webDavEnableNovels, next);
-                    if (next) {
-                      final novels = inject<NovelService>();
-                      await novels.sync();
-                      _message = novels.syncNotice == null
-                          ? '小说阅读进度与书签已同步'
-                          : '小说阅读进度与书签已同步。${novels.syncNotice}';
-                    } else {
-                      _message = '小说同步已关闭';
-                    }
+                    _message = next ? '已启用小说手动同步' : '小说同步已关闭';
                   }),
                 ),
                 SettingsTile.switchTile(
@@ -193,6 +185,19 @@ class _WebDavSyncPageState extends State<WebDavSyncPage> {
               onPressed: enabled && !_busy ? _syncHistory : null,
               text: _busy ? '请稍候…' : '立即同步观看记录',
               icon: Icons.sync_rounded,
+            ),
+            StateActionButton.tonal(
+              onPressed: enabled && GStorage.getSetting(SettingsKeys.webDavEnableNovels) && !_busy
+                  ? () => _run(() async {
+                      final novels = inject<NovelService>();
+                      await novels.sync();
+                      _message = novels.syncNotice == null
+                          ? '小说阅读进度与书签已同步'
+                          : '小说阅读进度与书签已同步。${novels.syncNotice}';
+                    })
+                  : null,
+              text: '立即同步小说',
+              icon: Icons.menu_book_outlined,
             ),
             StateActionButton.tonal(
               onPressed:

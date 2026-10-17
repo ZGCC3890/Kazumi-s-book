@@ -102,6 +102,7 @@ class _SearchPageState extends State<SearchPage> {
         _novelQuery = query.isEmpty ? null : query;
         _novelRevision++;
       });
+      await _controller.rememberSearch(query);
       return;
     }
     final filters = SearchParser(value).toFilterState();
@@ -259,6 +260,7 @@ class _SearchPageState extends State<SearchPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (_domain == _SearchDomain.anime) ...[
         Material(
           type: MaterialType.transparency,
           child: ListTile(
@@ -277,6 +279,7 @@ class _SearchPageState extends State<SearchPage> {
           ),
         ),
         const SizedBox(height: 28),
+        ],
         Observer(
           builder: (_) {
             final histories = _controller.searchHistories.toList();
@@ -557,6 +560,7 @@ class _SearchPageState extends State<SearchPage> {
               return Padding(
                 padding: EdgeInsets.symmetric(horizontal: inset),
                 child: NovelSearchPane(
+                  discovery: _discovery(),
                   service: widget.novelService,
                   header: _header(), query: _novelQuery, revision: revision,
                   onSelected: (edition) async {

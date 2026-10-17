@@ -4,9 +4,11 @@ import 'novel_models.dart';
 import 'novel_service.dart';
 
 class NovelBookCover extends StatefulWidget {
-  const NovelBookCover({super.key, required this.service, required this.book});
+  const NovelBookCover({super.key, required this.service, required this.book,
+    this.width = 44, this.height = 64});
   final NovelService service;
   final NovelBook? book;
+  final double width, height;
   @override
   State<NovelBookCover> createState() => _NovelBookCoverState();
 }
@@ -37,8 +39,8 @@ class _NovelBookCoverState extends State<NovelBookCover> {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    width: 44,
-    height: 64,
+    width: widget.width,
+    height: widget.height,
     child: _bytes == null
         ? const Icon(Icons.menu_book_outlined)
         : ClipRRect(
@@ -62,7 +64,7 @@ class _NovelBookCoverState extends State<NovelBookCover> {
                 return Image.memory(
                   snapshot.data!,
                   fit: BoxFit.cover,
-                  cacheWidth: 160,
+                  cacheWidth: (widget.width * MediaQuery.devicePixelRatioOf(context)).round(),
                   semanticLabel: '${widget.book!.title}封面',
                   errorBuilder: (context, error, stack) => Tooltip(
                     message: '封面解码失败：$error',

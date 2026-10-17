@@ -125,6 +125,22 @@ Future<void> _open(WidgetTester tester, _Service service) async {
   await tester.tap(find.text('选择小说'));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 400));
+  await tester.ensureVisible(find.text('书源状态'));
+  await tester.pump(const Duration(milliseconds: 100));
+  await tester.tap(find.text('书源状态'));
+  await tester.pump(const Duration(milliseconds: 300));
+}
+
+Future<void> _chooseSource(WidgetTester tester) async {
+  await tester.tap(find.text('选择书源阅读'));
+  await tester.pumpAndSettle();
+  final source = find.byWidgetPredicate((widget) => widget is ListTile &&
+      widget.key is ValueKey<String> &&
+      (widget.key! as ValueKey<String>).value.startsWith('novel-source-'));
+  await tester.ensureVisible(source.first);
+  await tester.pump();
+  await tester.tap(source.first);
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -152,7 +168,7 @@ void main() {
     expect(service.sources['lightnovel']!.requests.length, 1);
   });
 
-  testWidgets('each source previews one result and expansion resets for a new search', (tester) async {
+  testWidgets('cover grid shows all results and resets for a new search', (tester) async {
     final service = _Service();
     await _open(tester, service);
     service.sources['linovel']!.requests[0].$2.complete([
@@ -161,9 +177,6 @@ void main() {
     service.sources['lightnovel']!.complete(0, '乙源小说');
     await tester.pumpAndSettle();
     expect(find.text('甲源第0本'), findsOneWidget);
-    expect(find.text('甲源第1本'), findsNothing);
-    await tester.tap(find.text('展开全部 4 个结果'));
-    await tester.pumpAndSettle();
     expect(find.text('甲源第1本'), findsOneWidget);
     await tester.enterText(find.byType(TextField), '新书名');
     await tester.testTextInput.receiveAction(TextInputAction.search);
@@ -174,7 +187,7 @@ void main() {
     service.sources['lightnovel']!.complete(1, '乙源新小说');
     await tester.pumpAndSettle();
     expect(find.text('新第0本'), findsOneWidget);
-    expect(find.text('新第1本'), findsNothing);
+    expect(find.text('新第1本'), findsOneWidget);
     expect(find.text('甲源第0本'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -199,6 +212,7 @@ void main() {
     expect(find.textContaining('已安装书源可继续使用'), findsNothing);
     await tester.tap(find.text('仍可阅读的小说'));
     await tester.pumpAndSettle();
+    await _chooseSource(tester);
     expect(service.selected?.title, '仍可阅读的小说');
   });
 
@@ -225,6 +239,8 @@ void main() {
       for (final source in service.sources.values)
         source.complete(0, '${source.source}结果');
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byType(PopupMenuButton<String>).first);
+      await tester.pump();
       await tester.tap(find.byType(PopupMenuButton<String>).first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('打开书籍链接'));
@@ -254,10 +270,12 @@ void main() {
       await tester.pump();
       expect(find.text('源甲小说'), findsOneWidget);
       await tester.pump();
-      expect(find.byTooltip('查看番剧详情'), findsOneWidget);
-      expect(find.text('正在搜索…'), findsOneWidget);
+      expect(find.byTooltip('查看番剧详情'), findsNothing);
+      expect(find.text('1 个书源正在搜索…'), findsOneWidget);
       await tester.tap(find.text('源甲小说'));
       await tester.pumpAndSettle();
+      expect(find.byTooltip('查看番剧详情'), findsOneWidget);
+      await _chooseSource(tester);
       expect(service.selected!.sourceId, 'linovel');
       expect(service.boundEdition, 'already-reading');
       expect(find.text('确认对应小说和版本'), findsNothing);
@@ -275,6 +293,8 @@ void main() {
         source.complete(0, '${source.source}结果');
       }
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byType(PopupMenuButton<String>).first);
+      await tester.pump();
       await tester.tap(find.byType(PopupMenuButton<String>).first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('打开书籍链接'));
@@ -304,6 +324,8 @@ void main() {
       );
       service.sources['lightnovel']!.complete(0, '公开小说');
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('首次登录'));
+      await tester.pump();
       await tester.tap(find.text('首次登录'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).at(1), 'reader');
@@ -340,6 +362,8 @@ void main() {
       expect(find.text('过期结果'), findsNothing);
       expect(find.text('linovel新结果'), findsOneWidget);
       await tester.enterText(find.byType(TextField), '未提交的词');
+      await tester.ensureVisible(find.byType(PopupMenuButton<String>).first);
+      await tester.pump();
       await tester.tap(find.byType(PopupMenuButton<String>).first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('重新搜索'));

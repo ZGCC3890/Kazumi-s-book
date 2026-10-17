@@ -80,7 +80,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused) {
-      unawaited(_save().then((_) => service.syncAutomatically()));
+      unawaited(_save());
     }
   }
 
@@ -338,7 +338,6 @@ class _NovelReaderPageState extends State<NovelReaderPage>
       if (!leaveWithoutWriting && !await _save()) return;
       await widget.onLeave?.call(Set.unmodifiable(_readChapters));
       if (mounted) setState(() => _leaving = true);
-      unawaited(service.syncAutomatically());
       if (mounted) Navigator.pop(context);
     } catch (error) {
       if (mounted) {
@@ -982,7 +981,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
                     content: Text('云同步未完成：${service.syncError}'),
                     actions: [
                       TextButton(
-                        onPressed: service.syncAutomatically,
+                        onPressed: service.retrySync,
                         child: const Text('重试'),
                       ),
                     ],

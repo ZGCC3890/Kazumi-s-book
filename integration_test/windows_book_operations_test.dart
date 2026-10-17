@@ -127,10 +127,15 @@ void main() {
     await type(tester, find.byType(TextField).first, 'Fixture');
     await screenshot(tester, 'novel-query-before-submit');
     await click(tester, find.byTooltip('搜索'));
-    await visible(tester, find.text('Author A'));
-    await visible(tester, find.text('Author C'));
+    await visible(tester, find.text('葬送的芙莉莲'));
     await screenshot(tester, 'novel-query-after-submit');
-    await text(tester, 'Author A');
+    await text(tester, '葬送的芙莉莲');
+    await visible(tester, find.text('小说详情'));
+    await text(tester, '选择书源阅读');
+    await visible(tester, find.textContaining('Author A'));
+    await visible(tester, find.textContaining('Author C'));
+    await screenshot(tester, 'novel-details-source-choice');
+    await text(tester, 'Fixture Source A');
     await visible(tester, find.byType(NovelReaderPage));
     final reader = tester.widget<NovelReaderPage>(find.byType(NovelReaderPage));
     final novels = inject<NovelService>();
@@ -181,6 +186,17 @@ void main() {
     await screenshot(tester, 'reader-resumed');
     await click(tester, find.textContaining('Chapter 2 opening'));
     await back(tester);
+    await click(tester, find.byTooltip('小说操作'));
+    await text(tester, '删除书籍');
+    await text(tester, '取消');
+    expect(novels.isShelved(reader.editionId), isTrue);
+    await click(tester, find.byTooltip('小说操作'));
+    await text(tester, '删除书籍');
+    await text(tester, '删除');
+    expect(novels.isShelved(reader.editionId), isFalse);
+    expect(novels.position(reader.editionId)!.chapter.title, 'Chapter 2');
+    expect(novels.bookmarks(reader.editionId).any((mark) => mark['note'] == 'WindowsBookmark'), isTrue);
+    await screenshot(tester, 'bookshelf-removed-progress-kept');
     await click(tester, find.descendant(of: find.byType(NavigationRail),
         matching: find.byIcon(Icons.settings_outlined)));
     await click(tester, find.byTooltip('全部设置'));
@@ -204,6 +220,8 @@ void main() {
     await text(tester, '返回同步设置');
     await text(tester, '启用 WebDAV');
     await text(tester, '小说阅读进度与书签');
+    await visible(tester, find.text('已启用小说手动同步'));
+    await text(tester, '立即同步小说');
     await visible(tester, find.text('小说阅读进度与书签已同步'));
     final davHttp = HttpClient();
     try {

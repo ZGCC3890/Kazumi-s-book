@@ -157,6 +157,10 @@ class XPathNovelAdapter implements NovelSourceAdapter {
         (login.isNotEmpty && root.queryXPath(login).nodes.isNotEmpty)) {
       throw const NovelLoginRequired();
     }
+    if (rule.json.containsKey('errorXPath')) {
+      final message = _text(root, rule.json['errorXPath'] as String);
+      if (message.isNotEmpty) throw StateError(message);
+    }
     return root;
   }
 

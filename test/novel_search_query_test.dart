@@ -22,4 +22,17 @@ void main() {
       expect(novelQueryFromAnime(title), title);
     }
   });
+
+  test('novel editions and paired subtitles use the shared work title', () {
+    for (final title in [
+      '辉夜大小姐想让我告白～天才们的恋爱头脑战～',
+      '辉夜大小姐想让我告白小说版 ～秀知院学园的七大不可思议～',
+      '辉夜大小姐想让我告白 小説版 ~秀知院学園七不思議~',
+    ]) {
+      expect(novelQueryFromAnime(title), '辉夜大小姐想让我告白');
+    }
+    expect(novelQueryFromAnime('辉夜姬想让人告白 小說版'), '辉夜姬想让人告白');
+    expect(novelQueryFromAnime('～'), '～');
+    expect(novelQueryFromAnime('小说版'), '小说版');
+  });
 }

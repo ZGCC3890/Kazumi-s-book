@@ -77,6 +77,13 @@ appId: com.zgcc.kazumisbook
                 from:
                   text: "(?s).*小说阅读进度与书签.*"
                 direction: UP
+      - scrollUntilVisible:
+          element: "立即同步小说"
+          direction: DOWN
+          timeout: 2000
+      - tapOn:
+          text: "立即同步小说"
+          waitToSettleTimeoutMs: 100
       - extendedWaitUntil:
           visible: "小说阅读进度与书签已同步"
           timeout: 15000

@@ -35,6 +35,12 @@ class _Anime extends SearchPageController {
   final queries = <String>[];
   Completer<void>? pending;
   Completer<void>? filterSave;
+  final remembered = <String>[];
+  @override
+  Future<void> rememberSearch(String input) async {
+    remembered.add(input);
+    runInAction(() => searchHistories.insert(0, SearchHistory(input, 2)));
+  }
   @override
   Future<void> setNotShowWatchedBangumis(bool value) async {
     if (filterSave != null) await filterSave!.future;
@@ -174,7 +180,7 @@ class _Novels extends NovelService {
     Set<String> chapters,
   ) async => 1;
   @override
-  Future<void> syncAutomatically() async {}
+  Future<void> retrySync() async {}
 }
 
 Future<void> _open(
@@ -268,12 +274,13 @@ void main() {
         tester.widget<TextField>(find.byType(TextField)).controller!.text,
         '',
       );
-      expect(find.text('番剧专属历史'), findsNothing);
+      expect(find.text('番剧专属历史'), findsOneWidget);
       expect(find.byTooltip('以图搜番'), findsNothing);
       expect(find.byTooltip('小说规则'), findsOneWidget);
       const query = '小说 tag:冒险 sort:rank';
       await _submit(tester, query);
       expect(novels.source.requests.single.$1, query);
+      expect(anime.remembered, [query]);
       expect(anime.queries, ['番剧书名']);
       novels.source.finish(0, '独立小说结果');
       await tester.pumpAndSettle();
@@ -314,6 +321,26 @@ void main() {
     },
   );
 
+  testWidgets('history is visible in both modes and a history click uses the active domain', (tester) async {
+    final anime = _Anime(), novels = _Novels();
+    await _open(tester, anime, novels);
+    await _switch(tester, '小说');
+    await tester.tap(find.text('番剧专属历史'));
+    await tester.pump();
+    expect(novels.source.requests.single.$1, '番剧专属历史');
+    expect(anime.queries, isEmpty);
+    novels.source.finish(0, '历史小说');
+    await tester.pumpAndSettle();
+    await _submit(tester, '新小说历史');
+    novels.source.finish(1, '新小说');
+    await tester.pumpAndSettle();
+    await _switch(tester, '番剧');
+    expect(find.text('新小说历史'), findsOneWidget);
+    await tester.tap(find.text('新小说历史'));
+    await tester.pumpAndSettle();
+    expect(anime.queries, ['新小说历史']);
+  });
+
   testWidgets(
     'selecting a novel opens the reader and returning keeps the main search page',
     (tester) async {
@@ -324,6 +351,12 @@ void main() {
       novels.source.finish(0, '直接阅读的小说');
       await tester.pumpAndSettle();
       await tester.tap(find.text('直接阅读的小说'));
+      await tester.pumpAndSettle();
+      expect(novels.selected, isNull);
+      expect(find.text('小说详情'), findsOneWidget);
+      await tester.tap(find.text('选择书源阅读'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('novel-source-linovel-https://test/直接阅读的小说')));
       await tester.pumpAndSettle();
       expect(find.byType(NovelReaderPage), findsOneWidget);
       await tester.tapAt(const Offset(240, 450));

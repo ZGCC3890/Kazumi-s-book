@@ -75,14 +75,7 @@ abstract class _SearchPageController with Store {
       bangumiList.clear();
       _searchOffset = 0;
       hasMoreSearchResults = true;
-      if (!_collectRepository.getPrivateMode() && input.trim().isNotEmpty) {
-        await _searchHistoryRepository.deleteDuplicates(input);
-        if (_searchHistoryRepository.isHistoryFull(10)) {
-          await _searchHistoryRepository.deleteOldest();
-        }
-        await _searchHistoryRepository.saveHistory(input);
-        loadSearchHistories();
-      }
+      await rememberSearch(input);
     }
     if (generation != _searchGeneration) return;
     final filterState = SearchParser(input).toFilterState();
@@ -143,6 +136,16 @@ abstract class _SearchPageController with Store {
   @action
   Future<void> deleteSearchHistory(SearchHistory history) async {
     await _searchHistoryRepository.deleteHistory(history);
+    loadSearchHistories();
+  }
+
+  Future<void> rememberSearch(String input) async {
+    if (_collectRepository.getPrivateMode() || input.trim().isEmpty) return;
+    await _searchHistoryRepository.deleteDuplicates(input);
+    if (_searchHistoryRepository.isHistoryFull(10)) {
+      await _searchHistoryRepository.deleteOldest();
+    }
+    await _searchHistoryRepository.saveHistory(input);
     loadSearchHistories();
   }
 

@@ -39,5 +39,5 @@ abstract interface class NovelReaderStore implements Listenable {
   Future<void> resolve(String key, NovelRevision selected, {
     required String expectedToken,
   });
-  Future<void> syncAutomatically();
+  Future<void> retrySync();
 }

@@ -28,7 +28,9 @@ class NovelAnimeResolver {
       anime.type == 2 &&
       [anime.name, anime.nameCn, ...anime.alias]
           .where((name) => name.isNotEmpty)
-          .any((name) => titleKey(name) == titleKey(title));
+          .expand(novelTitleVariants)
+          .any((name) => novelTitleVariants(title)
+              .any((variant) => titleKey(name) == titleKey(variant)));
 
   static Future<BangumiSearchPage> _searchAnime(
     String title,
