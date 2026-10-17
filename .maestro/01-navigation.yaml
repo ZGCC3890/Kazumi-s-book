@@ -149,7 +149,7 @@ appId: com.zgcc.kazumisbook
     commands:
       - swipe:
           from:
-            text: "网络设置"
+            text: "界面设置"
           direction: UP
 - scrollUntilVisible:
     element: "(?s).*更新设置.*"
@@ -163,7 +163,7 @@ appId: com.zgcc.kazumisbook
     commands:
       - swipe:
           from:
-            text: "网络设置"
+            text: "界面设置"
           direction: UP
 - scrollUntilVisible:
     element: "(?s).*存储与日志.*"
@@ -177,7 +177,7 @@ appId: com.zgcc.kazumisbook
     commands:
       - swipe:
           from:
-            text: "网络设置"
+            text: "界面设置"
           direction: UP
 - scrollUntilVisible:
     element: "(?s).*关于.*"

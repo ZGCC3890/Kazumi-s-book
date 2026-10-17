@@ -25,6 +25,15 @@ appId: com.zgcc.kazumisbook
 - assertVisible: "关闭插图"
 - takeScreenshot: build/android-ui/reader-illustration
 - tapOn: "关闭插图"
+# Compare text anchors after scrolling past the leading illustration.
+- swipe:
+    start: "50%,70%"
+    end: "50%,20%"
+    duration: 600
+- swipe:
+    start: "50%,70%"
+    end: "50%,20%"
+    duration: 600
 - swipe:
     start: "2%,80%"
     end: "2%,30%"
