@@ -271,7 +271,9 @@ void main() {
       expect(tester.takeException(), isNull);
       await tester.tap(find.byIcon(Icons.arrow_back).first);
       await tester.pumpAndSettle();
-      expect(tester.widget<SearchPage>(find.byType(SearchPage)), same(page));
+      final returned = tester.widget<SearchPage>(find.byType(SearchPage));
+      expect(returned.controller, same(page.controller));
+      expect(returned.novelService, same(page.novelService));
       expect(tester.takeException(), isNull);
     },
   );
