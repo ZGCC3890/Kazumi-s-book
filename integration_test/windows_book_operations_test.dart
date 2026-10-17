@@ -79,10 +79,10 @@ Future<void> category(WidgetTester tester, String label, {double delta = 200}) a
 Future<void> back(WidgetTester tester) =>
     click(tester, find.byIcon(Icons.arrow_back));
 
-Future<void> screenshot(WidgetTester tester, String name) async {
+Future<void> screenshot(WidgetTester tester, String name, {Finder? boundaryFinder}) async {
   await tester.pump();
   final boundary = tester.renderObject<RenderRepaintBoundary>(
-    find.byType(RepaintBoundary).first,
+    boundaryFinder ?? find.byType(RepaintBoundary).first,
   );
   final image = await boundary.toImage();
   final png = await image.toByteData(format: ui.ImageByteFormat.png);
@@ -120,6 +120,11 @@ void main() {
     await text(tester, '添加规则');
     await text(tester, '从剪贴板导入');
     await text(tester, '导入规则');
+    await text(tester, 'Fixture Source A');
+    await visible(tester, find.text('打开书源网站 / 注册'));
+    await screenshot(tester, 'source-account-manager', boundaryFinder: find.ancestor(
+      of: find.byType(AlertDialog), matching: find.byType(RepaintBoundary)).first);
+    await text(tester, '取消');
     await visible(tester, find.text('Fixture Source A'));
     await back(tester);
     await tester.pump(const Duration(milliseconds: 300));
@@ -147,6 +152,13 @@ void main() {
     await until(tester, () => novels.position(reader.editionId)!.textOffset > 0,
         'Dragging the native Windows reader margin must advance the stored anchor');
     final beforeKey = novels.position(reader.editionId)!.textOffset;
+    final scrollFinder = find.descendant(of: find.byType(NovelReaderPage), matching: find.byType(CustomScrollView));
+    final scroll = tester.widget<CustomScrollView>(scrollFinder).controller!;
+    await tester.fling(scrollFinder, const Offset(0, -240), 1500);
+    await tester.pump();
+    final released = scroll.offset;
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(scroll.offset, greaterThan(released), reason: 'Native reader must continue moving after touch release');
     await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
     await until(tester, () => novels.position(reader.editionId)!.textOffset > beforeKey,
         'Native Windows PageDown must advance reading');
@@ -200,6 +212,10 @@ void main() {
     await click(tester, find.descendant(of: find.byType(NavigationRail),
         matching: find.byIcon(Icons.settings_outlined)));
     await click(tester, find.byTooltip('全部设置'));
+    await category(tester, 'AI 作品关联');
+    await visible(tester, find.text('API Token'));
+    expect(tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, '启用 AI 作品关联')).value, false);
+    await screenshot(tester, 'ai-association-settings');
     await category(tester, '同步设置');
     await text(tester, '设置 WebDAV');
     await text(tester, '连接你的云盘');

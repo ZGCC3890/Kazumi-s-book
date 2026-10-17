@@ -123,6 +123,11 @@ class NovelHttpSession {
       spec['usernameField'] as String: username,
       spec['passwordField'] as String: password,
     });
+    await verify(rule);
+  }
+
+  Future<void> verify(NovelRule rule) async {
+    final spec = rule.json['login'] as NovelJson;
     final verified = await fetch(
       rule,
       spec['verifyUrl'] as String,
@@ -130,9 +135,8 @@ class NovelHttpSession {
       rule.headers,
       {},
     );
-    if (RegExp(
-          rule.json['loginRequiredUrlPattern'] as String,
-        ).hasMatch(verified.url) ||
+    final loginPattern = rule.json['loginRequiredUrlPattern'] as String;
+    if ((loginPattern.isNotEmpty && RegExp(loginPattern).hasMatch(verified.url)) ||
         html
                 .parse(verified.body)
                 .querySelector(spec['verifySelector'] as String) ==

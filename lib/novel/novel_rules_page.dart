@@ -11,6 +11,8 @@ import 'novel_rule_catalog_page.dart';
 import 'novel_rule_import.dart';
 import 'novel_rule_import_dialog.dart';
 import 'novel_service.dart';
+import 'novel_account_dialog.dart';
+import 'novel_ai_page.dart';
 
 Future<String> _readRuleText(String url) =>
     PluginSiteClient.instance.requestText(url, method: 'GET');
@@ -120,6 +122,9 @@ class _NovelRulesPageState extends State<NovelRulesPage> {
           const Text('我的规则', style: TextStyle(fontSize: 22)),
           const SizedBox(height: 8),
           const Text('默认书源自动获取。在这里管理已安装的小说来源，或添加更多规则。'),
+          ListTile(leading: const Icon(Icons.auto_awesome_outlined), title: const Text('AI 作品关联'),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => NovelAiPage(service: widget.service)))),
           const SizedBox(height: 16),
           TextField(
             controller: _search,
@@ -145,16 +150,20 @@ class _NovelRulesPageState extends State<NovelRulesPage> {
               title: Text(rule.name),
               subtitle: Text(Uri.parse(rule.json['searchUrl'] as String).host),
               leading: const Icon(Icons.menu_book_outlined),
+              onTap: _busy ? null : () => showNovelAccount(context, widget.service, rule.id),
               trailing: PopupMenuButton<String>(
                 tooltip: '管理${rule.name}',
                 enabled: !_busy,
                 itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'account', child: Text('书源账号与网站')),
                   PopupMenuItem(value: 'copy', child: Text('复制规则链接')),
                   PopupMenuItem(value: 'delete', child: Text('删除规则')),
                 ],
                 onSelected: (action) async {
                   if (action == 'delete') {
                     await _remove(rule);
+                  } else if (action == 'account') {
+                    await showNovelAccount(context, widget.service, rule.id);
                   } else {
                     await _run(() async {
                       await Clipboard.setData(ClipboardData(text: jsonToKazumiBase64(rule.encode())));

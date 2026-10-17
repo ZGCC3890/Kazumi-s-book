@@ -9,6 +9,7 @@ import 'package:hive_ce/hive.dart';
 import 'package:kazumi/novel/novel_locator.dart';
 import 'package:kazumi/novel/novel_models.dart';
 import 'package:kazumi/novel/novel_service.dart';
+import 'package:kazumi/novel/novel_ai.dart';
 import 'package:kazumi/novel/novel_webdav_exchange.dart';
 import 'package:kazumi/request/core/dio_factory.dart';
 import 'package:kazumi/services/storage/storage.dart';
@@ -232,6 +233,47 @@ void main() {
     expect(root.uri.pathSegments.where((part) => part.isNotEmpty).last,
       startsWith('kazumis_book_integration_'));
     await root.delete(recursive: true);
+  });
+
+  test('AI configuration and source account names remain local across restart and sync', () async {
+    var service = await device('private-config');
+    await seed(service);
+    const config = NovelAiSettings(enabled: true, endpoint: 'https://api.test',
+      model: 'test-model', token: 'private-fixture-token');
+    await service.saveAiSettings(config);
+    expect(service.aiSettings.toJson(), config.toJson());
+    expect(service.accountName('wenku8'), '');
+    final rule = jsonDecode(File('novel_rules/wenku8.json').readAsStringSync()) as Map<String, dynamic>;
+    rule['encoding'] = 'utf-8';
+    rule['login'] = {'url': '${remote.url}/login', 'usernameField': 'username',
+      'passwordField': 'password', 'fields': <String, String>{},
+      'verifyUrl': '${remote.url}/verified', 'verifySelector': '#ok'};
+    await service.importRule(jsonEncode(rule));
+    // The source transport is exercised below; only the remote endpoint is a fixture.
+    final interceptor = InterceptorsWrapper(onRequest: (request, handler) {
+      if (request.uri.path == '/login' || request.uri.path == '/verified') {
+        handler.resolve(Response(requestOptions: request, data: utf8.encode('<div id="ok"></div>'), statusCode: 200));
+      } else { handler.next(request); }
+    });
+    DioFactory.pluginDio.interceptors.add(interceptor);
+    try {
+      await service.login('wenku8', 'fixture-user', 'not-persisted-password');
+      await service.verifyAccount('wenku8');
+      expect(service.accountName('wenku8'), 'fixture-user');
+      service = await device('private-config');
+      expect(service.aiSettings.toJson(), config.toJson());
+      expect(service.accountName('wenku8'), 'fixture-user');
+      await sync(service);
+      final payloads = remote.files.values.map((bytes) => utf8.decode(bytes)).join();
+      expect(payloads, isNot(contains('private-fixture-token')));
+      expect(payloads, isNot(contains('fixture-user')));
+      expect(Hive.box<String>('novel_v1').values.join(), isNot(contains('not-persisted-password')));
+      await service.logout('wenku8');
+      expect(service.accountName('wenku8'), '');
+      final before = service.aiSettings.toJson();
+      await expectLater(service.saveAiSettings(const NovelAiSettings(enabled: true)), throwsFormatException);
+      expect(service.aiSettings.toJson(), before);
+    } finally { DioFactory.pluginDio.interceptors.remove(interceptor); }
   });
 
   test('first use installs separate rules once and retains deletion after restart', () async {

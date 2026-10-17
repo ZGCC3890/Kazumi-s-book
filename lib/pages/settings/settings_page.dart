@@ -68,6 +68,12 @@ const List<_SettingsGroup> _settingsGroups = [
         icon: Icons.downloading_rounded,
         path: '/settings/download-settings',
       ),
+      _SettingsCategory(
+        label: 'AI 作品关联',
+        description: '小说与番剧译名查询',
+        icon: Icons.auto_awesome_outlined,
+        path: '/settings/novel-ai',
+      ),
     ],
   ),
   _SettingsGroup(

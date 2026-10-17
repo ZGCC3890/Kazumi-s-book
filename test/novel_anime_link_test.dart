@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:dio/dio.dart';
+import 'package:kazumi/novel/novel_ai.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -35,6 +37,16 @@ BangumiItem _anime(
 class _Service extends NovelService {
   _Service(this.items) : super(WebDav());
   final List<BangumiItem> items;
+  @override NovelAiSettings get aiSettings => const NovelAiSettings(enabled: true, token: 'test-token');
+  @override Future<List<String>> suggestTitles(String title, {required bool toAnime,
+    NovelAiSettings? settings, CancelToken? cancelToken}) async => ['动画译名'];
+  Object? aiError;
+  List<BangumiItem> aiMatches = [];
+  @override Future<List<BangumiItem>> animeForTitle(String title) async {
+    expect(title, '动画译名');
+    if (aiError != null) throw aiError!;
+    return aiMatches;
+  }
   bool fail = false;
   int requests = 0, binds = 0;
   Completer<List<BangumiItem>>? pending;
@@ -81,6 +93,7 @@ Future<void> _open(
   _Service service,
   VoidCallback onRead, {
   ValueNotifier<NovelBook>? selection,
+  bool showAi = false,
 }) async {
   addTearDown(() async {
     await tester.pumpWidget(const SizedBox.shrink());
@@ -91,7 +104,7 @@ Future<void> _open(
       Widget row(NovelBook book) => ListTile(
         title: Text(book.title),
         onTap: onRead,
-        trailing: NovelAnimeLink(service: service, book: book),
+        trailing: NovelAnimeLink(service: service, book: book, showAi: showAi),
       );
       c.route(
         '/',
@@ -128,6 +141,35 @@ Future<void> _open(
 }
 
 void main() {
+  testWidgets('AI novel association confirms a name and opens the searched anime', (tester) async {
+    final service = _Service([])..aiMatches = [_anime(91, '动画译名')];
+    await _open(tester, service, () {}, showAi: true);
+    await tester.tap(find.byTooltip('AI 关联番剧'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('动画译名'));
+    await tester.pumpAndSettle();
+    expect(find.text('anime:91:动画译名'), findsOneWidget);
+    expect(service.binds, 0);
+  });
+  testWidgets('AI cancellation, no anime results and search errors remain explicit', (tester) async {
+    final service = _Service([]);
+    await _open(tester, service, () {}, showAi: true);
+    await tester.tap(find.byTooltip('AI 关联番剧'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('AI 关联番剧'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('动画译名'));
+    await tester.pumpAndSettle();
+    expect(find.text('没有搜索到这个名称的番剧'), findsOneWidget);
+    service.aiError = StateError('fixture search failed');
+    await tester.tap(find.byTooltip('AI 关联番剧'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('动画译名'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('fixture search failed'), findsOneWidget);
+  });
   group('novel to anime resolution', () {
     test('published novel names match verified anime aliases but not other Kaguya works', () {
       final anime = _anime(248175, '辉夜大小姐想让我告白～天才们的恋爱头脑战～', aliases: [

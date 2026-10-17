@@ -10,6 +10,8 @@ import 'package:kazumi/novel/novel_service.dart';
 import 'package:kazumi/bean/dialog/adaptive_bottom_sheet.dart';
 import 'package:kazumi/services/sync/webdav.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
+import 'package:kazumi/novel/novel_ai.dart';
+import 'package:dio/dio.dart';
 
 class _Adapter implements NovelSourceAdapter {
   _Adapter(this.source);
@@ -42,6 +44,11 @@ class _Adapter implements NovelSourceAdapter {
 
 class _Service extends NovelService {
   _Service() : super(WebDav());
+  @override String accountName(String sourceId) => '';
+  bool aiEnabled = false;
+  @override NovelAiSettings get aiSettings => NovelAiSettings(enabled: aiEnabled, token: 'test-token');
+  @override Future<List<String>> suggestTitles(String title, {required bool toAnime,
+    NovelAiSettings? settings, CancelToken? cancelToken}) async => ['AI 小说译名'];
   final sources = {
     'linovel': _Adapter('linovel'),
     'lightnovel': _Adapter('lightnovel'),
@@ -144,6 +151,55 @@ Future<void> _chooseSource(WidgetTester tester) async {
 }
 
 void main() {
+  for (final cancel in [false, true]) {
+    testWidgets('anime entry resolves AI name before querying sources (cancel: $cancel)', (tester) async {
+      final service = _Service()..aiEnabled = true;
+      addTearDown(service.dispose);
+      final anime = BangumiItem.fromJson({'id': 42, 'name': '原番剧名', 'name_cn': '原番剧名',
+        'rating': {'rank': 1, 'score': 8, 'total': 1}, 'images': <String, String>{}});
+      await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => Scaffold(
+        body: TextButton(onPressed: () => NovelEntry.open(context, anime, service),
+          child: const Text('阅读小说'))))));
+      await tester.tap(find.text('阅读小说'));
+      await tester.pumpAndSettle();
+      expect(service.sources.values.every((source) => source.requests.isEmpty), true);
+      await tester.tap(find.text(cancel ? '取消' : 'AI 小说译名'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      if (cancel) {
+        expect(find.byType(NovelSearchPage), findsNothing);
+      } else {
+        for (final source in service.sources.values) {
+          expect(source.requests.single.$1, 'AI 小说译名');
+          source.complete(0, '搜索到的小说');
+        }
+        await tester.pumpAndSettle();
+        expect(find.text('搜索到的小说'), findsOneWidget);
+      }
+    });
+  }
+  testWidgets('explicit AI action searches the selected candidate and cancelling keeps results', (tester) async {
+    final service = _Service()..aiEnabled = true;
+    await _open(tester, service);
+    for (final source in service.sources.values) { source.complete(0, '原作品'); }
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('AI 关联小说'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(service.sources['linovel']!.requests.length, 1);
+    await tester.tap(find.byTooltip('AI 关联小说'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('AI 小说译名'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    for (final source in service.sources.values) {
+      expect(source.requests.last.$1, 'AI 小说译名');
+      source.complete(1, '关联作品');
+    }
+    await tester.pumpAndSettle();
+    expect(find.text('关联作品'), findsOneWidget);
+  });
   testWidgets('same-ID default upgrade re-searches the changed source and ignores its old response', (tester) async {
     final service = _Service()..pendingDefaults = true..defaultInstallGate = Completer<void>();
     final oldAdapter = service.sources['linovel']!;
@@ -318,6 +374,9 @@ void main() {
     'system back during login can finish without touching a closed dialog',
     (tester) async {
       final service = _Service();
+      final rule = jsonDecode(File('novel_rules/linovel.json').readAsStringSync()) as Map<String, dynamic>;
+      rule['login'] = jsonDecode(File('novel_rules/wenku8.json').readAsStringSync())['login'];
+      service.ruleOverrides['linovel'] = NovelRule.decode(jsonEncode(rule));
       await _open(tester, service);
       service.sources['linovel']!.requests[0].$2.completeError(
         const NovelLoginRequired(),

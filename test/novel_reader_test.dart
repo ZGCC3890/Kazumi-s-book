@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kazumi/novel/novel_locator.dart';
@@ -161,12 +161,12 @@ Future<void> _open(WidgetTester tester, _ReaderStore store, {double scale = 1, b
 Future<void> _showControls(WidgetTester tester) async {
   if (find.byType(BackButton).evaluate().isNotEmpty) return;
   final size = tester.view.physicalSize / tester.view.devicePixelRatio;
-  final scrollMode = find.byType(ListView).evaluate().isNotEmpty;
+  final scrollMode = find.byType(CustomScrollView).evaluate().isNotEmpty;
   await tester.tapAt(Offset(scrollMode ? 4 : size.width / 2, size.height / 2));
   await tester.pumpAndSettle();
 }
 
-ScrollController _scroll(WidgetTester tester) => tester.widget<ListView>(find.byType(ListView).first).controller!;
+ScrollController _scroll(WidgetTester tester) => tester.widget<CustomScrollView>(find.byType(CustomScrollView).first).controller!;
 
 class _PopObserver extends NavigatorObserver {
   _PopObserver(this.onPop);
@@ -180,6 +180,48 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (_) async => null);
   });
+  testWidgets('scrolling within a line keeps the body and saved anchor unchanged', (tester) async {
+    final store = _ReaderStore({_one.url: List.generate(500,
+      (i) => NovelBlock.text('段落$i：${List.filled(8, '长章节滚动性能和惯性验证。').join()}'))});
+    await _open(tester, store);
+    final controller = _scroll(tester);
+    final body = tester.widget<ScrollView>(find.byWidgetPredicate(
+      (w) => w is ScrollView && w.controller == controller));
+    final writes = store.saved.length;
+    final clock = Stopwatch()..start();
+    for (var i = 1; i <= 20; i++) {
+      controller.jumpTo(i.toDouble());
+      await tester.pump(const Duration(milliseconds: 8));
+    }
+    clock.stop();
+    debugPrint('READER 500 paragraphs / 20 scroll frames: ${clock.elapsedMilliseconds}ms');
+    expect(tester.widget<ScrollView>(find.byWidgetPredicate(
+      (w) => w is ScrollView && w.controller == controller)), same(body));
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(store.saved.length, writes);
+  });
+
+  testWidgets('a fling keeps moving after release and persists its final anchor', (tester) async {
+    final store = _ReaderStore({_one.url: List.generate(500,
+      (i) => NovelBlock.text('第$i段：平滑惯性滚动与最后位置保存。'))});
+    await _open(tester, store, showControls: false);
+    final controller = _scroll(tester);
+    await tester.fling(find.byType(CustomScrollView), const Offset(0, -320), 1800);
+    await tester.pump();
+    var previous = controller.offset;
+    for (var frame = 0; frame < 12; frame++) {
+      await tester.pump(const Duration(microseconds: 8333));
+      expect(controller.offset, greaterThan(previous));
+      previous = controller.offset;
+    }
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 700));
+    final atRest = store.saved.last;
+    expect(atRest.textOffset, greaterThan(0));
+    await tester.pump(const Duration(seconds: 1));
+    expect(store.saved.last, same(atRest));
+  });
+
   for (final controlsVisible in [false, true]) {
     testWidgets('reader restores system insets before revealing the shelf (controls: $controlsVisible)', (tester) async {
       const bars = FakeViewPadding(top: 24, bottom: 24);
@@ -336,7 +378,7 @@ void main() {
       store.prefs['mode'] = readingMode;
       store.prefs['theme'] = 1;
       await _open(tester, store, themeMode: mode, showControls: false);
-      final body = find.byType(readingMode == 'scroll' ? ListView : PageView);
+      final body = find.byType(readingMode == 'scroll' ? CustomScrollView : PageView);
       await tester.drag(body, Offset(readingMode == 'scroll' ? 0 : -400,
         readingMode == 'scroll' ? -400 : 0));
       await tester.pumpAndSettle();
@@ -529,6 +571,32 @@ void main() {
     painter.dispose();
     expect(tester.takeException(), isNull);
   });
+
+  for (final mode in ['scroll', 'page']) {
+    for (final width in [411.0, 1008.0]) {
+      for (final scale in [1.0, 1.35, 2.0]) {
+        testWidgets('$mode rendered glyphs fit width $width at scale $scale', (tester) async {
+          final store = _ReaderStore({_one.url: [NovelBlock.text(
+            List.filled(12, '甲乙丙丁中文换行，ABCDE punctuation！混合文字。').join())]});
+          store.prefs['mode'] = mode;
+          await _open(tester, store, scale: scale, size: Size(width, 900));
+          final lines = find.byWidgetPredicate((w) => w is Text && w.maxLines == 1 &&
+            w.style?.fontSize == 20 && (w.data?.isNotEmpty ?? false));
+          expect(lines, findsWidgets);
+          for (final element in lines.evaluate()) {
+            final rich = find.descendant(of: find.byWidget(element.widget), matching: find.byType(RichText));
+            final paragraph = tester.renderObject<RenderParagraph>(rich);
+            final painter = TextPainter(text: paragraph.text, textDirection: paragraph.textDirection,
+              textScaler: paragraph.textScaler)..layout();
+            expect(painter.computeLineMetrics().single.width, lessThanOrEqualTo(paragraph.size.width + .01),
+              reason: 'The laid-out line and the actual rendered font must use identical metrics.');
+            painter.dispose();
+          }
+          expect(tester.takeException(), isNull);
+        });
+      }
+    }
+  }
 
   testWidgets('leaving without moving does not overwrite a causally newer remote position', (tester) async {
     final text = List.generate(30, (i) => '第$i段：在线同步之后没有继续移动阅读位置。').join('\n');

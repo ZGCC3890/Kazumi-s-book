@@ -79,6 +79,7 @@ class NovelLayout {
     var page = <int>[], used = 0.0;
     for (var i = 0; i < fragments.length; i++) {
       final fragment = fragments[i];
+      _tops.add(_tops.last + fragment.height);
       if (page.isNotEmpty && used + fragment.height > height) {
         pages.add(page);
         page = [];
@@ -91,6 +92,7 @@ class NovelLayout {
   }
   final List<NovelFragment> fragments = [];
   final List<List<int>> pages = [];
+  final List<double> _tops = [0];
 
   int fragmentAt(int offset, {int? imageBlock}) {
     if (imageBlock != null) {
@@ -105,14 +107,17 @@ class NovelLayout {
   }
 
   int pageOf(int fragment) => pages.indexWhere((p) => p.contains(fragment));
-  double pixelsBefore(int fragment) =>
-      fragments.take(fragment).fold(0.0, (sum, f) => sum + f.height);
+  double pixelsBefore(int fragment) => _tops[fragment];
   int atPixels(double pixels) {
-    var top = 0.0;
-    for (var i = 0; i < fragments.length; i++) {
-      if (top + fragments[i].height > pixels) return i;
-      top += fragments[i].height;
+    var low = 0, high = fragments.length;
+    while (low < high) {
+      final middle = (low + high) ~/ 2;
+      if (_tops[middle + 1] > pixels) {
+        high = middle;
+      } else {
+        low = middle + 1;
+      }
     }
-    return fragments.length - 1;
+    return low.clamp(0, fragments.length - 1);
   }
 }

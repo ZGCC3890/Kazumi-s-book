@@ -16,6 +16,7 @@ import 'package:kazumi/pages/index_module.dart';
 import 'package:kazumi/pages/menu/menu.dart';
 import 'package:kazumi/pages/collect/collect_library_tabs.dart';
 import 'package:kazumi/novel/novel_library_page.dart';
+import 'package:kazumi/novel/novel_ai_page.dart';
 import 'package:kazumi/navigation.dart';
 import 'package:kazumi/pages/about/about_page.dart';
 import 'package:kazumi/pages/logs/logs_page.dart';
@@ -173,6 +174,7 @@ void main() {
   });
 
   final categories = <String, Type>{
+    'AI 作品关联': NovelAiPage,
     '播放设置': PlayerSettingsPage,
     '弹幕设置': DanmakuSettingsPage,
     '操作设置': KeyboardSettingsPage,

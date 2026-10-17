@@ -40,6 +40,8 @@ class NovelRule {
   final NovelJson json;
   String get id => json['id'] as String;
   String get name => json['name'] as String;
+  Uri get website => Uri.parse(json['websiteUrl'] as String? ??
+    Uri.parse(headers['Referer'] ?? json['searchUrl'] as String).origin);
   String get directBookUrlPattern => json['directBookUrlPattern'] as String;
   Map<String, String> get headers =>
       Map<String, String>.from(json['headers'] as Map);
@@ -59,6 +61,12 @@ class NovelRule {
     final uri = Uri.parse(j['searchUrl'] as String);
     if (!['http', 'https'].contains(uri.scheme) || uri.host.isEmpty) {
       throw const FormatException('搜索地址必须是 HTTP(S) URL');
+    }
+    if (j.containsKey('websiteUrl')) {
+      final website = Uri.parse(j['websiteUrl'] as String);
+      if (!['http', 'https'].contains(website.scheme) || website.host.isEmpty) {
+        throw const FormatException('书源网站地址必须是 HTTP(S) URL');
+      }
     }
     if (!['GET', 'POST'].contains(j['searchMethod'])) {
       throw const FormatException('searchMethod 必须是 GET 或 POST');

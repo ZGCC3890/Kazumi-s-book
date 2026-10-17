@@ -102,7 +102,7 @@ class _NovelSearchDetailPageState extends State<NovelSearchDetailPage> {
           if (book.author.isNotEmpty)
             Padding(padding: const EdgeInsets.only(top: 8),
               child: Text(book.author, textAlign: TextAlign.center)),
-          Center(child: NovelAnimeLink(service: widget.service, book: book)),
+          Center(child: NovelAnimeLink(service: widget.service, book: book, showAi: true)),
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: () => setState(() => _choosing = !_choosing),

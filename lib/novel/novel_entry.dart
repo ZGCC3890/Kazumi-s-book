@@ -10,6 +10,8 @@ import 'novel_search_query.dart';
 import 'novel_search_results.dart';
 import 'novel_rules_page.dart';
 import 'novel_conflicts.dart';
+import 'novel_account_dialog.dart';
+import 'novel_ai_page.dart';
 
 class NovelEntry {
   static Future<void> conflicts(
@@ -57,11 +59,17 @@ class NovelEntry {
     if (!context.mounted) return;
     final ids = service.boundEditions(anime.id);
     if (ids.isEmpty) {
+      var query = novelQueryFromAnime(anime.nameCn.isEmpty ? anime.name : anime.nameCn);
+      if (service.aiSettings.enabled) {
+        final selected = await chooseAiTitle(context, service, query, toAnime: false);
+        if (selected == null || !context.mounted) return;
+        query = selected;
+      }
       await search(
         context,
         service,
         anime.id,
-        novelQueryFromAnime(anime.nameCn.isEmpty ? anime.name : anime.nameCn),
+        query,
       );
       return;
     }
@@ -353,81 +361,8 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
 
   Future<void> _login(String source) async {
     final owner = ModalRoute.of(context)!;
-    final username = TextEditingController();
-    final password = TextEditingController();
-    var busy = false;
-    String? error;
-    final dialog = DialogRoute<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, update) => AlertDialog(
-          title: Text('登录${widget.service.rule(source).name}'),
-          content: SizedBox(
-            width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('只需首次登录；会话保存在本机，账号密码不上传至规则仓库或云同步。会话过期后才需要重新登录。'),
-                TextField(
-                  controller: username,
-                  enabled: !busy,
-                  autocorrect: false,
-                  decoration: const InputDecoration(labelText: '书源用户名'),
-                ),
-                TextField(
-                  controller: password,
-                  enabled: !busy,
-                  obscureText: true,
-                  enableSuggestions: false,
-                  autocorrect: false,
-                  decoration: const InputDecoration(labelText: '密码'),
-                ),
-                if (busy) const LinearProgressIndicator(),
-                if (error != null) Text(error!),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: busy ? null : () => Navigator.pop(ctx, false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: busy
-                  ? null
-                  : () async {
-                      final loginOwner = ModalRoute.of(ctx)!;
-                      update(() {
-                        busy = true;
-                        error = null;
-                      });
-                      try {
-                        await widget.service.login(
-                          source,
-                          username.text.trim(),
-                          password.text,
-                        );
-                        if (ctx.mounted && loginOwner.isActive) Navigator.pop(ctx, true);
-                      } catch (failure) {
-                        if (ctx.mounted && loginOwner.isActive)
-                          update(() {
-                            busy = false;
-                            error = failure.toString();
-                          });
-                      }
-                    },
-              child: const Text('登录并搜索'),
-            ),
-          ],
-        ),
-      ),
-    );
-    final loggedIn = await Navigator.of(context).push(dialog);
-    await dialog.completed;
-    password.clear();
-    username.dispose();
-    password.dispose();
+    final loggedIn = await showNovelAccount(context, widget.service, source,
+      submitLabel: '登录并搜索');
     if (loggedIn == true && mounted && owner.isActive) {
       final generation = _generation;
       setState(() {
@@ -561,6 +496,13 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
       automaticallyImplyLeading: false,
       title: const Text('小说搜索'),
       actions: [
+        IconButton(tooltip: 'AI 关联小说', icon: const Icon(Icons.auto_awesome_outlined),
+          onPressed: _busy ? null : () async {
+            final title = await chooseAiTitle(context, widget.service, _query.text, toAnime: false);
+            if (title == null || !mounted) return;
+            _query.text = title;
+            await _search();
+          }),
         IconButton(
           tooltip: '管理小说规则',
           onPressed: _busy ? null : _manageRules,

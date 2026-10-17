@@ -74,6 +74,23 @@ appId: com.zgcc.kazumisbook
     index: 1
 - assertVisible: "(?s).*Fixture Source A.*"
 - assertVisible: "(?s).*Fixture Source C.*"
+- tapOn:
+    text: "(?s).*Fixture Source A.*"
+    waitToSettleTimeoutMs: 100
+- assertVisible: "打开书源网站 / 注册"
+- assertVisible: "(?s).*未声明客户端登录和验证协议.*"
+- takeScreenshot: build/android-ui/source-account-manager
+- tapOn:
+    text: "取消"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    text: "AI 作品关联"
+    waitToSettleTimeoutMs: 100
+- assertVisible: "API Token"
+- assertVisible: "验证连接"
+- takeScreenshot: build/android-ui/ai-association-settings
+- back
+- assertVisible: "添加规则"
 # The import snackbar moves the FAB by 48 px. Wait until its transition and
 # display end before Maestro captures the next button's screen coordinates.
 # Flutter's actual snackbar display duration is 4 seconds.

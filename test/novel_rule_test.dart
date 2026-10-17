@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kazumi/novel/novel_models.dart';
 import 'package:kazumi/novel/novel_locator.dart';
@@ -9,6 +10,19 @@ const _chapter = NovelChapter(url: 'https://initial.test/chapter',
     title: '第一章', volume: '第一卷', kind: 'chapter', number: 1);
 
 void main() {
+  test('source websites honor explicit metadata and declared referer or search origins', () {
+    expect(_rule('wenku8').website.toString(), 'https://www.wenku8.net');
+    expect(_rule('syosetu').website.toString(), 'https://syosetu.com');
+    final json = jsonDecode(_rule('linovel').encode()) as Map<String, dynamic>;
+    json['headers'] = <String, String>{};
+    expect(NovelRule.decode(jsonEncode(json)).website.toString(), 'https://www.linovel.net');
+    json['websiteUrl'] = 'https://source.test/register';
+    expect(NovelRule.decode(jsonEncode(json)).website.path, '/register');
+    for (final address in ['file:///tmp/test', 'https:']) {
+      json['websiteUrl'] = address;
+      expect(() => NovelRule.decode(jsonEncode(json)), throwsFormatException);
+    }
+  });
   test('owned English chapter titles retain nullable catalog numbers', () {
     for (final title in ['Chapter 1', 'Chapter 2', 'Chapter 3']) {
       expect(NovelLocator.numberOf(title), isNull);

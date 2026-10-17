@@ -46,6 +46,8 @@ class _NovelReaderPageState extends State<NovelReaderPage>
   ScrollController? _scroll;
   PageController? _pages;
   int? _restoreImageBlock;
+  late String _normalizedText, _chapterDigest, _serviceStatus;
+  final Map<int, String> _imageHashes = {};
   String get _text => _blocks.where((b) => !b.image).map((b) => b.value).join();
   // The former standalone night preset now uses paper white in app light mode.
   int get _dayTheme => _prefs['theme'] == 3 ? 0 : _prefs['theme'] as int;
@@ -54,13 +56,17 @@ class _NovelReaderPageState extends State<NovelReaderPage>
   void initState() {
     super.initState();
     _prefs = service.preferences;
+    _serviceStatus = _status;
     WidgetsBinding.instance.addObserver(this);
     service.addListener(_serviceChanged);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     unawaited(_open());
   }
 
+  String get _status => '${service.state.revisions('position/${widget.editionId}').length > 1}/${service.syncError}';
   void _serviceChanged() {
+    if (_serviceStatus == _status) return;
+    _serviceStatus = _status;
     if (mounted) setState(() {});
   }
 
@@ -184,6 +190,11 @@ class _NovelReaderPageState extends State<NovelReaderPage>
       _startAtEnd = startAtEnd;
       _initialSavePending = true;
       _blocks = blocks;
+      _normalizedText = NovelLocator.normalize(_text);
+      _chapterDigest = NovelLocator.digest(_text);
+      _imageHashes
+        ..clear()
+        ..addAll(images.map((index, bytes) => MapEntry(index, sha256.convert(bytes).toString())));
       _images
         ..clear()
         ..addAll(images);
@@ -267,25 +278,26 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     }
   }
 
-  void _moved(int fragment) {
+  void _moved(int fragment, {bool force = false}) {
     if (_restoring || _layout == null || fragment < 0) return;
+    if (!force && fragment == _fragment) return;
     _fragment = fragment;
     final f = _layout!.fragments[fragment];
     _restoreImageBlock = f.image ? f.block : null;
-    _location = NovelLocator.capture(
+    _location = NovelLocator.capturePrepared(
       editionId: widget.editionId,
       sourceId: widget.book.sourceId,
       chapter: _chapters[_chapterIndex],
-      text: _text,
+      normalized: _normalizedText,
+      chapterDigest: _chapterDigest,
       offset: f.offset,
       updatedAt: DateTime.now().millisecondsSinceEpoch,
-      imageHash: f.image ? sha256.convert(_images[f.block]!).toString() : null,
+      imageHash: f.image ? _imageHashes[f.block]! : null,
     );
     _saveTimer ??= Timer(const Duration(milliseconds: 600), () {
       _saveTimer = null;
       unawaited(_save());
     });
-    setState(() {});
   }
 
   Future<bool> _save() async {
@@ -851,7 +863,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
         // Reflow preserves the exact semantic anchor; only user movement updates it.
         if (_initialSavePending) {
           _initialSavePending = false;
-          if (startAtEnd) _moved(_fragment);
+          if (startAtEnd) _moved(_fragment, force: true);
           unawaited(_save());
         }
       });
@@ -859,13 +871,21 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     if (_prefs['mode'] == 'scroll') {
       return SelectionArea(
         child: _readerGestures(
-          ListView(
+          CustomScrollView(
             key: ValueKey(key),
             controller: _scroll,
-            padding: EdgeInsets.symmetric(horizontal: inset),
-            children: [
-              for (final f in _layout!.fragments) _fragmentWidget(f, style),
-              Row(
+            slivers: [
+              SliverPadding(
+                padding: EdgeInsets.symmetric(horizontal: inset),
+                sliver: SliverVariedExtentList.builder(
+                  itemCount: _layout!.fragments.length,
+                  itemExtentBuilder: (index, _) => _layout!.fragments[index].height,
+                  itemBuilder: (_, index) => _fragmentWidget(_layout!.fragments[index], style),
+                ),
+              ),
+              SliverPadding(
+                padding: EdgeInsets.symmetric(horizontal: inset),
+                sliver: SliverToBoxAdapter(child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   TextButton(
@@ -879,6 +899,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
                     child: const Text('下一章'),
                   ),
                 ],
+                )),
               ),
             ],
           ),
@@ -917,6 +938,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
         ? (theme.colorScheme.surface, theme.colorScheme.onSurface)
         : palette[_dayTheme];
     final style = TextStyle(
+      inherit: false,
       fontSize: (_prefs['fontSize'] as num).toDouble(),
       height: (_prefs['lineHeight'] as num).toDouble(),
       color: colors.$2,

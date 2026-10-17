@@ -3,6 +3,7 @@ import 'package:flutter_modular/flutter_modular.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 import 'novel_models.dart';
 import 'novel_service.dart';
+import 'novel_ai_page.dart';
 
 class NovelAnimeLink extends StatefulWidget {
   const NovelAnimeLink({
@@ -10,10 +11,12 @@ class NovelAnimeLink extends StatefulWidget {
     required this.service,
     required this.book,
     this.editionId,
+    this.showAi = false,
   });
   final NovelService service;
   final NovelBook book;
   final String? editionId;
+  final bool showAi;
   @override
   State<NovelAnimeLink> createState() => _NovelAnimeLinkState();
 }
@@ -93,8 +96,30 @@ class _NovelAnimeLinkState extends State<NovelAnimeLink> {
     }
   }
 
+  Future<void> _ai() async {
+    final title = await chooseAiTitle(context, widget.service, widget.book.title, toAnime: true);
+    if (title == null || !mounted) return;
+    try {
+      final matches = await widget.service.animeForTitle(title);
+      if (!mounted) return;
+      if (matches.isEmpty) {
+        _message('没有搜索到这个名称的番剧');
+        return;
+      }
+      await _open(matches);
+    } catch (error) {
+      if (mounted) _message(error.toString());
+    }
+  }
+
+  void _message(String message) => ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(message)));
+
   @override
-  Widget build(BuildContext context) => FutureBuilder<List<BangumiItem>>(
+  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
+    if (widget.showAi) IconButton(tooltip: 'AI 关联番剧', icon: const Icon(Icons.auto_awesome_outlined), onPressed: _ai),
+    FutureBuilder<List<BangumiItem>>(
     future: _matches,
     builder: (context, snapshot) {
       if (snapshot.connectionState != ConnectionState.done) {
@@ -124,5 +149,5 @@ class _NovelAnimeLinkState extends State<NovelAnimeLink> {
         onPressed: () => _open(snapshot.data!),
       );
     },
-  );
+  )]);
 }

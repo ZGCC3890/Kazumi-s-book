@@ -75,6 +75,26 @@ Future<void> _add(WidgetTester tester, String option) async {
 }
 
 void main() {
+  testWidgets('rule cards and menus open the same account manager and AI settings', (tester) async {
+    final service = _Rules();
+    await service.importRules([NovelRule.decode(_raw)]);
+    await _open(tester, service);
+    await tester.tap(find.text('轻之文库（中文原创）'));
+    await tester.pumpAndSettle();
+    expect(find.text('打开书源网站 / 注册'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('书源账号与网站'));
+    await tester.pumpAndSettle();
+    expect(find.text('打开书源网站 / 注册'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('AI 作品关联'));
+    await tester.pumpAndSettle();
+    expect(find.text('API Token'), findsOneWidget);
+  });
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory root;
   late PathProviderPlatform paths;

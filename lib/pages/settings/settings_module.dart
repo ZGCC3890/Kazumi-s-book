@@ -25,6 +25,8 @@ import 'package:kazumi/pages/settings/theme_settings_page.dart';
 import 'package:kazumi/pages/settings/update_settings.dart';
 import 'package:kazumi/request/config/api_endpoints.dart';
 import 'package:kazumi/services/sync/danmaku_shield_sync_service.dart';
+import 'package:kazumi/novel/novel_ai_page.dart';
+import 'package:kazumi/novel/novel_service.dart';
 
 final settingsModule = createModule(
   path: '/settings',
@@ -36,6 +38,7 @@ final settingsModule = createModule(
         sub
           ..route('/', child: (context, state) => const SettingsIndexPage())
           ..route('/sync', child: (context, state) => const SyncSettingsPage())
+          ..route('/novel-ai', child: (context, state) => NovelAiPage(service: inject<NovelService>()))
           ..route('/bangumi/',
               child: (context, state) => const BangumiSyncPage())
           ..route('/webdav/',

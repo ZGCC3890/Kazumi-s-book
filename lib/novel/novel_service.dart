@@ -15,14 +15,36 @@ import 'novel_sync_state.dart';
 import 'novel_reader_store.dart';
 import 'novel_http_session.dart';
 import 'novel_anime_resolver.dart';
+import 'novel_ai.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 
 class NovelService extends ChangeNotifier implements NovelReaderStore {
-  NovelService(this.webDav);
+  NovelService(this.webDav, {Dio Function()? aiClient}) : _aiClient = aiClient ??
+    (() => Dio(BaseOptions(connectTimeout: const Duration(seconds: 15))));
   final WebDav webDav;
+  final Dio Function() _aiClient;
   final _writes = AsyncSerialQueue();
   final _ruleWrites = AsyncSerialQueue();
   final _anime = NovelAnimeResolver();
+  NovelAiSettings _aiSettings = const NovelAiSettings();
+  NovelAiSettings get aiSettings => _aiSettings;
+  Future<void> saveAiSettings(NovelAiSettings value) async {
+    value.validate();
+    await _box.put('aiSettings', jsonEncode(value.toJson()));
+    _aiSettings = value;
+    notifyListeners();
+  }
+  Future<List<String>> suggestTitles(String title, {required bool toAnime,
+      NovelAiSettings? settings, CancelToken? cancelToken}) async {
+    final dio = _aiClient();
+    try {
+      return await NovelAiClient(dio).titles(settings ?? aiSettings, title,
+        toAnime: toAnime, cancelToken: cancelToken);
+    } finally {
+      dio.close();
+    }
+  }
+  Future<List<BangumiItem>> animeForTitle(String title) => _anime.forTitle(title);
   late Box<String> _box, _cache, _rules;
   late String deviceId;
   late NovelHttpSession _http;
@@ -51,6 +73,8 @@ class NovelService extends ChangeNotifier implements NovelReaderStore {
     _box = await Hive.openBox<String>('novel_v1', path: path);
     _cache = await Hive.openBox<String>('novel_cache_v1', path: path);
     _rules = await Hive.openBox<String>('novel_rules_v1', path: path);
+    final ai = _box.get('aiSettings');
+    if (ai != null) _aiSettings = NovelAiSettings.fromJson(jsonDecode(ai) as NovelJson);
     _http = NovelHttpSession(
       () => DioFactory.pluginDio,
       '$path/novel_sessions',
@@ -76,9 +100,16 @@ class NovelService extends ChangeNotifier implements NovelReaderStore {
         _http.fetch(rule(id), url, method, headers, body),
   );
 
-  Future<void> login(String sourceId, String username, String password) =>
-      _http.login(rule(sourceId), username, password);
-  Future<void> logout(String sourceId) => _http.logout(rule(sourceId));
+  String accountName(String sourceId) => _box.get('account/$sourceId') ?? '';
+  Future<void> login(String sourceId, String username, String password) async {
+    await _http.login(rule(sourceId), username, password);
+    await _box.put('account/$sourceId', username);
+  }
+  Future<void> verifyAccount(String sourceId) => _http.verify(rule(sourceId));
+  Future<void> logout(String sourceId) async {
+    await _http.logout(rule(sourceId));
+    await _box.delete('account/$sourceId');
+  }
   @override
   Future<Uint8List> image(String sourceId, String url) async {
     final key = 'image/$sourceId/$url';

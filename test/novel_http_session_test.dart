@@ -48,6 +48,11 @@ void main() {
       await expectLater(session.fetch(rule, '$base/book', 'GET', rule.headers, {}),
         throwsA(isA<NovelLoginRequired>()));
       await session.login(rule, 'fixture', 'private-password');
+      await session.verify(rule);
+      json['loginRequiredUrlPattern'] = '';
+      await session.verify(NovelRule.decode(jsonEncode(json)));
+      json['login']['verifySelector'] = '#missing';
+      await expectLater(session.verify(NovelRule.decode(jsonEncode(json))), throwsStateError);
       // ProxyManager closes and replaces the old Dio when settings change.
       // Keep the local session usable without retaining that closed client.
       dio.close();
@@ -63,6 +68,7 @@ void main() {
         expect(await file.readAsString(), isNot(contains('private-password')));
       }
       await session.logout(rule);
+      await expectLater(session.verify(rule), throwsA(isA<NovelLoginRequired>()));
       await expectLater(session.fetch(rule, '$base/book', 'GET', rule.headers, {}),
         throwsA(isA<NovelLoginRequired>()));
     } finally {

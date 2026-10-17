@@ -86,6 +86,8 @@ void main() {
         await tester.pumpAndSettle();
         final source = find.byKey(const ValueKey('novel-source-wenku8-https://books/2'));
         await tester.ensureVisible(source);
+        await tester.pump();
+        expect(tester.getCenter(source).dy, lessThan(size.height));
         await tester.tap(source);
         await tester.pumpAndSettle();
         expect(selected, same(second));
