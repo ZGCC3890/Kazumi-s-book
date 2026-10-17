@@ -4,7 +4,7 @@ mkdir -p build/media-diagnostic/fixtures
 capture() {
   adb logcat -d > build/media-diagnostic/final-logcat.txt
   adb exec-out screencap -p > build/media-diagnostic/final-screen.png
-  for phase in prepare auto controls resume next; do
+  for phase in prepare history auto controls resume next; do
     if [ -f "build/media-diagnostic/${phase}.log" ]; then
       printf '\n%s\n' "Diagnostic ${phase}:"
       tail -n 12 "build/media-diagnostic/${phase}.log"
@@ -34,6 +34,32 @@ python3 tool/android_ui/fixture_server.py --output build/media-diagnostic/fixtur
 fixture_pid=$!
 trap 'capture; kill "$fixture_pid"' EXIT
 curl --fail --silent --show-error --retry 8 --retry-connrefused --retry-delay 1 http://127.0.0.1:8765/fixture-state > build/media-diagnostic/fixture-ready.json
+python3 - <<'PY'
+import json
+from pathlib import Path
+stamp = 1792240000000
+version = f'{stamp:016d}|fixture-media:1'
+key = 'Fixture Video400602::online'
+history = {
+    'bangumiItem': {'id': 400602, 'type': 2, 'name': '葬送的芙莉莲',
+                    'nameCn': '葬送的芙莉莲',
+                    'images': {'large': 'http://10.0.2.2:8765/cover.png'}},
+    'lastWatchEpisode': 1, 'adapterName': 'Fixture Video',
+    'lastWatchTime': stamp, 'lastSrc': '1',
+    'lastWatchEpisodeName': 'Episode 1', 'entryKind': 'online',
+    'episodePageUrl': 'http://10.0.2.2:8765/clip.mp4',
+    'progresses': {'1': {'episode': 1, 'road': 0, 'progressMs': 0, 'updatedAtMs': stamp}},
+}
+Path('build/media-diagnostic/history-snapshot.json').write_text(json.dumps({
+    'schemaVersion': 1, 'generatedAt': stamp, 'histories': [history],
+    'itemVersions': {key: version}, 'progressVersions': {key: {'1': version}},
+    'deletedVersions': {},
+}), encoding='utf-8')
+PY
+for collection in kazumiSync kazumiSync/history kazumiSync/history/changes; do
+  curl --fail --silent --show-error -X MKCOL "http://127.0.0.1:8765/dav/${collection}"
+done
+curl --fail --silent --show-error --upload-file build/media-diagnostic/history-snapshot.json http://127.0.0.1:8765/dav/kazumiSync/history/snapshot.json
 book_media_ready=false
 for book_media_attempt in $(seq 1 30); do
   if adb shell content query --uri content://media/external_primary/file --projection _id --where _id=-1 > build/media-diagnostic/media-ready.log 2>&1 &&
@@ -47,6 +73,7 @@ test "$book_media_ready" = true
 adb push build/media-diagnostic/fixtures/video-rule.json /sdcard/Download/book-test-video.json > build/media-diagnostic/push-fixture.log
 adb install diagnostic-apk/app-x86_64-release.apk > build/media-diagnostic/install.log
 maestro test .maestro/media-diagnostic-prepare.yaml > build/media-diagnostic/prepare.log 2>&1
+maestro test .maestro/media-diagnostic-history.yaml > build/media-diagnostic/history.log 2>&1
 maestro test .maestro/media-diagnostic-play.yaml > build/media-diagnostic/auto.log 2>&1
 adb logcat -d > build/media-diagnostic/auto-logcat.txt
 adb exec-out screencap -p > build/media-diagnostic/auto-screen.png

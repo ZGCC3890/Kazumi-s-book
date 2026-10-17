@@ -1,0 +1,36 @@
+appId: com.zgcc.kazumisbook
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "热门番组"
+    timeout: 60000
+- tapOn: "(?s).*我的.*"
+- tapOn: "设置"
+- scrollUntilVisible:
+    element: "(?s).*同步设置.*"
+    direction: DOWN
+- tapOn: "(?s).*同步设置.*"
+- tapOn: "设置 WebDAV"
+- tapOn: "(?s).*连接你的云盘.*"
+- tapOn: "服务器地址"
+- inputText: "http://10.0.2.2:8765/dav"
+- tapOn: "用户名"
+- inputText: "fixture"
+- tapOn: "密码或应用授权码"
+- inputText: "fixture"
+- hideKeyboard
+- scrollUntilVisible:
+    element: "保存并测试"
+    direction: DOWN
+- tapOn: "保存并测试"
+- extendedWaitUntil:
+    visible: "连接成功，配置已保存"
+    timeout: 30000
+- tapOn: "返回同步设置"
+- tapOn: "(?s).*启用 WebDAV.*"
+- tapOn: "(?s).*观看记录.*自动同步播放进度与历史记录.*"
+- tapOn: "立即同步观看记录"
+- extendedWaitUntil:
+    visible: "观看记录已同步"
+    timeout: 60000
+- takeScreenshot: build/media-diagnostic/history-synced

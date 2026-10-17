@@ -6,26 +6,10 @@ env:
 - extendedWaitUntil:
     visible: "热门番组"
     timeout: 60000
-- tapOn: "搜索"
-- tapOn: "搜索番剧名称"
-- inputText: "Frieren"
-- tapOn: "搜索"
-- extendedWaitUntil:
-    visible: "(?s).*芙莉莲.*"
-    timeout: 60000
-- tapOn:
-    text: "(?s).*芙莉莲.*"
-    index: 0
-- extendedWaitUntil:
-    visible: "开始观看"
-    timeout: 60000
-- tapOn: "开始观看"
-- extendedWaitUntil:
-    visible: "(?s).*Fixture Video.*"
-    timeout: 30000
-- tapOn:
-    text: "(?s).*葬送的芙莉莲.*"
-    index: 0
+- tapOn: "(?s).*我的.*"
+- tapOn: "历史记录"
+- assertVisible: "(?s).*葬送的芙莉莲.*"
+- tapOn: "继续播放"
 - extendedWaitUntil:
     notVisible: "视频资源解析中"
     timeout: 30000
