@@ -1,0 +1,18 @@
+appId: com.zgcc.kazumisbook
+---
+- tapOn:
+    text: "全屏"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    text: "Got it"
+    waitToSettleTimeoutMs: 100
+- runFlow:
+    when:
+      notVisible: "暂停"
+    commands:
+      - tapOn:
+          point: "50%,50%"
+          waitToSettleTimeoutMs: 100
+- extendedWaitUntil:
+    visible: "下一集"
+    timeout: 2000

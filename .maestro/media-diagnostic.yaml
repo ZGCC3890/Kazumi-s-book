@@ -1,0 +1,34 @@
+appId: com.zgcc.kazumisbook
+env:
+  LAYOUT: phone
+---
+- runFlow: media-diagnostic-prepare.yaml
+- runFlow: media-diagnostic-history.yaml
+- runFlow: media-diagnostic-play.yaml
+- runFlow:
+    file: assert-owned-playback.yaml
+    env:
+      PHASE: episode-one
+      EPISODE: '1'
+      MODE: advancing
+- runFlow: media-diagnostic-controls.yaml
+- runFlow:
+    file: assert-owned-playback.yaml
+    env:
+      PHASE: paused
+      EPISODE: '1'
+      MODE: steady
+- runFlow: media-diagnostic-resume.yaml
+- runFlow:
+    file: assert-owned-playback.yaml
+    env:
+      PHASE: resumed
+      EPISODE: '1'
+      MODE: advancing
+- runFlow: media-diagnostic-next.yaml
+- runFlow:
+    file: assert-owned-playback.yaml
+    env:
+      PHASE: episode-two
+      EPISODE: '2'
+      MODE: advancing

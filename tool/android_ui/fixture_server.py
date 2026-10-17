@@ -195,11 +195,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--base-url", default=BASE)
+    parser.add_argument("--host", default="0.0.0.0")
     args = parser.parse_args()
     BASE = args.base_url
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "video-rule.json").write_text(json.dumps(video_rule()), encoding="utf-8")
-    server = ThreadingHTTPServer(("0.0.0.0", 8765), Handler)
+    server = ThreadingHTTPServer((args.host, 8765), Handler)
     server.output = args.output
     server.files = {}
     server.directories = {'/dav'}

@@ -1,0 +1,36 @@
+appId: com.zgcc.kazumisbook
+---
+- assertVisible: ${'Episode ' + EPISODE + '，正在播放'}
+- copyTextFrom: '(?s).*\d{2}:\d{2} / 02:00.*'
+- runScript:
+    file: scripts/playback-sample.js
+    env:
+      SAMPLE: before
+- takeScreenshot: ${'build/media-diagnostic/' + PHASE + '-1-screen'}
+- runFlow:
+    when:
+      true: ${MODE == 'advancing'}
+    commands:
+      - extendedWaitUntil:
+          visible: ${output.progressPattern}
+          timeout: 10000
+- runFlow:
+    when:
+      true: ${MODE == 'steady'}
+    commands:
+      - repeat:
+          while:
+            true: ${Date.now() - output.startedAt < 5000}
+          commands:
+            - copyTextFrom: '(?s).*\d{2}:\d{2} / 02:00.*'
+            - runScript:
+                file: scripts/playback-sample.js
+                env:
+                  SAMPLE: after
+- copyTextFrom: '(?s).*\d{2}:\d{2} / 02:00.*'
+- runScript:
+    file: scripts/playback-sample.js
+    env:
+      SAMPLE: after
+- assertVisible: ${'Episode ' + EPISODE + '，正在播放'}
+- takeScreenshot: ${'build/media-diagnostic/' + PHASE + '-2-screen'}

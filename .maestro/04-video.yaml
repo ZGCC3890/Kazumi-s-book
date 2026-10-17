@@ -83,12 +83,7 @@ appId: com.zgcc.kazumisbook
     when:
       true: ${LAYOUT == 'phone'}
     commands:
-      - tapOn:
-          text: "全屏"
-          waitToSettleTimeoutMs: 100
-      - extendedWaitUntil:
-          visible: "下一集"
-          timeout: 30000
+      - runFlow: enter-first-fullscreen.yaml
 - tapOn:
     text: "暂停"
     waitToSettleTimeoutMs: 100

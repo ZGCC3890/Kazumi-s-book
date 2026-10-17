@@ -4,7 +4,7 @@ mkdir -p build/media-diagnostic/fixtures
 capture() {
   adb logcat -d > build/media-diagnostic/final-logcat.txt
   adb exec-out screencap -p > build/media-diagnostic/final-screen.png
-  for phase in prepare history auto controls resume next; do
+  for phase in flow; do
     if [ -f "build/media-diagnostic/${phase}.log" ]; then
       printf '\n%s\n' "Diagnostic ${phase}:"
       tail -n 12 "build/media-diagnostic/${phase}.log"
@@ -72,46 +72,5 @@ done
 test "$book_media_ready" = true
 adb push build/media-diagnostic/fixtures/video-rule.json /sdcard/Download/book-test-video.json > build/media-diagnostic/push-fixture.log
 adb install diagnostic-apk/app-x86_64-release.apk > build/media-diagnostic/install.log
-maestro test .maestro/media-diagnostic-prepare.yaml > build/media-diagnostic/prepare.log 2>&1
-maestro test .maestro/media-diagnostic-history.yaml > build/media-diagnostic/history.log 2>&1
-maestro test .maestro/media-diagnostic-play.yaml > build/media-diagnostic/auto.log 2>&1
-adb logcat -d > build/media-diagnostic/auto-logcat.txt
-adb exec-out screencap -p > build/media-diagnostic/auto-screen.png
-sample_progress() {
-  local phase="$1"
-  local episode="$2"
-  local mode="$3"
-  for sample in 1 2; do
-    adb shell uiautomator dump /sdcard/renderer-auto.xml > "build/media-diagnostic/${phase}-${sample}-dump.log"
-    adb pull /sdcard/renderer-auto.xml "build/media-diagnostic/${phase}-${sample}.xml" > "build/media-diagnostic/${phase}-${sample}-pull.log"
-    adb exec-out screencap -p > "build/media-diagnostic/${phase}-${sample}-screen.png"
-    sleep 2
-  done
-  python3 - "$phase" "$episode" "$mode" <<'PY'
-from pathlib import Path
-import re
-import sys
-import xml.etree.ElementTree as ET
-positions = []
-for sample in (1, 2):
-    root = ET.fromstring(Path(f'build/media-diagnostic/{sys.argv[1]}-{sample}.xml').read_text())
-    labels = [node.attrib.get('content-desc', '') for node in root.iter('node')]
-    assert any(f'Episode {sys.argv[2]}，正在播放' in label for label in labels), labels
-    matches = [re.search(r'(\d{2}):(\d{2}) / 02:00', label) for label in labels]
-    positions.append(next(int(match[1]) * 60 + int(match[2]) for match in matches if match))
-assert all(0 < position < 120 for position in positions), positions
-if sys.argv[3] == 'steady':
-    assert positions[0] == positions[1], positions
-else:
-    assert positions[0] < positions[1], positions
-print(f'{sys.argv[1]} TIME GREEN: same episode {sys.argv[3]}: {positions}; frames await visual review.')
-PY
-}
-sample_progress episode-one 1 advancing
-maestro test .maestro/media-diagnostic-controls.yaml > build/media-diagnostic/controls.log 2>&1
-sample_progress paused 1 steady
-maestro test .maestro/media-diagnostic-resume.yaml > build/media-diagnostic/resume.log 2>&1
-sample_progress resumed 1 advancing
-maestro test .maestro/media-diagnostic-next.yaml > build/media-diagnostic/next.log 2>&1
-sample_progress episode-two 2 advancing
+maestro test .maestro/media-diagnostic.yaml > build/media-diagnostic/flow.log 2>&1
 echo 'Both episode timing records completed with default player settings; review video frames.'

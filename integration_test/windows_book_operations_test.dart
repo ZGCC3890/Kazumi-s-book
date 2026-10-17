@@ -26,8 +26,9 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 
 import 'support/native_test_profile.dart';
 
-Future<void> until(WidgetTester tester, bool Function() ready, String reason) async {
-  final deadline = DateTime.now().add(const Duration(seconds: 60));
+Future<void> until(WidgetTester tester, bool Function() ready, String reason,
+    {Duration timeout = const Duration(seconds: 2)}) async {
+  final deadline = DateTime.now().add(timeout);
   while (!ready() && DateTime.now().isBefore(deadline)) {
     await tester.pump(const Duration(milliseconds: 200));
     expect(tester.takeException(), isNull, reason: reason);
@@ -42,8 +43,10 @@ Future<void> until(WidgetTester tester, bool Function() ready, String reason) as
   expect(ready(), isTrue, reason: reason);
 }
 
-Future<void> visible(WidgetTester tester, Finder finder) =>
-    until(tester, () => finder.evaluate().isNotEmpty, finder.describeMatch(Plurality.zero));
+Future<void> visible(WidgetTester tester, Finder finder,
+        {Duration timeout = const Duration(seconds: 2)}) =>
+    until(tester, () => finder.evaluate().isNotEmpty,
+        finder.describeMatch(Plurality.zero), timeout: timeout);
 
 Future<void> click(WidgetTester tester, Finder finder) async {
   await visible(tester, finder);
@@ -100,6 +103,7 @@ void main() {
     expect((await getApplicationSupportDirectory()).path, '${profile.path}/support');
     debugPrintSynchronously('NATIVE_TEST_PROFILE: ${profile.path}');
     app.main();
+    await visible(tester, find.text('暂不创建'), timeout: const Duration(seconds: 10));
     await text(tester, '暂不创建');
     for (final label in ['同意并继续', '继续', '开始使用', '仍然继续']) {
       await text(tester, label);
@@ -107,10 +111,6 @@ void main() {
     await visible(tester, find.text('热门番组'));
     await click(tester, find.byTooltip('搜索'));
     await visible(tester, find.text('番剧搜索'));
-    await type(tester, find.byType(TextField).first, 'Frieren');
-    await click(tester, find.byTooltip('搜索'));
-    await visible(tester, find.textContaining('芙莉莲'));
-    await screenshot(tester, 'anime-search');
     await click(tester, find.byTooltip('搜索类型'));
     await text(tester, '小说');
     await click(tester, find.byTooltip('小说规则'));
@@ -280,10 +280,14 @@ void main() {
     await click(tester, find.byTooltip('搜索'));
     await type(tester, find.byType(TextField).first, 'Frieren');
     await click(tester, find.byTooltip('搜索'));
+    await visible(tester, find.textContaining('芙莉莲'),
+        timeout: const Duration(seconds: 15));
+    await screenshot(tester, 'anime-search');
     await text(tester, '葬送的芙莉莲');
     await text(tester, '吐槽');
     await visible(tester, find.byWidgetPredicate((widget) => widget is Semantics &&
-        widget.properties.identifier == 'bangumi-comment'));
+        widget.properties.identifier == 'bangumi-comment'),
+        timeout: const Duration(seconds: 15));
     await screenshot(tester, 'anime-comments');
     await text(tester, '开始观看');
     await visible(tester, find.text('Fixture Video'));
@@ -293,9 +297,11 @@ void main() {
     final player = video.playerController;
     await until(tester, () => player.playback.playing &&
         player.playback.currentPosition > const Duration(seconds: 1),
-        'Native Windows media must actually play the owned video');
+        'Native Windows media must actually play the owned video',
+        timeout: const Duration(seconds: 10));
     await until(tester, () => find.byType(SnackBar).evaluate().isEmpty,
-        'The initial player status message must leave the controls');
+        'The initial player status message must leave the controls',
+        timeout: const Duration(seconds: 3));
     final mouse = await tester.createGesture(kind: ui.PointerDeviceKind.mouse);
     await mouse.addPointer();
     addTearDown(() => mouse.removePointer());
@@ -313,7 +319,8 @@ void main() {
     await click(tester, find.byTooltip('下一集'));
     await until(tester, () => video.videoPageController.playingEpisode?.episode == 2 &&
         player.playback.playing && player.playback.currentPosition > const Duration(seconds: 1),
-        'Next episode must load and actually play episode two');
+        'Next episode must load and actually play episode two',
+        timeout: const Duration(seconds: 10));
     await screenshot(tester, 'video-second-episode');
     expect(tester.takeException(), isNull);
   }, timeout: const Timeout(Duration(minutes: 8)));
