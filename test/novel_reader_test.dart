@@ -742,6 +742,136 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('illustration pinch zoom closes without changing the reading anchor', (tester) async {
+    final bytes = await tester.runAsync(() async {
+      final image = await createTestImage(width: 256, height: 256);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      return data!.buffer.asUint8List();
+    });
+    final store = _ReaderStore({_one.url: const [
+      NovelBlock.image('https://test/front.png'),
+      NovelBlock.text('插图后的正文保持原来的阅读位置。'),
+    ]}, imageBytes: bytes!);
+    await _open(tester, store, showControls: false);
+    final before = store.saved.last.toJson();
+    final offset = _scroll(tester).offset;
+    await tester.tap(find.bySemanticsLabel('小说插图，点击放大'));
+    await tester.pumpAndSettle();
+    final viewer = find.byType(InteractiveViewer);
+    expect(viewer, findsOneWidget);
+    double zoom() => tester.widget<Transform>(find.descendant(
+      of: viewer, matching: find.byType(Transform),
+    ).first).transform.getMaxScaleOnAxis();
+    expect(zoom(), 1);
+    final center = tester.getCenter(viewer);
+    final left = await tester.startGesture(center - const Offset(40, 0), pointer: 1);
+    final right = await tester.startGesture(center + const Offset(40, 0), pointer: 2);
+    await tester.pump();
+    await left.moveTo(center - const Offset(60, 0));
+    await right.moveTo(center + const Offset(60, 0));
+    await tester.pump();
+    await left.moveTo(center - const Offset(120, 0));
+    await right.moveTo(center + const Offset(120, 0));
+    await tester.pump();
+    await left.up();
+    await right.up();
+    await tester.pumpAndSettle();
+    expect(zoom(), greaterThan(1.5));
+    await tester.tap(find.byTooltip('关闭插图'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(find.byType(InteractiveViewer), findsNothing);
+    expect(find.byType(NovelReaderPage), findsOneWidget);
+    expect(_scroll(tester).offset, offset);
+    expect(store.saved.last.toJson(), before);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('page taps and swipes save progress and taps cross both chapter boundaries', (tester) async {
+    final text = String.fromCharCodes(List.generate(1600, (i) => 0x4e00 + i));
+    final store = _ReaderStore({
+      _one.url: [NovelBlock.text(text)],
+      _two.url: [NovelBlock.text('第二章开头。$text')],
+    });
+    store.prefs['mode'] = 'page';
+    await _open(tester, store, showControls: false);
+    PageView pages() => tester.widget<PageView>(find.byType(PageView));
+    Future<void> settle() async {
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 700));
+    }
+    final count = pages().childrenDelegate.estimatedChildCount!;
+    expect(count, greaterThan(2));
+    final bounds = tester.getRect(find.byType(PageView));
+    final left = Offset(bounds.left + 30, bounds.center.dy);
+    final right = Offset(bounds.right - 30, bounds.center.dy);
+    await tester.tapAt(right);
+    await settle();
+    expect(pages().controller!.page, 1);
+    final pageOneOffset = store.saved.last.textOffset;
+    expect(pageOneOffset, greaterThan(0));
+    await tester.drag(find.byType(PageView), Offset(-bounds.width * .7, 0));
+    await settle();
+    expect(pages().controller!.page, 2);
+    expect(store.saved.last.textOffset, greaterThan(pageOneOffset));
+    await tester.drag(find.byType(PageView), Offset(bounds.width * .7, 0));
+    await settle();
+    expect(pages().controller!.page, 1);
+    expect(store.saved.last.textOffset, pageOneOffset);
+    await tester.tapAt(left);
+    await settle();
+    expect(pages().controller!.page, 0);
+    expect(store.saved.last.textOffset, 0);
+    for (var page = 1; page < count; page++) {
+      await tester.tapAt(right);
+      await settle();
+      expect(store.saved.last.chapter.url, _one.url);
+      expect(pages().controller!.page, page);
+    }
+    final lastOffset = store.saved.last.textOffset;
+    await tester.tapAt(right);
+    await settle();
+    expect(store.saved.last.chapter.url, _two.url);
+    expect(store.saved.last.textOffset, 0);
+    expect(pages().controller!.page, 0);
+    await tester.tapAt(left);
+    await settle();
+    expect(store.saved.last.chapter.url, _one.url);
+    expect(pages().controller!.page, count - 1);
+    expect(store.saved.last.textOffset, lastOffset);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final mode in ['scroll', 'page']) {
+    testWidgets('$mode whole-book slider opens and saves the selected chapter', (tester) async {
+      final store = _ReaderStore({
+        _one.url: const [NovelBlock.text('第一章原文。')],
+        _two.url: const [NovelBlock.text('第二章选中的正文。')],
+      });
+      store.prefs['mode'] = mode;
+      await _open(tester, store);
+      await tester.tap(find.byTooltip('阅读进度'));
+      await tester.pumpAndSettle();
+      final slider = find.byKey(const ValueKey('novel-book-progress'));
+      final bounds = tester.getRect(slider);
+      await tester.dragFrom(Offset(bounds.left + 24, bounds.center.dy),
+          Offset(bounds.width - 48, 0));
+      await tester.pumpAndSettle();
+      expect(tester.widget<Slider>(slider).value, 1);
+      expect(store.saved.last.chapter.url, _one.url);
+      await tester.tap(find.text('前往章节'));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 700));
+      expect(find.byKey(const ValueKey('novel-book-progress')), findsNothing);
+      expect(find.text('第二章选中的正文。'), findsOneWidget);
+      expect(store.saved.last.chapter.url, _two.url);
+      expect(store.saved.last.textOffset, 0);
+      expect(store.requested.last, _two.url);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('dragging chapter progress saves the newly visible text anchor', (tester) async {
     final store = _ReaderStore({_one.url: List.generate(100, (i) => NovelBlock.text('第$i段可见阅读正文。'))});
     await _open(tester, store);

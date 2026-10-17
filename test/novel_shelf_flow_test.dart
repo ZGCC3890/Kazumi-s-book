@@ -239,6 +239,33 @@ void main() {
     timeout: const Timeout(Duration(seconds: 45)),
   );
   testWidgets(
+    'declining the exit offer keeps progress without shelving or changing anime status',
+    (tester) async {
+      final (service, repo) = (await tester.runAsync(
+        () async => (_Service(), _CollectRepository()),
+      ))!;
+      await _start(tester, service, CollectController(repo));
+      await tester.runAsync(() => tester.tap(find.byType(BackButton)));
+      await tester.pumpAndSettle();
+      expect(find.text('加入书架？'), findsOneWidget);
+      final saved = service.saved!.toJson();
+      expect(service.saved!.chapter.url, _chapters[1].url);
+      await tester.runAsync(() => tester.tap(find.text('暂不添加')));
+      await tester.pumpAndSettle();
+      expect(find.byType(NovelReaderPage), findsNothing);
+      expect(find.text('打开小说'), findsOneWidget);
+      expect(service.saved!.toJson(), saved);
+      expect(service.shelved, false);
+      expect(service.shelfAttempt.isCompleted, false);
+      expect(repo.writes, 0);
+      expect(GStorage.collectibles, isEmpty);
+      expect(GStorage.collectChanges, isEmpty);
+      expect(animeAdapter.requests, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+    timeout: const Timeout(Duration(seconds: 45)),
+  );
+  testWidgets(
     'shelving preserves an existing anime status and its sync change log',
     (tester) async {
       final (service, repo) = (await tester.runAsync(

@@ -11,6 +11,10 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import 'package:kazumi/bean/dialog/dialog_helper.dart';
 import 'package:kazumi/bean/settings/theme_provider.dart';
 import 'package:kazumi/core_module.dart';
+import 'package:kazumi/pages/index_module.dart';
+import 'package:kazumi/pages/menu/menu.dart';
+import 'package:kazumi/pages/collect/collect_library_tabs.dart';
+import 'package:kazumi/novel/novel_library_page.dart';
 import 'package:kazumi/navigation.dart';
 import 'package:kazumi/pages/about/about_page.dart';
 import 'package:kazumi/pages/logs/logs_page.dart';
@@ -233,6 +237,45 @@ void main() {
     expect(find.byType(ProxySettingsPage), findsOneWidget);
     expect(GStorage.getSetting(SettingsKeys.proxyUrl), isEmpty);
   }, timeout: const Timeout(Duration(seconds: 45)));
+
+  testWidgets('bookshelf startup setting persists and the production tab guard opens it', (tester) async {
+    final previous = GStorage.getSetting(SettingsKeys.defaultStartupPage);
+    addTearDown(() => tester.runAsync(() =>
+        GStorage.putSetting(SettingsKeys.defaultStartupPage, previous)));
+    await _open(tester);
+    await _tap(tester, '界面设置');
+    await _tap(tester, '启动界面设置');
+    await _tap(tester, '书架');
+    expect(GStorage.getSetting(SettingsKeys.defaultStartupPage), '/tab/collect/novels/');
+    await _back(tester);
+    await _tap(tester, '界面设置');
+    expect(find.text('书架'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(() => Hive.box<dynamic>('setting').flush());
+    final module = createModule(register: (c) {
+      c.module(coreModule);
+      c.module(indexModule);
+    });
+    await tester.pumpWidget(ModularApp(
+      module: module,
+      initialRoute: '/tab/',
+      navigatorKey: rootNavigatorKey,
+      navigatorObservers: [KazumiDialog.observer, rootRouteObserver],
+      provide: (scope) => scope.addChangeNotifier<ThemeProvider>(ThemeProvider.new),
+      child: Builder(builder: (context) => MaterialApp.router(
+        scaffoldMessengerKey: rootScaffoldMessengerKey,
+        routerConfig: ModularApp.routerConfigOf(context),
+      )),
+    ));
+    await _settle(tester);
+    expect(find.byType(ScaffoldMenu), findsOneWidget);
+    expect(find.byType(NovelLibraryPage), findsOneWidget);
+    final tabs = tester.widget<CollectLibraryTabs>(find.byType(CollectLibraryTabs));
+    expect(tabs.bookshelf, true);
+    expect(tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex, 2);
+    expect(find.byIcon(Icons.favorite), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('production update toggle persists through route reentry', (tester) async {
     await _open(tester);
