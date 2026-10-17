@@ -12,6 +12,9 @@ import 'package:kazumi/modules/search/search_history_module.dart';
 import 'package:kazumi/novel/novel_service.dart';
 import 'package:kazumi/novel/novel_rule.dart';
 import 'package:kazumi/novel/novel_rules_page.dart';
+import 'package:kazumi/novel/novel_models.dart';
+import 'package:kazumi/novel/novel_reader_page.dart';
+import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 import 'package:kazumi/pages/menu/menu.dart';
 import 'package:kazumi/pages/popular/popular_controller.dart';
 import 'package:kazumi/pages/popular/popular_page.dart';
@@ -38,8 +41,47 @@ class _Popular extends PopularController {
 
 class _RulesService extends NovelService {
   _RulesService() : super(WebDav());
+  final source = _NovelSource();
+  NovelBook? selected;
+  NovelPosition? saved;
   @override
-  List<NovelRule> get rules => const [];
+  List<NovelRule> get rules => [NovelRule.decode(
+      File('novel_rules/linovel.json').readAsStringSync())];
+  @override String? get preferredSource => 'linovel';
+  @override bool get needsDefaultRules => false;
+  @override NovelSourceAdapter adapter(String id) => source;
+  @override Future<List<BangumiItem>> relatedAnime(NovelBook book,
+      {String? editionId, bool refresh = false}) async => [];
+  @override Future<String> bind({required int animeId, required NovelBook book,
+      required String editionLabel, required String language,
+      String? existingEditionId, String? existingWorkId}) async {
+    selected = book;
+    return 'route-edition';
+  }
+  @override NovelBook? selectedBook(String id) => selected;
+  @override NovelJson get preferences => {
+    'fontSize': 20.0, 'lineHeight': 1.8, 'theme': 0, 'mode': 'scroll',
+    'font': 'system', 'margin': 24.0, 'brightness': 0.0,
+  };
+  @override Future<List<NovelChapter>> catalog(NovelBook book, {bool refresh = false}) async =>
+      const [NovelChapter(url: 'https://test/chapter', title: '路由章节',
+          volume: '第一卷', kind: '正文', number: 1)];
+  @override Future<List<NovelBlock>> content(String sourceId, NovelChapter chapter,
+      {bool refresh = false}) async => const [NovelBlock.text('规则页返回后真正打开的正文。')];
+  @override NovelPosition? position(String editionId) => saved;
+  @override Future<void> savePosition(NovelPosition position) async { saved = position; }
+  @override Future<String> chapterReadIdentity(String editionId, NovelBook book,
+      NovelChapter chapter, NovelPosition? restoredFrom) async => chapter.url;
+  @override Future<void> syncAutomatically() async {}
+}
+
+class _NovelSource extends Fake implements NovelSourceAdapter {
+  final queries = <String>[];
+  @override Future<List<NovelBook>> search(String keyword) async {
+    queries.add(keyword);
+    return const [NovelBook(sourceId: 'linovel', url: 'https://test/book',
+        title: 'Fixture novel', author: 'Author A')];
+  }
 }
 
 // Keep this route test about production DI/navigation. Filesystem persistence
@@ -117,6 +159,7 @@ Future<void> _open(
   NovelService novels, {
   Size size = const Size(480, 900),
   String initialRoute = '/tab/popular/',
+  TargetPlatform? platform,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -156,6 +199,7 @@ Future<void> _open(
       navigatorObservers: [rootRouteObserver],
       child: Builder(
         builder: (context) => MaterialApp.router(
+          theme: platform == null ? null : ThemeData(platform: platform),
           routerConfig: ModularApp.routerConfigOf(context),
         ),
       ),
@@ -250,18 +294,24 @@ void main() {
     );
   }
 
-  for (final size in [const Size(480, 900), const Size(1280, 800)]) {
-    testWidgets('novel rules app bar returns to the production search route $size', (tester) async {
+  for (final scenario in [
+    (const Size(480, 900), '尚未提交的书名', TargetPlatform.android),
+    (const Size(1280, 800), '尚未提交的书名', TargetPlatform.android),
+    (const Size(840, 600), '', TargetPlatform.windows),
+    (const Size(1280, 860), '', TargetPlatform.windows),
+  ]) {
+    final (size, draft, platform) = scenario;
+    testWidgets('novel rules app bar returns to the production search route $size $platform', (tester) async {
       final service = _RulesService();
       addTearDown(service.dispose);
-      await _open(tester, service, size: size);
+      await _open(tester, service, size: size, platform: platform);
       await _clickSearch(tester, size);
       final original = tester.widget<SearchPage>(find.byType(SearchPage));
       await tester.tap(find.byTooltip('搜索类型'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('小说').last);
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), '尚未提交的书名');
+      if (draft.isNotEmpty) await tester.enterText(find.byType(TextField), draft);
       await tester.tap(find.byTooltip('小说规则'));
       await tester.pumpAndSettle();
       expect(find.byType(NovelRulesPage), findsOneWidget);
@@ -274,7 +324,21 @@ void main() {
           same(original.controller));
       expect(find.text('小说搜索'), findsOneWidget);
       expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
-          '尚未提交的书名');
+          draft);
+      await tester.enterText(find.byType(TextField), 'Fixture');
+      final submit = find.byTooltip('搜索');
+      await tester.ensureVisible(submit);
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(service.source.queries, ['Fixture']);
+      expect(find.text('Author A'), findsOneWidget);
+      await tester.tap(find.text('Author A'));
+      await tester.pumpAndSettle();
+      expect(service.selected?.title, 'Fixture novel');
+      expect(find.byType(NovelReaderPage), findsOneWidget);
+      expect(find.text('规则页返回后真正打开的正文。'), findsOneWidget);
+      expect(service.saved?.chapter.title, '路由章节');
       expect(tester.takeException(), isNull);
     });
   }

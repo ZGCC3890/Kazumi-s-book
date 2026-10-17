@@ -41,6 +41,11 @@ appId: com.zgcc.kazumisbook
     index: 1
 - assertVisible: "(?s).*Fixture Source A.*"
 - assertVisible: "(?s).*Fixture Source C.*"
+# The import snackbar moves the FAB by 48 px. Wait until its transition and
+# display end before Maestro captures the next button's screen coordinates.
+- extendedWaitUntil:
+    notVisible: "已导入 2 条小说规则"
+    timeout: 10000
 - tapOn: "添加规则"
 - tapOn: "(?s).*浏览规则仓库.*"
 - tapOn: "规则仓库设置"

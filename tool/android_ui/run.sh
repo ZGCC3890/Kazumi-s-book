@@ -9,6 +9,12 @@ capture() {
   fi
 }
 trap capture EXIT
+capture_host() {
+  local stage="$1"
+  adb shell date > "build/android-ui/host-${stage}-time.txt"
+  adb shell dumpsys activity lastanr > "build/android-ui/host-${stage}-lastanr.txt"
+  adb shell dumpsys window | awk '/mCurrentFocus=|mFocusedApp=|mTopFocusedDisplayId=|Application Not Responding/' > "build/android-ui/host-${stage}-window.txt"
+}
 ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=640x360:rate=24 -f lavfi -i sine=frequency=440 -t 20 -c:v libx264 -pix_fmt yuv420p -c:a aac -movflags +faststart build/android-ui/fixtures-clip.mp4
 mkdir -p build/android-ui/fixtures
 mv build/android-ui/fixtures-clip.mp4 build/android-ui/fixtures/clip.mp4
@@ -31,16 +37,21 @@ if [ "$book_media_ready" != true ]; then
   exit 1
 fi
 adb push build/android-ui/fixtures/video-rule.json /sdcard/Download/book-test-video.json > build/android-ui/push-fixture.log
-adb logcat -c
+adb logcat -d > build/android-ui/host-before-wm-boot-logcat.txt
+capture_host before-wm
 if [ "$1" = tablet ]; then
   adb shell wm size 800x1280
+  capture_host after-size
   adb shell wm density 160
 else
   adb shell wm size 480x900
+  capture_host after-size
   adb shell wm density 160
 fi
+capture_host after-density
 sha256sum android-upgrade-apk/app-x86_64-release.apk android-ui-apk/app-x86_64-release.apk > build/android-ui/upgrade-packages.sha256
 adb install -r android-upgrade-apk/app-x86_64-release.apk > build/android-ui/install-baseline.log
+capture_host before-maestro
 maestro test -e LAYOUT="$1" .maestro/00-upgrade-seed.yaml > build/android-ui/maestro.log 2>&1
 curl --fail --silent http://127.0.0.1:8765/fixture-state > build/android-ui/upgrade-legacy-state.json
 python3 tool/android_ui/verify_upgrade.py legacy build/android-ui/upgrade-legacy-state.json

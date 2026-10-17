@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -26,7 +27,13 @@ Future<void> until(WidgetTester tester, bool Function() ready, String reason) as
     await tester.pump(const Duration(milliseconds: 200));
     expect(tester.takeException(), isNull, reason: reason);
   }
-  if (!ready()) stdout.writeln('NATIVE_OPERATION_TIMEOUT: $reason');
+  if (!ready()) {
+    debugPrintSynchronously('NATIVE_OPERATION_TIMEOUT: $reason');
+    debugPrintSynchronously('NATIVE_VISIBLE_TEXT: ${find.byType(Text).evaluate()
+        .map((element) => (element.widget as Text).data)
+        .whereType<String>().take(60).join(' | ')}');
+    await screenshot(tester, 'operation-timeout');
+  }
   expect(ready(), isTrue, reason: reason);
 }
 
@@ -35,7 +42,7 @@ Future<void> visible(WidgetTester tester, Finder finder) =>
 
 Future<void> click(WidgetTester tester, Finder finder) async {
   await visible(tester, finder);
-  stdout.writeln('NATIVE_TAP: ${finder.describeMatch(Plurality.zero)}');
+  debugPrintSynchronously('NATIVE_TAP: ${finder.describeMatch(Plurality.zero)}');
   await tester.ensureVisible(finder.last);
   await tester.pump(const Duration(milliseconds: 200));
   await tester.tap(finder.last);
@@ -63,6 +70,7 @@ Future<void> screenshot(WidgetTester tester, String name) async {
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  WidgetController.hitTestWarningShouldBeFatal = true;
   testWidgets('native Windows main search, import, reader, bookmarks and shelf', (tester) async {
     // main initializes the real application data directory. Never run this
     // unattended against a person's installed application's data.
@@ -93,8 +101,13 @@ void main() {
     await visible(tester, find.text('Fixture Source A'));
     await back(tester);
     await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('小说搜索'), findsOneWidget);
     await tester.enterText(find.byType(TextField).first, 'Fixture');
+    expect(tester.widget<TextField>(find.byType(TextField).first).controller!.text,
+        'Fixture');
+    await screenshot(tester, 'novel-query-before-submit');
     await click(tester, find.byTooltip('搜索'));
+    await screenshot(tester, 'novel-query-after-submit');
     await text(tester, 'Author A');
     await visible(tester, find.byType(NovelReaderPage));
     final reader = tester.widget<NovelReaderPage>(find.byType(NovelReaderPage));
