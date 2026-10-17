@@ -1,4 +1,4 @@
-name: Temporary Android renderer diagnostic
+name: Temporary Android owned operations and playback
 
 on:
   push:
@@ -64,7 +64,7 @@ jobs:
           path: |
             build/media-diagnostic/
             ~/.maestro/tests/
-  full_operations:
+  owned_operations:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -111,11 +111,11 @@ jobs:
           emulator-build: 16428233
           emulator-options: -no-window -gpu swiftshader -feature -HardwareDecoder -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
-          script: bash tool/android_ui/run.sh ${{ matrix.layout }}
+          script: bash tool/android_ui/run.sh ${{ matrix.layout }} owned
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Android-full-${{ matrix.layout }}
+          name: Android-owned-${{ matrix.layout }}
           path: |
             build/android-ui/
             ~/.maestro/tests/

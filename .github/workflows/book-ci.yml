@@ -254,7 +254,7 @@ jobs:
           emulator-build: 16428233
           emulator-options: -no-window -gpu swiftshader -feature -HardwareDecoder -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
-          script: bash tool/android_ui/run.sh ${{ matrix.layout }}
+          script: bash tool/android_ui/run.sh ${{ matrix.layout }} full
       - uses: actions/upload-artifact@v4
         if: always()
         with:

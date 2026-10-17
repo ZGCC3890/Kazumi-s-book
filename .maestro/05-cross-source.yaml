@@ -1,41 +1,6 @@
 appId: com.zgcc.kazumisbook
 ---
-- launchApp
-- extendedWaitUntil:
-    visible: "热门番组"
-    timeout: 10000
-- tapOn:
-    point: "50%,50%"
-    text: "(?s).*追番.*"
-    waitToSettleTimeoutMs: 100
-- tapOn:
-    point: "50%,50%"
-    text: "(?s).*书架.*"
-    waitToSettleTimeoutMs: 100
-- tapOn:
-    point: "50%,50%"
-    text: "小说操作"
-    waitToSettleTimeoutMs: 100
-- tapOn:
-    point: "50%,50%"
-    text: "更换书源"
-    waitToSettleTimeoutMs: 100
-- assertVisible: "选择小说书源"
-- extendedWaitUntil:
-    visible: "(?s).*Author B.*"
-    timeout: 2000
-- tapOn:
-    point: "50%,50%"
-    text: "(?s).*Author B.*"
-    waitToSettleTimeoutMs: 100
-- extendedWaitUntil:
-    visible: ".*Chapter 2 opening.*"
-    timeout: 2000
-- takeScreenshot: build/android-ui/cross-source-chapter-restored
-- back
-- extendedWaitUntil:
-    visible: "查看番剧详情"
-    timeout: 2000
+- runFlow: 05-change-source.yaml
 - tapOn:
     point: "50%,50%"
     text: "查看番剧详情"

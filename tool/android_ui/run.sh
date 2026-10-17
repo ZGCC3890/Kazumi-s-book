@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
+validation_scope="$2"
+case "$validation_scope" in
+  full) main_flow=.maestro/main.yaml ;;
+  owned) main_flow=.maestro/owned-main.yaml ;;
+  *) echo 'Expected validation scope: full or owned' >&2; exit 2 ;;
+esac
 mkdir -p build/android-ui
 capture() {
   adb logcat -d > build/android-ui/logcat.txt
@@ -73,9 +79,9 @@ kill "$fixture_pid"
 wait "$fixture_pid" || test "$?" -eq 143
 python3 tool/android_ui/fixture_server.py --output build/android-ui/fixtures >> build/android-ui/fixture-server.log 2>&1 &
 curl --fail --silent --show-error --retry 8 --retry-connrefused --retry-delay 1 http://127.0.0.1:8765/fixture-state > build/android-ui/fixture-clean-ready.json
-maestro test -e LAYOUT="$1" .maestro/main.yaml >> build/android-ui/maestro.log 2>&1
+maestro test -e LAYOUT="$1" "$main_flow" >> build/android-ui/maestro.log 2>&1
 curl --fail --silent http://127.0.0.1:8765/fixture-state > build/android-ui/webdav-state.json
-python3 tool/android_ui/verify_sync.py build/android-ui/webdav-state.json
+python3 tool/android_ui/verify_sync.py build/android-ui/webdav-state.json "$validation_scope"
 python3 tool/android_ui/exercise_conflict.py inject
 maestro test -e LAYOUT="$1" .maestro/06-conflict-cancel.yaml >> build/android-ui/maestro.log 2>&1
 python3 tool/android_ui/exercise_conflict.py cancelled
