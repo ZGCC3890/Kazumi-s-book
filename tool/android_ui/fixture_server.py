@@ -2,6 +2,7 @@
 import argparse
 import html
 import json
+import re
 import struct
 import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -18,7 +19,7 @@ def novel_rule(letter):
     rule.update(id=f"fixture-{letter.lower()}", name=f"Fixture Source {letter}",
                 edition="UI fixture", revision="1", headers={"Referer": BASE + "/"},
                 searchUrl=f"{BASE}/novels/{letter}/search?kw=@keyword",
-                directBookUrlPattern=r"^http://10\.0\.2\.2:8765/novels/[ABC]/book\.html$")
+                directBookUrlPattern=rf"^{re.escape(BASE)}/novels/[ABC]/book\.html$")
     return rule
 
 
@@ -148,10 +149,10 @@ class Handler(BaseHTTPRequestHandler):
             letter, page = parts[1:]
             if page == "search":
                 return self.send(f'<a class="search-book" href="/novels/{letter}/book.html">'
-                    f'<div class="book-name">Fixture Book</div><div class="book-extra">Author {letter} 丨 owned content</div>'
+                    f'<div class="book-name">葬送的芙莉莲</div><div class="book-extra">Author {letter} 丨 owned content</div>'
                     '<div class="book-cover"><img src="/cover.png"></div></a>')
             if page == "book.html":
-                return self.send('<h1 class="book-title">Fixture Book</h1><h2 class="volume-title">Volume 1</h2>'
+                return self.send('<h1 class="book-title">葬送的芙莉莲</h1><h2 class="volume-title">Volume 1</h2>'
                     + ''.join(f'<div class="chapter"><a href="/novels/{letter}/{i}.html">Chapter {i}</a></div>' for i in range(1, 4)))
             if page in ("1.html", "2.html", "3.html"):
                 chapter = int(page[0])
@@ -189,9 +190,12 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    global BASE
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--base-url", default=BASE)
     args = parser.parse_args()
+    BASE = args.base_url
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "video-rule.json").write_text(json.dumps(video_rule()), encoding="utf-8")
     server = ThreadingHTTPServer(("0.0.0.0", 8765), Handler)

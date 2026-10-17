@@ -1,0 +1,49 @@
+appId: com.zgcc.kazumisbook
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "热门番组"
+    timeout: 60000
+- tapOn: "(?s).*追番.*"
+- tapOn: "(?s).*书架.*"
+- tapOn: "小说操作"
+- tapOn: "更换书源"
+- assertVisible: "选择小说书源"
+- extendedWaitUntil:
+    visible: "(?s).*Author B.*"
+    timeout: 30000
+- tapOn: "(?s).*Author B.*"
+- extendedWaitUntil:
+    visible: ".*Chapter 2 opening.*"
+    timeout: 30000
+- takeScreenshot: build/android-ui/cross-source-chapter-restored
+- back
+- extendedWaitUntil:
+    visible: "查看番剧详情"
+    timeout: 60000
+- tapOn: "查看番剧详情"
+- assertVisible: "选择番剧"
+- tapOn: ".*芙莉莲.*2023"
+- extendedWaitUntil:
+    visible: "开始观看"
+    timeout: 60000
+- takeScreenshot: build/android-ui/novel-to-anime-details
+- tapOn: "阅读轻小说"
+- assertVisible: "选择小说书源"
+- extendedWaitUntil:
+    visible: "(?s).*Author B.*"
+    timeout: 30000
+- tapOn: "(?s).*Author B.*"
+- extendedWaitUntil:
+    visible: ".*Chapter 2 opening.*"
+    timeout: 30000
+- takeScreenshot: build/android-ui/anime-to-novel-restored
+- back
+- back
+- tapOn: "同步小说"
+- extendedWaitUntil:
+    visible:
+      text: "同步小说"
+      enabled: true
+    timeout: 60000
+- takeScreenshot: build/android-ui/bookshelf-final-sync

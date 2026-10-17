@@ -16,8 +16,11 @@ assert all(len(revisions) == 1 for revisions in entities.values()), 'Unexpected 
 positions = [revisions[0]['value'] for key, revisions in entities.items() if key.startswith('position/')]
 assert positions, 'Reader progress was not synchronized'
 assert all(position is not None for position in positions), 'Reader progress was deleted'
+assert any(position['sourceId'] == 'fixture-b' for position in positions), 'Cross-source progress was not retained'
 shelves = [revisions[0]['value'] for key, revisions in entities.items() if key.startswith('shelf/')]
 assert shelves and all(shelf is not None for shelf in shelves), 'Bookshelf was not synchronized'
+assert any(key.startswith('anime/') and revisions[0]['value'] is not None
+           for key, revisions in entities.items()), 'Anime to novel association was not synchronized'
 bookmarks = {revisions[0]['value']['note']: revisions[0]['value']['position']
              for key, revisions in entities.items()
              if key.startswith('bookmark/') and revisions[0]['value'] is not None}

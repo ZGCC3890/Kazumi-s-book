@@ -11,10 +11,10 @@ appId: com.zgcc.kazumisbook
 - inputText: "Fixture"
 - tapOn: "搜索"
 - extendedWaitUntil:
-    visible: ".*Fixture Book.*"
+    visible: "(?s).*葬送的芙莉莲.*"
     timeout: 60000
 - tapOn:
-    text: ".*Fixture Book.*"
+    text: "(?s).*葬送的芙莉莲.*"
     index: 0
 - extendedWaitUntil:
     visible: ".*Chapter 1 opening.*"
@@ -43,7 +43,7 @@ appId: com.zgcc.kazumisbook
 - hideKeyboard
 - tapOn: "保存"
 - tapOn: "书签"
-- assertVisible: "Bookmark1"
+- assertVisible: "(?s).*Bookmark1.*"
 - tapOn: "删除书签"
 - assertVisible: "还没有书签"
 - back
@@ -84,7 +84,7 @@ appId: com.zgcc.kazumisbook
 - takeScreenshot: build/android-ui/reader-settings
 - back
 - tapOn: "目录"
-- tapOn: ".*Chapter 2.*"
+- tapOn: "(?s).*Chapter 2.*"
 - assertVisible: ".*Chapter 2 opening.*"
 - takeScreenshot: build/android-ui/reader-chapter-two
 - tapOn: "阅读进度"
@@ -94,10 +94,10 @@ appId: com.zgcc.kazumisbook
 - assertVisible: "加入书架？"
 - tapOn: "加入书架"
 - back
-- tapOn: "追番"
-- tapOn: "书架"
-- assertVisible: ".*Fixture Book.*"
+- tapOn: "(?s).*追番.*"
+- tapOn: "(?s).*书架.*"
+- assertVisible: "(?s).*葬送的芙莉莲.*"
 - takeScreenshot: build/android-ui/bookshelf-added
-- tapOn: ".*Fixture Book.*"
+- tapOn: "(?s).*葬送的芙莉莲.*"
 - assertVisible: ".*Chapter 2 opening.*"
 - takeScreenshot: build/android-ui/reader-resumed

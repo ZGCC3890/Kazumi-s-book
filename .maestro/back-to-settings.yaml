@@ -1,0 +1,8 @@
+appId: com.zgcc.kazumisbook
+---
+- back
+- runFlow:
+    when:
+      true: ${LAYOUT == 'tablet'}
+    commands:
+      - tapOn: "设置"

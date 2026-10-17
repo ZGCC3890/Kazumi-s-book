@@ -1,0 +1,183 @@
+import 'dart:io';
+import 'dart:convert';
+import 'dart:ui' as ui;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_modular/flutter_modular.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:integration_test/integration_test.dart';
+import 'package:kazumi/main.dart' as app;
+import 'package:kazumi/novel/novel_reader_page.dart';
+import 'package:kazumi/novel/novel_service.dart';
+import 'package:kazumi/pages/player/player_item.dart';
+import 'package:kazumi/pages/settings/settings_page.dart';
+import 'package:kazumi/pages/video/video_page.dart';
+
+Future<void> until(WidgetTester tester, bool Function() ready, String reason) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 60));
+  while (!ready() && DateTime.now().isBefore(deadline)) {
+    await tester.pump(const Duration(milliseconds: 200));
+  }
+  expect(ready(), isTrue, reason: reason);
+}
+
+Future<void> visible(WidgetTester tester, Finder finder) =>
+    until(tester, () => finder.evaluate().isNotEmpty, finder.toString());
+
+Future<void> click(WidgetTester tester, Finder finder) async {
+  await visible(tester, finder);
+  await tester.ensureVisible(finder.first);
+  await tester.tap(finder.first);
+  await tester.pump(const Duration(milliseconds: 450));
+}
+
+Future<void> text(WidgetTester tester, String value) =>
+    click(tester, find.text(value).last);
+
+Future<void> screenshot(WidgetTester tester, String name) async {
+  await tester.pump();
+  final boundary = tester.renderObject<RenderRepaintBoundary>(
+    find.byType(RepaintBoundary).first,
+  );
+  final image = await boundary.toImage();
+  final png = await image.toByteData(format: ui.ImageByteFormat.png);
+  final file = File('${Platform.environment['GITHUB_WORKSPACE']}/build/windows-ui/$name.png');
+  await file.parent.create(recursive: true);
+  await file.writeAsBytes(png!.buffer.asUint8List());
+  image.dispose();
+}
+
+void main() {
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  testWidgets('native Windows main search, import, reader, bookmarks and shelf', (tester) async {
+    // main initializes the real application data directory. Never run this
+    // unattended against a person's installed application's data.
+    expect(Platform.isWindows, isTrue);
+    expect(Platform.environment['GITHUB_ACTIONS'], 'true',
+        reason: 'This native flow requires a fresh isolated CI user profile.');
+    app.main();
+    for (final label in ['同意并继续', '继续', '开始使用', '仍然继续']) {
+      await text(tester, label);
+    }
+    await visible(tester, find.text('热门番组'));
+    await click(tester, find.byTooltip('搜索'));
+    await visible(tester, find.text('番剧搜索'));
+    await tester.enterText(find.byType(TextField).first, 'Frieren');
+    await click(tester, find.byTooltip('搜索'));
+    await visible(tester, find.textContaining('芙莉莲'));
+    await screenshot(tester, 'anime-search');
+    await click(tester, find.byTooltip('搜索类型'));
+    await text(tester, '小说');
+    await click(tester, find.byTooltip('小说规则'));
+    await Clipboard.setData(const ClipboardData(
+      text: 'http://127.0.0.1:8765/novels/rules.json',
+    ));
+    await text(tester, '添加规则');
+    await text(tester, '从剪贴板导入');
+    await text(tester, '导入规则');
+    await visible(tester, find.text('Fixture Source A'));
+    await tester.pageBack();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.enterText(find.byType(TextField).first, 'Fixture');
+    await click(tester, find.byTooltip('搜索'));
+    await text(tester, 'Author A');
+    await visible(tester, find.byType(NovelReaderPage));
+    final reader = tester.widget<NovelReaderPage>(find.byType(NovelReaderPage));
+    final novels = inject<NovelService>();
+    await until(tester, () => novels.position(reader.editionId) != null,
+        'Real reader must save its initial position');
+    expect(find.byTooltip('阅读设置'), findsNothing);
+    final size = tester.view.physicalSize / tester.view.devicePixelRatio;
+    await tester.dragFrom(Offset(16, size.height * .8), const Offset(0, -450));
+    await until(tester, () => novels.position(reader.editionId)!.textOffset > 0,
+        'Dragging the native Windows reader margin must advance the stored anchor');
+    final beforeKey = novels.position(reader.editionId)!.textOffset;
+    await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
+    await until(tester, () => novels.position(reader.editionId)!.textOffset > beforeKey,
+        'Native Windows PageDown must advance reading');
+    await tester.tapAt(size.center(Offset.zero));
+    await click(tester, find.byTooltip('添加书签'));
+    await tester.enterText(find.byType(TextField).last, 'WindowsBookmark');
+    await text(tester, '保存');
+    await until(tester, () => novels.bookmarks(reader.editionId)
+        .any((mark) => mark['note'] == 'WindowsBookmark'), 'Native bookmark must persist');
+    await text(tester, '目录');
+    await text(tester, 'Chapter 2');
+    await until(tester, () => novels.position(reader.editionId)!.chapter.title == 'Chapter 2',
+        'Directory selection must save chapter two');
+    await screenshot(tester, 'reader-chapter-two');
+    await tester.pageBack();
+    await text(tester, '加入书架');
+    await visible(tester, find.text('小说搜索'));
+    await tester.pageBack();
+    await tester.pump(const Duration(milliseconds: 300));
+    await click(tester, find.descendant(of: find.byType(NavigationRail),
+        matching: find.byIcon(Icons.favorite_border)));
+    await text(tester, '书架');
+    await visible(tester, find.text('葬送的芙莉莲'));
+    expect(novels.isShelved(reader.editionId), isTrue);
+    await screenshot(tester, 'bookshelf');
+    await text(tester, '葬送的芙莉莲');
+    await visible(tester, find.byType(NovelReaderPage));
+    await until(tester, () => novels.position(reader.editionId)!.chapter.title == 'Chapter 2',
+        'Bookshelf must resume chapter two');
+    await screenshot(tester, 'reader-resumed');
+    await tester.tapAt(size.center(Offset.zero));
+    await tester.pageBack();
+    await click(tester, find.descendant(of: find.byType(NavigationRail),
+        matching: find.byIcon(Icons.settings_outlined)));
+    await click(tester, find.byTooltip('全部设置'));
+    await text(tester, '规则管理');
+    final http = HttpClient();
+    final request = await http.getUrl(Uri.parse('http://127.0.0.1:8765/video-rule.json'));
+    final response = await request.close();
+    expect(response.statusCode, 200);
+    final ruleJson = await utf8.decoder.bind(response).join();
+    http.close();
+    await Clipboard.setData(ClipboardData(text: ruleJson));
+    await text(tester, '添加规则');
+    await text(tester, '从剪贴板导入');
+    await text(tester, '导入规则');
+    await visible(tester, find.text('Fixture Video'));
+    for (var back = 0; back < 3 && find.byType(SettingsPage).evaluate().isNotEmpty; back++) {
+      await tester.pageBack();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+    expect(find.byType(SettingsPage), findsNothing);
+    await click(tester, find.descendant(of: find.byType(NavigationRail),
+        matching: find.byIcon(Icons.home_outlined)));
+    await click(tester, find.byTooltip('搜索'));
+    await tester.enterText(find.byType(TextField).first, 'Frieren');
+    await click(tester, find.byTooltip('搜索'));
+    await text(tester, '葬送的芙莉莲');
+    await text(tester, '吐槽');
+    await visible(tester, find.byWidgetPredicate((widget) => widget is Semantics &&
+        widget.properties.identifier == 'bangumi-comment'));
+    await screenshot(tester, 'anime-comments');
+    await text(tester, '开始观看');
+    await visible(tester, find.text('Fixture Video'));
+    await text(tester, '葬送的芙莉莲');
+    await visible(tester, find.byType(VideoPage));
+    final video = tester.widget<VideoPage>(find.byType(VideoPage));
+    final player = video.playerController;
+    await until(tester, () => player.playback.playing &&
+        player.playback.currentPosition > const Duration(seconds: 1),
+        'Native Windows media must actually play the owned video');
+    if (!player.panel.showVideoController) {
+      await tester.tapAt(tester.getCenter(find.byType(PlayerItem)));
+    }
+    await click(tester, find.byTooltip('暂停'));
+    await until(tester, () => !player.playback.playing, 'Pause must stop native playback');
+    await screenshot(tester, 'video-paused');
+    await click(tester, find.byTooltip('播放'));
+    await until(tester, () => player.playback.playing, 'Play must resume native playback');
+    await click(tester, find.byTooltip('下一集'));
+    await until(tester, () => video.videoPageController.playingEpisode?.episode == 2 &&
+        player.playback.playing && player.playback.currentPosition > const Duration(seconds: 1),
+        'Next episode must load and actually play episode two');
+    await screenshot(tester, 'video-second-episode');
+    expect(tester.takeException(), isNull);
+  }, timeout: const Timeout(Duration(minutes: 8)));
+}

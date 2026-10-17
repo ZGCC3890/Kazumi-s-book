@@ -24,7 +24,7 @@ jobs:
       - name: Native test dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y clang cmake libgtk-3-dev ninja-build libayatana-appindicator3-dev libasound2-dev libssl-dev
+          sudo apt-get install -y clang cmake libgtk-3-dev ninja-build libayatana-appindicator3-dev libasound2-dev libssl-dev ffmpeg
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -37,17 +37,55 @@ jobs:
         run: flutter test
       - name: Verify live upstream anime search and comments
         run: flutter test test/live/book_services_test.dart --dart-define=BOOK_LIVE=true --reporter expanded
+      - name: Generate owned native video fixture
+        run: |
+          mkdir -p build/native-fixture
+          ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=640x360:rate=24 -f lavfi -i sine=frequency=440 -t 20 -c:v libx264 -pix_fmt yuv420p -c:a aac -movflags +faststart build/native-fixture/clip.mp4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Owned-native-video-fixture
+          path: build/native-fixture/clip.mp4
   windows:
     needs: checks
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           flutter-version-file: pubspec.yaml
           cache: true
       - run: flutter pub get
+      - uses: actions/download-artifact@v4
+        with:
+          name: Owned-native-video-fixture
+          path: build/windows-ui/fixtures
+      - name: Native Windows application operations
+        shell: pwsh
+        timeout-minutes: 25
+        run: |
+          New-Item -ItemType Directory -Path build/windows-ui -Force | Out-Null
+          $fixture = Start-Process python -ArgumentList @('tool/android_ui/fixture_server.py', '--output', 'build/windows-ui/fixtures', '--base-url', 'http://127.0.0.1:8765') -WindowStyle Hidden -PassThru -RedirectStandardOutput build/windows-ui/fixture.log -RedirectStandardError build/windows-ui/fixture-error.log
+          try {
+            flutter test integration_test/windows_book_operations_test.dart -d windows --reporter expanded *> build/windows-ui/test.log
+            $result = $LASTEXITCODE
+            Get-Content -LiteralPath build/windows-ui/test.log -Tail 45
+            if ($result -ne 0) { throw 'Native Windows operation flow failed.' }
+          } finally {
+            Stop-Process -Id $fixture.Id -ErrorAction SilentlyContinue
+          }
+      - name: Clear only the isolated native test profile
+        if: always()
+        shell: pwsh
+        run: ./tool/windows_ui/clean_test_profile.ps1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Windows-UI
+          path: build/windows-ui/
       - run: flutter build windows --release "--dart-define=DANDANAPI_APPID=$env:DANDANAPI_APPID" "--dart-define=DANDANAPI_KEY=$env:DANDANAPI_KEY"
       - name: Verify Windows identity and native startup
         shell: pwsh

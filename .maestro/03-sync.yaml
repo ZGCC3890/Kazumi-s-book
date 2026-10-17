@@ -4,14 +4,14 @@ appId: com.zgcc.kazumisbook
 - extendedWaitUntil:
     visible: "热门番组"
     timeout: 60000
-- tapOn: "我的"
+- tapOn: "(?s).*我的.*"
 - tapOn: "设置"
 - scrollUntilVisible:
-    element: "同步设置"
+    element: "(?s).*同步设置.*"
     direction: DOWN
-- tapOn: "同步设置"
-- tapOn: "WebDAV"
-- tapOn: "连接你的云盘"
+- tapOn: "(?s).*同步设置.*"
+- tapOn: "设置 WebDAV"
+- tapOn: "(?s).*连接你的云盘.*"
 - tapOn: "服务器地址"
 - inputText: "http://10.0.2.2:8765/dav"
 - tapOn: "用户名"
@@ -27,8 +27,8 @@ appId: com.zgcc.kazumisbook
     visible: "连接成功，配置已保存"
     timeout: 30000
 - tapOn: "返回同步设置"
-- tapOn: "启用 WebDAV"
-- tapOn: "小说阅读进度与书签"
+- tapOn: "(?s).*启用 WebDAV.*"
+- tapOn: "(?s).*小说阅读进度与书签.*"
 - extendedWaitUntil:
     visible: "小说阅读进度与书签已同步"
     timeout: 60000

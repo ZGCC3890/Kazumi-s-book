@@ -4,11 +4,11 @@ appId: com.zgcc.kazumisbook
 - extendedWaitUntil:
     visible: "热门番组"
     timeout: 60000
-- tapOn: "我的"
+- tapOn: "(?s).*我的.*"
 - tapOn: "设置"
-- tapOn: "规则管理"
+- tapOn: "(?s).*规则管理.*"
 - tapOn: "添加规则"
-- tapOn: "从文件导入"
+- tapOn: "(?s).*从文件导入.*"
 - runFlow:
     when:
       visible: "Show roots"
@@ -17,7 +17,7 @@ appId: com.zgcc.kazumisbook
 - tapOn: "Downloads"
 - tapOn: "book-test-video.json"
 - extendedWaitUntil:
-    visible: "Fixture Video"
+    visible: "(?s).*Fixture Video.*"
     timeout: 30000
 - takeScreenshot: build/android-ui/video-rule-file-import
 - tapOn: "Fixture Video 的更多操作"
@@ -32,8 +32,12 @@ appId: com.zgcc.kazumisbook
 - takeScreenshot: build/android-ui/video-rule-test
 - back
 - back
-- back
-- tapOn: "首页"
+- runFlow:
+    when:
+      true: ${LAYOUT == 'phone'}
+    commands:
+      - back
+- tapOn: "(?s).*推荐.*"
 - tapOn: "搜索"
 - tapOn: "搜索番剧名称"
 - inputText: "Frieren"
@@ -56,10 +60,10 @@ appId: com.zgcc.kazumisbook
 - takeScreenshot: build/android-ui/anime-comments
 - tapOn: "开始观看"
 - extendedWaitUntil:
-    visible: "Fixture Video"
+    visible: "(?s).*Fixture Video.*"
     timeout: 30000
 - tapOn:
-    text: ".*葬送的芙莉莲.*"
+    text: "(?s).*葬送的芙莉莲.*"
     index: 0
 - extendedWaitUntil:
     notVisible: "视频资源解析中"

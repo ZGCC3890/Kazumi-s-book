@@ -32,15 +32,17 @@ appId: com.zgcc.kazumisbook
 - tapOn: "小说规则"
 - assertVisible: "我的规则"
 - tapOn: "添加规则"
-- tapOn: "从剪贴板导入"
+- tapOn: "(?s).*从剪贴板导入.*"
 - tapOn: "规则内容"
 - inputText: "http://10.0.2.2:8765/novels/rules.json"
 - hideKeyboard
-- tapOn: "导入规则"
-- assertVisible: "Fixture Source A"
-- assertVisible: "Fixture Source C"
+- tapOn:
+    text: "导入规则"
+    index: 1
+- assertVisible: "(?s).*Fixture Source A.*"
+- assertVisible: "(?s).*Fixture Source C.*"
 - tapOn: "添加规则"
-- tapOn: "浏览规则仓库"
+- tapOn: "(?s).*浏览规则仓库.*"
 - tapOn: "规则仓库设置"
 - tapOn: "规则仓库地址"
 - eraseText: 200
@@ -48,105 +50,107 @@ appId: com.zgcc.kazumisbook
 - hideKeyboard
 - tapOn: "保存"
 - extendedWaitUntil:
-    visible: "Fixture Source B"
+    visible: "(?s).*Fixture Source B.*"
     timeout: 30000
 - tapOn: "安装"
 - assertVisible: "重新获取"
 - tapOn: "重新获取"
 - assertVisible: "重新获取"
 - back
-- assertVisible: "Fixture Source B"
+- assertVisible: "(?s).*Fixture Source B.*"
 - tapOn: "管理Fixture Source C"
 - tapOn: "复制规则链接"
 - tapOn: "管理Fixture Source C"
 - tapOn: "删除规则"
 - tapOn: "保留"
-- assertVisible: "Fixture Source C"
+- assertVisible: "(?s).*Fixture Source C.*"
 - tapOn: "管理Fixture Source C"
 - tapOn: "删除规则"
 - tapOn: "删除"
-- assertNotVisible: "Fixture Source C"
+- assertNotVisible: "(?s).*Fixture Source C.*"
 - tapOn: "添加规则"
-- tapOn: "从剪贴板导入"
-- tapOn: "导入规则"
-- assertVisible: "Fixture Source C"
+- tapOn: "(?s).*从剪贴板导入.*"
+- tapOn:
+    text: "导入规则"
+    index: 1
+- assertVisible: "(?s).*Fixture Source C.*"
 - takeScreenshot: build/android-ui/installed-novel-rules
 - back
 - tapOn: "搜索小说书名"
 - inputText: "Fixture"
 - tapOn: "搜索"
 - extendedWaitUntil:
-    visible: ".*Fixture Book.*"
+    visible: "(?s).*葬送的芙莉莲.*"
     timeout: 60000
 - takeScreenshot: build/android-ui/novel-search
 - back
-- tapOn: "追番"
+- tapOn: "(?s).*追番.*"
 - assertVisible: "书架"
-- tapOn: "书架"
+- tapOn: "(?s).*书架.*"
 - assertVisible: "搜索小说"
 - takeScreenshot: build/android-ui/bookshelf
-- tapOn: "我的"
+- tapOn: "(?s).*我的.*"
 - tapOn: "设置"
 - assertVisible: "播放设置"
 - takeScreenshot: build/android-ui/settings
-- tapOn: "播放设置"
+- tapOn: "(?s).*播放设置.*"
 - assertVisible: "播放设置"
-- back
-- tapOn: "弹幕设置"
+- runFlow: back-to-settings.yaml
+- tapOn: "(?s).*弹幕设置.*"
 - assertVisible: "弹幕设置"
-- back
-- tapOn: "操作设置"
+- runFlow: back-to-settings.yaml
+- tapOn: "(?s).*操作设置.*"
 - assertVisible: "操作设置"
-- back
-- tapOn: "规则管理"
+- runFlow: back-to-settings.yaml
+- tapOn: "(?s).*规则管理.*"
 - assertVisible: "添加规则"
-- back
-- tapOn: "下载设置"
+- runFlow: back-to-settings.yaml
+- tapOn: "(?s).*下载设置.*"
 - assertVisible: "下载设置"
-- back
+- runFlow: back-to-settings.yaml
 - scrollUntilVisible:
-    element: "外观设置"
+    element: "(?s).*外观设置.*"
     direction: DOWN
-- tapOn: "外观设置"
+- tapOn: "(?s).*外观设置.*"
 - assertVisible: "外观设置"
-- tapOn: "深色模式"
+- tapOn: "(?s).*深色模式.*"
 - tapOn: "深色"
 - takeScreenshot: build/android-ui/theme-settings
-- back
+- runFlow: back-to-settings.yaml
 - scrollUntilVisible:
-    element: "界面设置"
+    element: "(?s).*界面设置.*"
     direction: DOWN
-- tapOn: "界面设置"
+- tapOn: "(?s).*界面设置.*"
 - assertVisible: "界面设置"
-- back
+- runFlow: back-to-settings.yaml
 - scrollUntilVisible:
-    element: "同步设置"
+    element: "(?s).*同步设置.*"
     direction: DOWN
-- tapOn: "同步设置"
+- tapOn: "(?s).*同步设置.*"
 - assertVisible: "WebDAV"
 - takeScreenshot: build/android-ui/sync-settings
-- back
+- runFlow: back-to-settings.yaml
 - scrollUntilVisible:
-    element: "网络设置"
+    element: "(?s).*网络设置.*"
     direction: DOWN
-- tapOn: "网络设置"
+- tapOn: "(?s).*网络设置.*"
 - assertVisible: "网络设置"
-- back
+- runFlow: back-to-settings.yaml
 - scrollUntilVisible:
-    element: "更新设置"
+    element: "(?s).*更新设置.*"
     direction: DOWN
-- tapOn: "更新设置"
+- tapOn: "(?s).*更新设置.*"
 - assertVisible: "更新设置"
-- back
+- runFlow: back-to-settings.yaml
 - scrollUntilVisible:
-    element: "存储与日志"
+    element: "(?s).*存储与日志.*"
     direction: DOWN
-- tapOn: "存储与日志"
+- tapOn: "(?s).*存储与日志.*"
 - assertVisible: "存储与日志"
-- back
+- runFlow: back-to-settings.yaml
 - scrollUntilVisible:
-    element: "关于"
+    element: "(?s).*关于.*"
     direction: DOWN
-- tapOn: "关于"
+- tapOn: "(?s).*关于.*"
 - assertVisible: ".*Kazumi.*book.*"
 - takeScreenshot: build/android-ui/about
