@@ -1,8 +1,8 @@
-name: Temporary Android full operations and playback
+name: Android application and playback validation
 
 on:
   push:
-    branches: [ci/android-media-diagnostic]
+    branches: [ci/android-media-diagnostic, ci/android-ui-validation]
 
 permissions:
   contents: read
@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   compare:
+    if: github.ref == 'refs/heads/ci/android-media-diagnostic'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -73,16 +74,23 @@ jobs:
         layout: [phone, tablet]
     steps:
       - uses: actions/checkout@v4
+      - name: Verify the existing APK matches application sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          source_commit=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/39074039751" --jq .head_sha)
+          git fetch --no-tags --depth=1 origin "$source_commit"
+          git diff --exit-code --quiet "$source_commit" HEAD -- . ':(exclude).maestro/**' ':(exclude).github/workflows/book-media-diagnostic.yml' ':(exclude)test/novel_rules_page_test.dart'
       - uses: actions/download-artifact@v4
         with:
           name: Kazumis-book-Android-ui-test
-          run-id: 39029285891
+          run-id: 39074039751
           github-token: ${{ github.token }}
           path: android-ui-apk
       - uses: actions/download-artifact@v4
         with:
           name: Kazumis-book-Android-upgrade-baseline
-          run-id: 39029285891
+          run-id: 39074039751
           github-token: ${{ github.token }}
           path: android-upgrade-apk
       - uses: actions/setup-java@v4

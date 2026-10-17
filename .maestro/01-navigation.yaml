@@ -75,7 +75,10 @@ appId: com.zgcc.kazumisbook
 - assertVisible: "(?s).*Fixture Source A.*"
 - assertVisible: "(?s).*Fixture Source C.*"
 - tapOn:
-    text: "(?s).*Fixture Source A.*"
+    text: "管理Fixture Source A"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    text: "书源账号与网站"
     waitToSettleTimeoutMs: 100
 - assertVisible: "打开书源网站 / 注册"
 - assertVisible: "(?s).*未声明客户端登录和验证协议.*"

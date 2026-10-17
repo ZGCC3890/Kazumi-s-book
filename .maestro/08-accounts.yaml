@@ -26,7 +26,8 @@ appId: com.zgcc.kazumisbook
 - inputText: "http://10.0.2.2:8765/account/rule.json"
 - hideKeyboard
 - tapOn: {text: "导入规则", index: 1, waitToSettleTimeoutMs: 100}
-- tapOn: {text: "(?s).*Fixture Account.*", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "管理Fixture Account", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "书源账号与网站", waitToSettleTimeoutMs: 100}
 - tapOn: {text: "书源用户名", waitToSettleTimeoutMs: 100}
 - inputText: "fixture-reader"
 - tapOn: {text: "密码", waitToSettleTimeoutMs: 100}
@@ -51,7 +52,8 @@ appId: com.zgcc.kazumisbook
     timeout: 2000
 - runScript: scripts/assert-account-renewed.js
 - tapOn: {text: "小说规则", waitToSettleTimeoutMs: 100}
-- tapOn: {text: "(?s).*Fixture Account.*", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "管理Fixture Account", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "书源账号与网站", waitToSettleTimeoutMs: 100}
 - assertVisible: "fixture-reader"
 - tapOn: {text: "验证当前会话", waitToSettleTimeoutMs: 100}
 - assertVisible: "当前登录会话验证成功"
@@ -59,7 +61,8 @@ appId: com.zgcc.kazumisbook
 - tapOn: {text: "清除登录", waitToSettleTimeoutMs: 100}
 - assertVisible: "已清除本机账号密码和登录会话"
 - tapOn: {text: "取消", waitToSettleTimeoutMs: 100}
-- tapOn: {text: "(?s).*Fixture Account.*", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "管理Fixture Account", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "书源账号与网站", waitToSettleTimeoutMs: 100}
 - assertNotVisible: "fixture-reader"
 - tapOn: {text: "登录并验证", waitToSettleTimeoutMs: 100}
 - assertVisible: "(?s).*请填写书源用户名和密码.*"
