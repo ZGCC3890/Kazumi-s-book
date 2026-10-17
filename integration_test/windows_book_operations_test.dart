@@ -289,9 +289,17 @@ void main() {
     await until(tester, () => player.playback.playing &&
         player.playback.currentPosition > const Duration(seconds: 1),
         'Native Windows media must actually play the owned video');
-    if (!player.panel.showVideoController) {
-      await tester.tapAt(tester.getCenter(find.byType(PlayerItem)));
-    }
+    await until(tester, () => find.byType(SnackBar).evaluate().isEmpty,
+        'The initial player status message must leave the controls');
+    final mouse = await tester.createGesture(kind: ui.PointerDeviceKind.mouse);
+    await mouse.addPointer();
+    addTearDown(() => mouse.removePointer());
+    await mouse.moveTo(tester.getCenter(find.byType(PlayerItem)));
+    await until(tester, () => find.byTooltip('暂停').hitTestable().evaluate().isNotEmpty,
+        'Desktop hover must expose the pause control');
+    await mouse.moveTo(tester.getCenter(find.byTooltip('暂停')));
+    await tester.pump(const Duration(milliseconds: 100));
+    await screenshot(tester, 'video-playing');
     await click(tester, find.byTooltip('暂停'));
     await until(tester, () => !player.playback.playing, 'Pause must stop native playback');
     await screenshot(tester, 'video-paused');
