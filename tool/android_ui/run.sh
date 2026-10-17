@@ -4,10 +4,17 @@ mkdir -p build/android-ui
 capture() {
   adb logcat -d > build/android-ui/logcat.txt
   adb exec-out screencap -p > build/android-ui/final-screen.png
+  if [ -f build/android-ui/maestro.log ]; then
+    tail -n 60 build/android-ui/maestro.log
+  fi
 }
 trap capture EXIT
+ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=640x360:rate=24 -f lavfi -i sine=frequency=440 -t 20 -c:v libx264 -pix_fmt yuv420p -c:a aac -movflags +faststart build/android-ui/fixtures-clip.mp4
+mkdir -p build/android-ui/fixtures
+mv build/android-ui/fixtures-clip.mp4 build/android-ui/fixtures/clip.mp4
 python3 tool/android_ui/fixture_server.py --output build/android-ui/fixtures > build/android-ui/fixture-server.log 2>&1 &
 adb install -r android-ui-apk/app-x86_64-release.apk > build/android-ui/install.log
+adb push build/android-ui/fixtures/video-rule.json /sdcard/Download/book-test-video.json > build/android-ui/push-fixture.log
 adb logcat -c
 if [ "$1" = tablet ]; then
   adb shell wm size 800x1280
@@ -20,4 +27,6 @@ else
   adb shell settings put system accelerometer_rotation 0
   adb shell settings put system user_rotation 0
 fi
-maestro test .maestro > build/android-ui/maestro.log 2>&1
+maestro test .maestro/main.yaml > build/android-ui/maestro.log 2>&1
+curl --fail --silent http://127.0.0.1:8765/fixture-state > build/android-ui/webdav-state.json
+python3 tool/android_ui/verify_sync.py build/android-ui/webdav-state.json

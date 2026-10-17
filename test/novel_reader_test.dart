@@ -37,7 +37,15 @@ class _ReaderStore extends ChangeNotifier implements NovelReaderStore {
   @override NovelJson get preferences => Map.of(prefs);
   @override NovelSyncState get state => _state;
   @override String? get syncError => null;
-  @override NovelPosition? position(String editionId) => remotePosition ?? (saved.isEmpty ? initial : saved.last);
+  @override NovelPosition? position(String editionId) {
+    if (remotePosition != null) return remotePosition;
+    final key = 'position/$editionId';
+    if (_state.revisions(key).isNotEmpty) {
+      final value = _state.value(key);
+      return value == null ? null : NovelPosition.fromJson(value);
+    }
+    return saved.isEmpty ? initial : saved.last;
+  }
   final readIdentities = <String, String>{};
   @override Future<String> chapterReadIdentity(String editionId, NovelBook book,
       NovelChapter chapter, NovelPosition? restoredFrom) async {
@@ -53,8 +61,18 @@ class _ReaderStore extends ChangeNotifier implements NovelReaderStore {
   }
   String mappingKey(NovelPosition from, NovelBook target) =>
       '${from.editionId}/${from.sourceId}/${from.chapter.url}/${target.sourceId}/${target.url}';
-  @override NovelChapter? mappedChapter(NovelPosition from, NovelBook target) =>
-      mappings[mappingKey(from, target)];
+  @override String chapterMappingKey(NovelPosition from, NovelBook target) =>
+      'chapterMap/${mappingKey(from, target)}';
+  @override List<String> chapterMappingWriteKeys(NovelPosition from, NovelBook target,
+      NovelChapter chapter) => [chapterMappingKey(from, target)];
+  @override NovelChapter? mappedChapter(NovelPosition from, NovelBook target) {
+    final key = chapterMappingKey(from, target);
+    if (_state.revisions(key).isNotEmpty) {
+      final value = _state.value(key);
+      return value == null ? null : NovelChapter.fromJson(value['chapter'] as NovelJson);
+    }
+    return mappings[mappingKey(from, target)];
+  }
   @override Future<void> confirmChapterMapping(NovelPosition from, NovelBook target, NovelChapter chapter) async {
     mappings[mappingKey(from, target)] = NovelChapter.fromJson(chapter.toJson());
     mappingWrites++;
@@ -84,8 +102,8 @@ class _ReaderStore extends ChangeNotifier implements NovelReaderStore {
   }
   @override Future<void> deleteBookmark(String id) async {}
   @override List<NovelJson> bookmarks(String editionId) => marks;
-  @override Future<void> resolve(String key, NovelRevision selected) async {
-    _state = _state.resolve(key, selected, 'test-device');
+  @override Future<void> resolve(String key, NovelRevision selected, {required String expectedToken}) async {
+    _state = _state.resolve(key, selected, 'test-device', expectedToken: expectedToken);
     notifyListeners();
   }
   @override Future<void> syncAutomatically() async {}
@@ -142,6 +160,102 @@ Future<void> _showControls(WidgetTester tester) async {
 ScrollController _scroll(WidgetTester tester) => tester.widget<ListView>(find.byType(ListView).first).controller!;
 
 void main() {
+  testWidgets('unrelated book and bookmark conflicts do not stop reading or settings', (tester) async {
+    final store = _ReaderStore({_one.url: const [NovelBlock.text('正常正文继续阅读。')]});
+    store._state = NovelSyncState().edit('position/other', {'title': 'A'}, 'a')
+        .merge(NovelSyncState().edit('position/other', {'title': 'B'}, 'b'));
+    const key = 'bookmark/other';
+    store._state = store.state.merge(NovelSyncState().edit(key,
+        {'position': {'editionId': 'other'}}, 'a'))
+        .merge(NovelSyncState().edit(key, null, 'b'));
+    await _open(tester, store);
+    expect(store.saved, isNotEmpty);
+    expect(find.byType(AlertDialog), findsNothing);
+    await tester.tap(find.byTooltip('阅读设置'));
+    await tester.pumpAndSettle();
+    expect(find.text('阅读设置'), findsOneWidget);
+    expect(store.state.conflicts, containsAll(['position/other', key]));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('reader rejects a progress choice when a third candidate arrives', (tester) async {
+    const text = '同一篇正文的三个不同续读位置。';
+    final store = _ReaderStore({_one.url: const [NovelBlock.text(text)]});
+    final first = _position(_one, text, 1);
+    final second = _position(_two, text, 2);
+    store._state = NovelSyncState().edit('position/edition', first.toJson(), 'a')
+        .merge(NovelSyncState().edit('position/edition', second.toJson(), 'b'));
+    await _open(tester, store, showControls: false);
+    await tester.tap(find.text('选择进度'));
+    await tester.pumpAndSettle();
+    store._state = store.state.merge(NovelSyncState().edit('position/edition',
+        _position(_one, text, 3).toJson(), 'c'));
+    store.notifyListeners();
+    await tester.tap(find.widgetWithText(ListTile, '第一卷 第一章\n${first.quote}'));
+    await tester.pumpAndSettle();
+    expect(store.state.revisions('position/edition'), hasLength(3));
+    expect(find.text('Bad state: 冲突已发生变化，请重新选择'), findsOneWidget);
+    expect(store.saved, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('same-book bookmark conflict is visible without stopping current reading', (tester) async {
+    const text = '阅读进度和书签是两种独立的数据。';
+    final store = _ReaderStore({_one.url: const [NovelBlock.text(text)]});
+    const key = 'bookmark/conflicting';
+    store._state = NovelSyncState().edit(key, {
+      'id': 'conflicting', 'note': '待选择书签',
+      'position': _position(_one, text, 3).toJson(),
+    }, 'a').merge(NovelSyncState().edit(key, null, 'b'));
+    final token = store.state.conflictToken(key);
+    await _open(tester, store);
+    expect(store.saved, isNotEmpty);
+    await tester.tap(find.byTooltip('书签'));
+    await tester.pumpAndSettle();
+    expect(find.text('书签有冲突'), findsOneWidget);
+    expect(find.text('还没有书签'), findsNothing);
+    await tester.tap(find.text('书签有冲突'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(store.state.conflictToken(key), token);
+    await tester.tap(find.text('书签有冲突'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保留删除'));
+    await tester.pumpAndSettle();
+    expect(store.state.value(key), isNull);
+    expect(find.text('还没有书签'), findsOneWidget);
+    expect(store.state.value('position/edition'), isNotNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('mapping conflict cancellation keeps original position; explicit choice resumes', (tester) async {
+    const text = '跨源章节对应必须确认，不能自动取其中一个。';
+    final original = _position(_one, text, 3);
+    final store = _ReaderStore({_one.url: const [NovelBlock.text(text)],
+      _two.url: const [NovelBlock.text(text)]}, initial: original);
+    final key = store.chapterMappingKey(original, _book);
+    store._state = NovelSyncState().edit(key, {'chapter': _one.toJson()}, 'a')
+        .merge(NovelSyncState().edit(key, {'chapter': _two.toJson()}, 'b'));
+    final before = store.state.encode();
+    await _open(tester, store, awaitsChoice: true);
+    expect(find.text('选择要保留的章节对应'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(store.state.encode(), before);
+    expect(store.saved, isEmpty);
+    expect(find.text('Bad state: 章节对应尚未选择，原进度已保留。'), findsOneWidget);
+    await tester.tap(find.text('重新加载'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('第一卷 第一章'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(store.state.revisions(key), hasLength(1));
+    expect(store.saved.last.chapter.url, _one.url);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final readingMode in ['scroll', 'page']) {
     testWidgets('$readingMode reader follows app theme without moving progress', (tester) async {
       final mode = ValueNotifier(ThemeMode.light);

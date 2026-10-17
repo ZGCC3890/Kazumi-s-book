@@ -14,7 +14,7 @@ import 'package:logger/logger.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
 const _novels = '/kazumiSync/novels';
-const _novelFile = '$_novels/v1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-'
+const _novelFile = '$_novels/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-'
     'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.json';
 
 class _Paths extends PathProviderPlatform {

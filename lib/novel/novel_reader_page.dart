@@ -6,6 +6,7 @@ import 'novel_layout.dart';
 import 'novel_locator.dart';
 import 'novel_models.dart';
 import 'novel_reader_store.dart';
+import 'novel_conflicts.dart';
 
 class NovelReaderPage extends StatefulWidget {
   const NovelReaderPage({
@@ -90,6 +91,10 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     });
     try {
       _chapters = await service.catalog(widget.book, refresh: refresh);
+      if (NovelConflicts.has(service.state, 'position/${widget.editionId}')) {
+        _fail(StateError('阅读进度有冲突，请选择要继续的进度。'));
+        return;
+      }
       final position = service.position(widget.editionId);
       if (!mounted) return;
       if (position == null) {
@@ -106,6 +111,11 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     NovelPosition position, {
     bool refresh = false,
   }) async {
+    if (!await NovelConflicts.ensure(context, service,
+        () => [service.chapterMappingKey(position, widget.book)])) {
+      _fail(StateError('章节对应尚未选择，原进度已保留。'));
+      return;
+    }
     final mapped = service.mappedChapter(position, widget.book);
     final currentMapping = mapped == null
         ? <NovelChapter>[]
@@ -213,6 +223,11 @@ class _NovelReaderPageState extends State<NovelReaderPage>
       }
       if (!mounted || generation != _generation) return;
       if (confirmMapping) {
+        if (!await NovelConflicts.ensure(context, service, () =>
+            service.chapterMappingWriteKeys(restore!, widget.book, chapter))) {
+          _fail(StateError('章节对应尚未选择，原进度已保留。'));
+          return;
+        }
         await service.confirmChapterMapping(restore!, widget.book, chapter);
       }
       if (!mounted || generation != _generation) return;
@@ -301,10 +316,26 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     if (_leaving || _exitPending) return;
     _exitPending = true;
     try {
+      var leaveWithoutWriting = false;
       if (service.state.revisions('position/${widget.editionId}').length > 1) {
-        await _resolvePosition();
+        leaveWithoutWriting = _location == null || identical(_location, _savedLocation);
+        if (!leaveWithoutWriting) {
+          final discard = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('阅读进度有冲突'),
+              content: const Text('当前页面的新位置尚未保存。退出会放弃这一位置，保留所有已有冲突候选。'),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('返回阅读')),
+                TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('放弃未保存位置并退出')),
+              ],
+            ),
+          );
+          if (discard != true || !mounted) return;
+          leaveWithoutWriting = true;
+        }
       }
-      if (!await _save()) return;
+      if (!leaveWithoutWriting && !await _save()) return;
       await widget.onLeave?.call(Set.unmodifiable(_readChapters));
       if (mounted) setState(() => _leaving = true);
       unawaited(service.syncAutomatically());
@@ -326,42 +357,10 @@ class _NovelReaderPageState extends State<NovelReaderPage>
 
   Future<void> _resolvePosition({bool reopen = false}) async {
     final key = 'position/${widget.editionId}';
-    final revisions = service.state.revisions(key);
-    final selected = await showDialog<int>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('选择要继续的进度'),
-        content: SizedBox(
-          width: 520,
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              for (var i = 0; i < revisions.length; i++)
-                ListTile(
-                  title: Text(
-                    revisions[i].value == null
-                        ? '删除进度'
-                        : '${(revisions[i].value!['chapter'] as NovelJson)['title']}',
-                  ),
-                  subtitle: Text(revisions[i].value?['quote'] as String? ?? ''),
-                  onTap: () => Navigator.pop(ctx, i),
-                ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-        ],
-      ),
-    );
-    if (selected == null) return;
-    await service.resolve(key, revisions[selected]);
-    _location = revisions[selected].value == null
-        ? null
-        : NovelPosition.fromJson(revisions[selected].value!);
+    if (!await NovelConflicts.choose(context, service, key) || !mounted ||
+        NovelConflicts.has(service.state, key)) return;
+    _location = service.position(widget.editionId);
+    _savedLocation = _location;
     if (reopen && mounted) await _open();
   }
 
@@ -547,11 +546,14 @@ class _NovelReaderPageState extends State<NovelReaderPage>
         listenable: service,
         builder: (_, _) {
           final marks = service.bookmarks(widget.editionId);
+          final conflicts = NovelConflicts.bookmarkKeys(service.state, widget.editionId);
           return SafeArea(
             child: ListView(
               children: [
                 const ListTile(title: Text('我的书签')),
-                if (marks.isEmpty) const ListTile(title: Text('还没有书签')),
+                if (marks.isEmpty && conflicts.isEmpty) const ListTile(title: Text('还没有书签')),
+                for (final key in conflicts)
+                  NovelConflictTile(store: service, recordKey: key),
                 for (final mark in marks)
                   ListTile(
                     title: Text(
@@ -566,13 +568,21 @@ class _NovelReaderPageState extends State<NovelReaderPage>
                     trailing: IconButton(
                       tooltip: '删除书签',
                       icon: const Icon(Icons.delete_outline),
-                      onPressed: () =>
-                          service.deleteBookmark(mark['id'] as String),
+                      onPressed: () => _bookmarkAction(() async {
+                        final id = mark['id'] as String;
+                        if (await NovelConflicts.ensure(ctx, service, () => ['bookmark/$id'])) {
+                          await service.deleteBookmark(id);
+                        }
+                      }),
                     ),
-                    onTap: () => Navigator.pop(
-                      ctx,
-                      NovelPosition.fromJson(mark['position'] as NovelJson),
-                    ),
+                    onTap: () => _bookmarkAction(() async {
+                      final id = mark['id'] as String;
+                      if (!await NovelConflicts.ensure(ctx, service, () => ['bookmark/$id']) || !ctx.mounted) return;
+                      final current = service.bookmarks(widget.editionId)
+                          .where((value) => value['id'] == id).firstOrNull;
+                      if (current != null) Navigator.pop(ctx,
+                          NovelPosition.fromJson(current['position'] as NovelJson));
+                    }),
                   ),
               ],
             ),
@@ -587,6 +597,15 @@ class _NovelReaderPageState extends State<NovelReaderPage>
       } catch (error) {
         _fail(error);
       }
+    }
+  }
+
+  Future<void> _bookmarkAction(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())));
     }
   }
 

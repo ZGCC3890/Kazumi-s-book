@@ -151,6 +151,8 @@ jobs:
           java-version: '17'
       - name: Install pinned Android UI test runner
         run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
           curl --fail --location --silent --show-error https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.11.0/maestro.zip --output "$RUNNER_TEMP/maestro.zip"
           unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP/maestro"
           test -f "$RUNNER_TEMP/maestro/maestro/bin/maestro"

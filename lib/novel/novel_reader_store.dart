@@ -15,6 +15,10 @@ abstract interface class NovelReaderStore implements Listenable {
     NovelPosition? restoredFrom,
   );
   NovelChapter? mappedChapter(NovelPosition from, NovelBook target);
+  String chapterMappingKey(NovelPosition from, NovelBook target);
+  List<String> chapterMappingWriteKeys(
+    NovelPosition from, NovelBook target, NovelChapter chapter,
+  );
   Future<void> confirmChapterMapping(
     NovelPosition from,
     NovelBook target,
@@ -32,6 +36,8 @@ abstract interface class NovelReaderStore implements Listenable {
   Future<void> addBookmark(NovelPosition position, String note);
   Future<void> deleteBookmark(String id);
   List<NovelJson> bookmarks(String editionId);
-  Future<void> resolve(String key, NovelRevision selected);
+  Future<void> resolve(String key, NovelRevision selected, {
+    required String expectedToken,
+  });
   Future<void> syncAutomatically();
 }

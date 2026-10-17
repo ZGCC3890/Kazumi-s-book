@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:kazumi/novel/novel_sync_state.dart';
 import 'package:kazumi/novel/novel_webdav_exchange.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
@@ -96,14 +97,14 @@ class WebDav {
 
   Future<String?> syncNovels({required String deviceId,
     required Set<String> knownSnapshots,
+    void Function()? onLegacyDetected,
     required Future<NovelSyncState> Function(NovelSyncState, Set<String>) merge}) =>
       _runWebDavExclusive(() async {
     bool enabled() => GStorage.getSetting(SettingsKeys.webDavEnable) &&
         GStorage.getSetting(SettingsKeys.webDavEnableNovels);
     if (!enabled()) return null;
     if (!initialized) await _init();
-    const path = '$_syncRootPath/novels/v1';
-    await _ensureRemoteDirectory('$_syncRootPath/novels');
+    const path = '$_syncRootPath/novels';
     await _ensureRemoteDirectory(path);
     await _ensureLocalTempDirectory();
     final run = await webDavLocalTempDirectory.createTemp('novel-sync-');
@@ -111,11 +112,33 @@ class WebDav {
       var index = 0;
       return await const NovelWebDavExchange().run(
         deviceId: deviceId, knownSnapshots: knownSnapshots, enabled: enabled, merge: merge,
-        list: () async => (await client.readDir(path)).where((e) => e.isDir != true)
-            .map((e) => e.name!).toList(),
+        list: () async {
+          final entries = await client.readDir(path);
+          final names = entries.where((e) => e.isDir != true)
+              .map((e) => e.name!).toList();
+          if (entries.any((e) => e.isDir == true && e.name == 'v1')) {
+            // Import old devices' immutable heads; all new writes stay flat.
+            // Never delete the legacy collection: an old writer may be active.
+            final legacy = (await client.readDir('$path/v1'))
+                .where((e) => e.isDir != true).map((e) => 'v1/${e.name!}').toList();
+            if (legacy.any((name) =>
+                NovelWebDavExchange.snapshotName.hasMatch(name.substring(3)))) {
+              onLegacyDetected?.call();
+            }
+            names.addAll(legacy);
+          }
+          return names;
+        },
         read: (name) async {
           final file = File('${run.path}/remote-${index++}.json');
-          await client.read2File('$path/$name', file.path);
+          try {
+            await client.read2File('$path/$name', file.path);
+          } on DioException catch (error) {
+            if (error.response?.statusCode == 404) {
+              throw NovelSnapshotMissing(name);
+            }
+            rethrow;
+          }
           return file.readAsString();
         },
         write: (name, body) async {
@@ -124,6 +147,7 @@ class WebDav {
           await client.writeFromFile(upload.path, '$path/$name');
         },
         move: (from, to) => client.rename('$path/$from', '$path/$to', false),
+        remove: (name) => client.remove('$path/$name'),
       );
     } finally {
       await run.delete(recursive: true);

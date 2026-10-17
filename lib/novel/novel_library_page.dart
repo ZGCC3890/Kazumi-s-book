@@ -5,6 +5,7 @@ import 'novel_rules_page.dart';
 import 'novel_service.dart';
 import 'novel_book_cover.dart';
 import 'novel_anime_link.dart';
+import 'novel_conflicts.dart';
 
 class NovelLibraryPage extends StatelessWidget {
   const NovelLibraryPage({super.key, required this.service, this.title});
@@ -79,6 +80,8 @@ class NovelLibraryPage extends StatelessWidget {
             ),
           if (service.lastSync != null)
             ListTile(title: Text('上次同步：${service.lastSync!.toLocal()}')),
+          if (service.syncNotice != null)
+            ListTile(title: Text(service.syncNotice!)),
           if (service.state.conflicts.isNotEmpty)
             ListTile(
               leading: const Icon(Icons.merge),
@@ -86,36 +89,49 @@ class NovelLibraryPage extends StatelessWidget {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => NovelEntry.conflicts(context, service),
             ),
-          if (service.shelfEditions.isEmpty)
+          if (service.shelfEditions.isEmpty && service.state.conflicts.isEmpty)
             const Padding(
               padding: EdgeInsets.all(32),
               child: Text('点击“搜索小说”选择书源开始阅读，也可以从番剧详情或追番卡片打开小说。'),
             ),
-          if (service.state.conflicts.isEmpty)
-            for (final edition in service.shelfEditions)
+          for (final key in service.state.conflicts)
+            Card(child: NovelConflictTile(store: service, recordKey: key)),
+            for (final edition in service.shelfEditions.where((edition) =>
+                NovelConflicts.displayKeys(service.state, edition.id).isEmpty))
+              if (NovelConflicts.workDeleted(service.state, edition.id))
+                Card(child: ListTile(
+                  leading: const Icon(Icons.info_outline),
+                  title: const Text('作品信息已删除'),
+                  subtitle: const Text('书源与阅读进度仍保留，点击继续阅读'),
+                  onTap: () => _run(context,
+                      () => NovelEntry.read(context, service, edition.id)),
+                ))
+              else
               Card(
                 child: ListTile(
-                  leading: NovelBookCover(
+                  leading: NovelConflicts.sourceKeys(service.state, edition.id).isNotEmpty
+                      ? const Tooltip(message: '这本书的书源有冲突，请点击选择', child: Icon(Icons.merge))
+                      : NovelBookCover(
                     service: service,
                     book: service.selectedBook(edition.id),
                   ),
                   title: Text(service.work(edition.workId).title),
                   subtitle: Text(service.work(edition.workId).author),
                   onTap: () => _run(context, () async {
-                    await NovelEntry.conflicts(context, service);
-                    if (context.mounted && service.state.conflicts.isEmpty)
-                      await NovelEntry.read(context, service, edition.id);
+                    await NovelEntry.read(context, service, edition.id);
                   }),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (service.selectedBook(edition.id) != null)
+                      if (NovelConflicts.sourceKeys(service.state, edition.id).isEmpty &&
+                          service.selectedBook(edition.id) != null)
                         NovelAnimeLink(
                           service: service,
                           book: service.selectedBook(edition.id)!,
                           editionId: edition.id,
                         ),
                       PopupMenuButton<String>(
+                        tooltip: '小说操作',
                         itemBuilder: (_) => const [
                           PopupMenuItem(value: 'source', child: Text('更换书源')),
                         ],

@@ -1,0 +1,79 @@
+appId: com.zgcc.kazumisbook
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "热门番组"
+    timeout: 60000
+- tapOn: "我的"
+- tapOn: "设置"
+- tapOn: "规则管理"
+- tapOn: "添加规则"
+- tapOn: "从文件导入"
+- runFlow:
+    when:
+      visible: "Show roots"
+    commands:
+      - tapOn: "Show roots"
+- tapOn: "Downloads"
+- tapOn: "book-test-video.json"
+- extendedWaitUntil:
+    visible: "Fixture Video"
+    timeout: 30000
+- takeScreenshot: build/android-ui/video-rule-file-import
+- tapOn: "Fixture Video 的更多操作"
+- tapOn: "测试规则"
+- tapOn: "测试关键词"
+- inputText: "Frieren"
+- hideKeyboard
+- tapOn: "开始测试"
+- extendedWaitUntil:
+    visible: ".*葬送的芙莉莲.*"
+    timeout: 30000
+- takeScreenshot: build/android-ui/video-rule-test
+- back
+- back
+- back
+- tapOn: "首页"
+- tapOn: "搜索"
+- tapOn: "搜索番剧名称"
+- inputText: "Frieren"
+- tapOn: "搜索"
+- extendedWaitUntil:
+    visible: ".*芙莉莲.*"
+    timeout: 60000
+- tapOn:
+    text: ".*芙莉莲.*"
+    index: 0
+- extendedWaitUntil:
+    visible: "开始观看"
+    timeout: 60000
+- tapOn: "吐槽"
+- extendedWaitUntil:
+    visible:
+      id: ".*bangumi-comment.*"
+    timeout: 60000
+- assertNotVisible: "评论加载失败"
+- takeScreenshot: build/android-ui/anime-comments
+- tapOn: "开始观看"
+- extendedWaitUntil:
+    visible: "Fixture Video"
+    timeout: 30000
+- tapOn:
+    text: ".*葬送的芙莉莲.*"
+    index: 0
+- extendedWaitUntil:
+    notVisible: "视频资源解析中"
+    timeout: 30000
+- tapOn:
+    point: "50%,25%"
+- extendedWaitUntil:
+    visible: "暂停"
+    timeout: 30000
+- tapOn: "暂停"
+- assertVisible: "播放"
+- takeScreenshot: build/android-ui/video-paused
+- tapOn: "播放"
+- tapOn: "下一集"
+- assertNotVisible: "暂时无法播放"
+- takeScreenshot: build/android-ui/video-second-episode
+- back

@@ -21,7 +21,7 @@ const _bookB = NovelBook(sourceId: 'syosetu', url: 'https://fixture.invalid/b', 
 const _chapterA = NovelChapter(url: 'https://fixture.invalid/a/1', title: '第一章', volume: '第一卷', kind: '正文', number: 1);
 const _chapterB = NovelChapter(url: 'https://fixture.invalid/b/7', title: '不同目录标题', volume: '不同卷名', kind: '正文', number: 7);
 const _text = '这是两个测试书源共享的正文内容，仅用于确认映射、保存、重启以及因果同步。';
-const _novelRoot = '/kazumiSync/novels/v1';
+const _novelRoot = '/kazumiSync/novels';
 const _videoSentinel = '/kazumiSync/history/snapshot.json';
 
 NovelPosition _position(String edition, int offset, {String source = 'wenku8', NovelChapter chapter = _chapterA}) =>
@@ -83,7 +83,7 @@ class _HttpDav {
         case 'OPTIONS':
           response.statusCode = HttpStatus.ok;
           response.headers.set('DAV', '1, 2');
-          response.headers.set('Allow', 'OPTIONS, MKCOL, PROPFIND, GET, PUT, MOVE');
+          response.headers.set('Allow', 'OPTIONS, MKCOL, PROPFIND, GET, PUT, MOVE, DELETE');
         case 'MKCOL':
           response.statusCode = directories.add(path) ? HttpStatus.created : HttpStatus.methodNotAllowed;
         case 'PROPFIND':
@@ -127,6 +127,10 @@ class _HttpDav {
           }
           files[destination] = files.remove(path)!;
           response.statusCode = HttpStatus.created;
+        case 'DELETE':
+          if (directories.contains(path)) throw StateError('Collection DELETE is forbidden');
+          response.statusCode = files.remove(path) == null
+              ? HttpStatus.notFound : HttpStatus.noContent;
         default:
           throw StateError('Unexpected WebDAV method $method $path');
       }
@@ -486,7 +490,8 @@ void main() {
     expect(service.state.revisions(key), hasLength(2));
     expect(() => service.position(edition), throwsStateError);
     final selected = service.state.revisions(key).singleWhere((r) => r.value!['textOffset'] == 2);
-    await service.resolve(key, selected);
+    await service.resolve(key, selected,
+        expectedToken: service.state.conflictToken(key));
     await sync(service);
 
     service = await device('B');
@@ -496,6 +501,55 @@ void main() {
     remote.requests.clear();
     await sync(service);
     expect(remote.snapshotGets, 0);
+  });
+
+  test('legacy data migrates into flat heads and repeated progress stays bounded across restart', () async {
+    var service = await device('legacy');
+    final edition = await seed(service);
+    await service.savePosition(_position(edition, 3));
+    await service.addBookmark(_position(edition, 3), '迁移书签');
+    await sync(service);
+    final original = remote.snapshots.single;
+    final legacy = '$_novelRoot/v1/${original.split('/').last}';
+    remote.directories.add('$_novelRoot/v1');
+    remote.files[legacy] = remote.files.remove(original)!;
+    final sentinel = utf8.encode('another device is uploading');
+    remote.files['$_novelRoot/v1/foreign.cache'] = sentinel;
+    final box = Hive.box<String>('novel_v1');
+    final local = jsonDecode(box.get('state')!) as Map<String, dynamic>;
+    final legacyScope = sha256.convert(utf8.encode(
+      '${remote.url}\nfixture\n/kazumiSync/novels/v1')).toString();
+    local['seen'] = {legacyScope: [original.split('/').last]};
+    await box.put('state', jsonEncode(local));
+    service = await device('legacy');
+    remote.requests.clear();
+    await sync(service);
+    expect(remote.files.containsKey(legacy), isFalse);
+    expect(service.syncNotice, '旧版小说数据已合并，其他设备请升级。');
+    expect(remote.directories, contains('$_novelRoot/v1'));
+    expect(remote.files['$_novelRoot/v1/foreign.cache'], sentinel);
+    expect(remote.snapshots, hasLength(1));
+    expect(remote.snapshots.single.substring(_novelRoot.length + 1), isNot(contains('/')));
+    expect(service.position(edition)!.textOffset, 3);
+    expect(service.bookmarks(edition).single['note'], '迁移书签');
+    final stored = jsonDecode(Hive.box<String>('novel_v1').get('state')!) as Map;
+    expect((stored['seen'] as Map).containsKey(legacyScope), isFalse);
+    final flat = remote.snapshots.single;
+    final verify = remote.requests.lastIndexOf(('GET', flat));
+    expect(verify, greaterThanOrEqualTo(0));
+    expect(remote.requests.indexOf(('DELETE', legacy)), greaterThan(verify));
+    for (var offset = 4; offset <= 15; offset++) {
+      await service.savePosition(_position(edition, offset));
+      await sync(service);
+      expect(remote.snapshots, hasLength(1));
+    }
+    service = await device('new-device');
+    await sync(service);
+    expect(service.position(edition)!.textOffset, 15);
+    expect(service.bookmarks(edition).single['note'], '迁移书签');
+    expect(remote.requests.where((r) => r.$1 == 'PUT' || r.$1 == 'MOVE')
+        .where((r) => r.$2.contains('/v1/')), isEmpty);
+    expect(remote.requests, isNot(contains(('DELETE', '$_novelRoot/v1'))));
   });
 
   for (final operation in ['PUT', 'MOVE']) {
@@ -518,10 +572,13 @@ void main() {
       expect(service.position(edition)!.textOffset, 2);
       remote.failOperation = null;
       await sync(service);
-      expect(remote.snapshots, hasLength(2));
-      expect(remote.files[oldSnapshot], oldBytes);
+      expect(remote.snapshots, hasLength(1));
+      expect(remote.files.containsKey(oldSnapshot), isFalse);
       expect(service.syncError, isNull);
-      expect(remote.requests.where((r) => r.$1 == 'DELETE'), isEmpty);
+      expect(remote.requests.where((r) => r.$1 == 'DELETE' && r.$2.endsWith('.json'))
+          .map((r) => r.$2),
+          [oldSnapshot]);
+      expect(remote.files.keys.where((path) => path.endsWith('.cache')), isEmpty);
     });
   }
 }

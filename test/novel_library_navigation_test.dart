@@ -9,6 +9,7 @@ import 'package:kazumi/novel/novel_book_cover.dart';
 import 'package:kazumi/novel/novel_library_page.dart';
 import 'package:kazumi/novel/novel_models.dart';
 import 'package:kazumi/novel/novel_service.dart';
+import 'package:kazumi/novel/novel_sync_state.dart';
 import 'package:kazumi/pages/menu/menu.dart';
 import 'package:kazumi/pages/collect/collect_module.dart';
 import 'package:kazumi/pages/collect/collect_page.dart';
@@ -180,6 +181,42 @@ void main() {
     }
     expect(service.images, hasLength(1));
     expect(find.bySemanticsLabel('已入架的小说封面'), findsOneWidget);
+  });
+  testWidgets('unrelated conflicts remain visible without hiding the normal bookshelf', (tester) async {
+    final service = _Library(cover);
+    addTearDown(service.dispose);
+    const key = 'bookmark/another-book';
+    service.state = NovelSyncState().edit(key, {
+      'id': 'another-book', 'note': '另一部书的书签',
+      'position': {'editionId': 'other', 'chapter': {'volume': '一卷', 'title': '第一章'}, 'quote': '原文'},
+    }, 'a').merge(NovelSyncState().edit(key, null, 'b'));
+    final before = service.state.encode();
+    await tester.pumpWidget(MaterialApp(home: NovelLibraryPage(service: service)));
+    await tester.pumpAndSettle();
+    expect(find.text('已入架的小说'), findsOneWidget);
+    expect(find.text('书签有冲突'), findsOneWidget);
+    expect(find.bySemanticsLabel('已入架的小说封面'), findsOneWidget);
+    await tester.tap(find.text('书签有冲突'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(service.state.encode(), before);
+    expect(find.text('已入架的小说'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  test('book lookup skips an unrelated source conflict but reports a related one', () {
+    final service = NovelService(WebDav());
+    addTearDown(service.dispose);
+    const unrelated = NovelBook(sourceId: 'source-a', url: 'https://source/other', title: '别的小说');
+    service.state = NovelSyncState()
+        .edit('edition/other', const NovelEdition('other', 'w2', '中文', 'zh').toJson(), 'a')
+        .edit('edition/e', const NovelEdition('e', 'w', '中文', 'zh').toJson(), 'a')
+        .edit('source/other/source-a', {'editionId': 'other', 'book': unrelated.toJson()}, 'a')
+        .edit('source/e/source-a', {'editionId': 'e', 'book': _book.toJson()}, 'a')
+        .merge(NovelSyncState().edit('source/other/source-a', null, 'b'));
+    expect(service.editionForBook(_book), 'e');
+    expect(() => service.editionForBook(unrelated), throwsStateError);
   });
   testWidgets('invalid source cover bytes report a decoding error', (
     tester,

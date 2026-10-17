@@ -111,7 +111,10 @@ class CommentsCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            Text(item.comment.comment),
+            Semantics(
+              identifier: 'bangumi-comment',
+              child: Text(item.comment.comment),
+            ),
           ],
         ),
       ),

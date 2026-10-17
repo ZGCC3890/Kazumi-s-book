@@ -145,6 +145,7 @@ class _NovelRulesPageState extends State<NovelRulesPage> {
               subtitle: Text(Uri.parse(rule.json['searchUrl'] as String).host),
               leading: const Icon(Icons.menu_book_outlined),
               trailing: PopupMenuButton<String>(
+                tooltip: '管理${rule.name}',
                 enabled: !_busy,
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'copy', child: Text('复制规则链接')),

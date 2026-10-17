@@ -25,7 +25,7 @@ appId: com.zgcc.kazumisbook
     visible: ".*芙莉莲.*"
     timeout: 60000
 - takeScreenshot: build/android-ui/anime-search
-- tapOn: "搜索类型"
+- tapOn: "番剧"
 - tapOn: "小说"
 - assertVisible: "小说搜索"
 - assertVisible: "搜索小说书名"
@@ -38,6 +38,37 @@ appId: com.zgcc.kazumisbook
 - hideKeyboard
 - tapOn: "导入规则"
 - assertVisible: "Fixture Source A"
+- assertVisible: "Fixture Source C"
+- tapOn: "添加规则"
+- tapOn: "浏览规则仓库"
+- tapOn: "规则仓库设置"
+- tapOn: "规则仓库地址"
+- eraseText: 200
+- inputText: "http://10.0.2.2:8765/novels/catalog.json"
+- hideKeyboard
+- tapOn: "保存"
+- extendedWaitUntil:
+    visible: "Fixture Source B"
+    timeout: 30000
+- tapOn: "安装"
+- assertVisible: "重新获取"
+- tapOn: "重新获取"
+- assertVisible: "重新获取"
+- back
+- assertVisible: "Fixture Source B"
+- tapOn: "管理Fixture Source C"
+- tapOn: "复制规则链接"
+- tapOn: "管理Fixture Source C"
+- tapOn: "删除规则"
+- tapOn: "保留"
+- assertVisible: "Fixture Source C"
+- tapOn: "管理Fixture Source C"
+- tapOn: "删除规则"
+- tapOn: "删除"
+- assertNotVisible: "Fixture Source C"
+- tapOn: "添加规则"
+- tapOn: "从剪贴板导入"
+- tapOn: "导入规则"
 - assertVisible: "Fixture Source C"
 - takeScreenshot: build/android-ui/installed-novel-rules
 - back
@@ -78,6 +109,8 @@ appId: com.zgcc.kazumisbook
     direction: DOWN
 - tapOn: "外观设置"
 - assertVisible: "外观设置"
+- tapOn: "深色模式"
+- tapOn: "深色"
 - takeScreenshot: build/android-ui/theme-settings
 - back
 - scrollUntilVisible:

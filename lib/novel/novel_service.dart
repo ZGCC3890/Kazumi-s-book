@@ -36,6 +36,7 @@ class NovelService extends ChangeNotifier
   Timer? _syncTimer, _poll;
   @override
   String? syncError;
+  String? syncNotice;
   DateTime? lastSync;
   bool syncing = false;
   Future<void>? _initialization;
@@ -272,7 +273,11 @@ class NovelService extends ChangeNotifier
 
   String? editionForBook(NovelBook book) {
     for (final edition in editions) {
-      final source = state.value('source/${edition.id}/${book.sourceId}');
+      final key = 'source/${edition.id}/${book.sourceId}';
+      final candidates = state.revisions(key);
+      if (candidates.length > 1 && !candidates.any((revision) =>
+          (revision.value?['book'] as NovelJson?)?['url'] == book.url)) continue;
+      final source = state.value(key);
       if (source != null && (source['book'] as NovelJson)['url'] == book.url)
         return edition.id;
     }
@@ -304,6 +309,25 @@ class NovelService extends ChangeNotifier
     NovelBook target,
   ) =>
       'chapterMap/$editionId/${sha256.convert(utf8.encode(jsonEncode([sourceId, chapterUrl, target.sourceId, target.url])))}';
+
+  @override
+  String chapterMappingKey(NovelPosition from, NovelBook target) =>
+      _mappingKey(from.editionId, from.sourceId, from.chapter.url, target);
+
+  @override
+  List<String> chapterMappingWriteKeys(
+    NovelPosition from, NovelBook target, NovelChapter chapter,
+  ) {
+    final sourceKey = 'source/${from.editionId}/${from.sourceId}';
+    final keys = [sourceKey, chapterMappingKey(from, target)];
+    if (state.revisions(sourceKey).length > 1) return keys;
+    final source = state.value(sourceKey);
+    if (source != null) {
+      final original = NovelBook.fromJson(source['book'] as NovelJson);
+      keys.add(_mappingKey(from.editionId, target.sourceId, chapter.url, original));
+    }
+    return keys;
+  }
 
   @override
   NovelChapter? mappedChapter(NovelPosition from, NovelBook target) {
@@ -452,8 +476,10 @@ class NovelService extends ChangeNotifier
   Future<void> deleteBookmark(String id) =>
       _commit((s) => s.edit('bookmark/$id', null, deviceId));
   @override
-  Future<void> resolve(String key, NovelRevision selected) =>
-      _commit((s) => s.resolve(key, selected, deviceId));
+  Future<void> resolve(String key, NovelRevision selected, {
+    required String expectedToken,
+  }) => _commit((s) => s.resolve(key, selected, deviceId,
+      expectedToken: expectedToken));
 
   @override
   Future<List<NovelChapter>> catalog(
@@ -539,24 +565,39 @@ class NovelService extends ChangeNotifier
     if (!syncEnabled) throw StateError('请先启用 WebDAV 小说同步');
     if (syncing) return;
     syncing = true;
+    syncNotice = null;
     notifyListeners();
     try {
+      final account =
+          '${GStorage.getSetting(SettingsKeys.webDavURL)}\n'
+          '${GStorage.getSetting(SettingsKeys.webDavUsername)}\n';
+      final legacyScope = sha256.convert(
+        utf8.encode('$account/kazumiSync/novels/v1'),
+      ).toString();
       final scope = sha256
           .convert(
             utf8.encode(
-              '${GStorage.getSetting(SettingsKeys.webDavURL)}\n'
-              '${GStorage.getSetting(SettingsKeys.webDavUsername)}\n/kazumiSync/novels/v1',
+              '$account/kazumiSync/novels',
             ),
           )
           .toString();
+      var migrated = false;
       final published = await webDav.syncNovels(
         deviceId: deviceId,
         knownSnapshots: (_seen[scope] ?? []).toSet(),
+        onLegacyDetected: () {
+          migrated = true;
+          syncNotice = '正在迁移旧版小说同步数据…';
+          notifyListeners();
+        },
         merge: (remote, names) async {
           await _commit(
             (s) => s.merge(remote),
             local: false,
-            seen: {..._seen, scope: names.toList()..sort()},
+            seen: {
+              ...(Map<String, List<String>>.from(_seen)..remove(legacyScope)),
+              scope: names.toList()..sort(),
+            },
           );
           return state;
         },
@@ -572,8 +613,10 @@ class NovelService extends ChangeNotifier
         );
       }
       syncError = null;
+      syncNotice = migrated ? '旧版小说数据已合并，其他设备请升级。' : null;
       lastSync = DateTime.now();
     } catch (error) {
+      syncNotice = null;
       syncError = error.toString();
       rethrow;
     } finally {

@@ -42,6 +42,7 @@ class _Remote {
     if (files.containsKey(to)) throw StateError('destination already exists');
     files[to] = files.remove(from)!;
   }
+  Future<void> remove(String name) async { files.remove(name); }
 }
 
 class _Device {
@@ -55,7 +56,7 @@ class _Device {
   Future<String?> sync(_Remote remote, {Future<List<String>> Function()? list}) =>
       const NovelWebDavExchange().run(deviceId: id, knownSnapshots: seen,
         list: list ?? remote.list, read: remote.read, write: remote.write,
-        move: remote.move, enabled: () => enabled, merge: (incoming, names) async {
+        move: remote.move, remove: remote.remove, enabled: () => enabled, merge: (incoming, names) async {
           if (failPersist) throw StateError('local commit failed');
           state = state.merge(incoming);
           seen = names;
@@ -65,7 +66,7 @@ class _Device {
 }
 
 void main() {
-  test('incremental GET reads N then zero then only the new snapshot', () async {
+  test('compaction verifies listed heads, then unchanged single-head sync reads zero', () async {
     final remote = _Remote();
     final first = NovelSyncState().edit(_key, {'chapter': 3}, _a);
     final second = first.edit(_key, {'chapter': 4}, _a);
@@ -80,7 +81,8 @@ void main() {
     expect(remote.reads, isEmpty);
     final newest = remote.add(second.edit(_key, {'chapter': 2}, _a), _a);
     await device.sync(remote);
-    expect(remote.reads, [newest]);
+    expect(remote.reads, contains(newest));
+    expect(remote.files.keys.where(NovelWebDavExchange.snapshotName.hasMatch), [newest]);
     expect(device.state.value(_key)!['chapter'], 2);
   });
 
@@ -134,7 +136,7 @@ void main() {
       remote.failMove = false;
       final published = await device.sync(remote);
       expect(published, isNotNull);
-      expect(remote.files[oldName], oldRaw);
+      expect(remote.files.containsKey(oldName), isFalse);
       expect(NovelSyncState.decode(remote.files[published]!).value(_key)!['chapter'], 2);
     });
   }
@@ -162,7 +164,8 @@ void main() {
     expect(first.state.revisions(_key), hasLength(2));
     expect(first.state.encode(), second.state.encode());
     final selected = first.state.revisions(_key).singleWhere((r) => r.value!['chapter'] == 2);
-    first.state = first.state.resolve(_key, selected, _a);
+    first.state = first.state.resolve(_key, selected, _a,
+        expectedToken: first.state.conflictToken(_key));
     await first.sync(remote);
     await second.sync(remote);
     expect(second.state.value(_key)!['chapter'], 2);
@@ -178,13 +181,13 @@ void main() {
     expect(remote.writes, isEmpty);
   });
 
-  test('disabling after PUT leaves only an ignored cache, never a final snapshot', () async {
+  test('disabling after PUT removes its own pending upload without publishing', () async {
     final remote = _Remote();
     final device = _Device(_a, NovelSyncState().edit(_key, {'chapter': 1}, _a));
     remote.afterWrite = () => device.enabled = false;
     expect(await device.sync(remote), isNull);
     expect(remote.writes, hasLength(1));
     expect(remote.moves, isEmpty);
-    expect(remote.files.keys.where(NovelWebDavExchange.snapshotName.hasMatch), isEmpty);
+    expect(remote.files, isEmpty);
   });
 }

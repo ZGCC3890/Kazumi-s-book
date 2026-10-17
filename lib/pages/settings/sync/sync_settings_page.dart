@@ -53,6 +53,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             final webDavEnabled =
                 GStorage.getSetting(SettingsKeys.webDavEnable);
             final hasSyncContent =
+                GStorage.getSetting(SettingsKeys.webDavEnableNovels) ||
                 GStorage.getSetting(SettingsKeys.webDavEnableHistory) ||
                     GStorage.getSetting(SettingsKeys.webDavEnableCollect) ||
                     GStorage.getSetting(SettingsKeys.webDavEnableDanmakuShield);
@@ -82,7 +83,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                 title: '多设备同步',
                 service: 'WebDAV',
                 description: '通过自己的云盘，在其他设备接着看。',
-                content: '观看记录 · 收藏 · 弹幕屏蔽词',
+                content: '观看记录 · 收藏 · 弹幕屏蔽词 · 小说',
                 icon: Icons.devices_rounded,
                 color: colors.tertiaryContainer,
                 onColor: colors.onTertiaryContainer,

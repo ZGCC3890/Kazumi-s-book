@@ -1,0 +1,6 @@
+appId: com.zgcc.kazumisbook
+---
+- runFlow: 01-navigation.yaml
+- runFlow: 02-reader.yaml
+- runFlow: 03-sync.yaml
+- runFlow: 04-video.yaml

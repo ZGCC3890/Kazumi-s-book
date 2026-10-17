@@ -44,11 +44,49 @@ class NovelSyncState {
     return _write(key, value, deviceId);
   }
 
-  NovelSyncState resolve(String key, NovelRevision selected, String deviceId) {
-    if (!revisions(key).contains(selected)) {
+  /// Captures every displayed candidate, independent of map/list ordering.
+  String conflictToken(String key) {
+    final candidates = revisions(key)
+        .map((revision) => _canonical(revision.toJson()))
+        .toList()
+      ..sort();
+    return jsonEncode({'key': key, 'candidates': candidates});
+  }
+
+  NovelSyncState resolve(
+    String key,
+    NovelRevision selected,
+    String deviceId, {
+    required String expectedToken,
+  }) {
+    if (conflictToken(key) != expectedToken) {
       throw StateError('冲突已发生变化，请重新选择');
     }
-    return _write(key, selected.value, deviceId);
+    final selectedValue = _canonical(selected.toJson());
+    final candidate = revisions(key)
+        .where((revision) => _canonical(revision.toJson()) == selectedValue)
+        .firstOrNull;
+    if (candidate == null) {
+      throw StateError('所选候选不在当前冲突中，请重新选择');
+    }
+    return _write(key, candidate.value, deviceId);
+  }
+
+  /// Whether this complete state preserves every causal revision in [other].
+  /// Deletion tombstones participate exactly like live values.
+  bool covers(NovelSyncState other) {
+    for (final entry in other.entities.entries) {
+      for (final candidate in entry.value) {
+        final covered = revisions(entry.key).any(
+          (revision) =>
+              revision.dominates(candidate) &&
+              (!candidate.dominates(revision) ||
+                  _canonical(revision.value) == _canonical(candidate.value)),
+        );
+        if (!covered) return false;
+      }
+    }
+    return true;
   }
 
   NovelSyncState _write(String key, NovelJson? value, String deviceId) {

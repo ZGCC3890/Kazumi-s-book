@@ -97,7 +97,7 @@ class _WebDavSyncPageState extends State<WebDavSyncPage> {
             const SyncPageIntro(
               icon: Icons.devices_rounded,
               title: 'WebDAV',
-              description: '连接自己的云盘，同步观看记录、收藏与弹幕屏蔽词。',
+              description: '连接自己的云盘，同步观看记录、收藏、弹幕屏蔽词与小说。',
             ),
             SettingsSection(
               margin: EdgeInsets.zero,
@@ -137,7 +137,15 @@ class _WebDavSyncPageState extends State<WebDavSyncPage> {
                   onToggle: (value) => _run(() async {
                     final next = value ?? !GStorage.getSetting(SettingsKeys.webDavEnableNovels);
                     await GStorage.putSetting(SettingsKeys.webDavEnableNovels, next);
-                    if (next) await inject<NovelService>().sync();
+                    if (next) {
+                      final novels = inject<NovelService>();
+                      await novels.sync();
+                      _message = novels.syncNotice == null
+                          ? '小说阅读进度与书签已同步'
+                          : '小说阅读进度与书签已同步。${novels.syncNotice}';
+                    } else {
+                      _message = '小说同步已关闭';
+                    }
                   }),
                 ),
                 SettingsTile.switchTile(

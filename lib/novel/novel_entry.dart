@@ -9,60 +9,26 @@ import 'novel_service.dart';
 import 'novel_search_query.dart';
 import 'novel_anime_link.dart';
 import 'novel_rules_page.dart';
+import 'novel_conflicts.dart';
 
 class NovelEntry {
   static Future<void> conflicts(
     BuildContext context,
     NovelService service,
   ) async {
-    while (service.state.conflicts.isNotEmpty && context.mounted) {
-      if (!context.mounted) return;
-      final key = service.state.conflicts.first;
-      final revisions = service.state.revisions(key);
-      final chosen = await showDialog<int>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('选择要保留的阅读数据'),
-          content: SizedBox(
-            width: 560,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(key),
-                  const Text('两台设备独立修改了同一记录。选择后会同步你的决定。'),
-                  for (var i = 0; i < revisions.length; i++)
-                    ListTile(
-                      title: Text(
-                        revisions[i].value == null
-                            ? '删除这条记录'
-                            : key.startsWith('position/')
-                            ? '${(revisions[i].value!['chapter'] as NovelJson)['volume']} '
-                                  '${(revisions[i].value!['chapter'] as NovelJson)['title']}'
-                            : revisions[i].value.toString(),
-                      ),
-                      subtitle: Text(
-                        revisions[i].value?['quote'] as String? ??
-                            revisions[i].clock.keys.join(' / '),
-                      ),
-                      onTap: () => Navigator.pop(ctx, i),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('稍后决定'),
-            ),
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (_) => ListenableBuilder(
+        listenable: service,
+        builder: (_, _) => SafeArea(child: ListView(
+          children: [
+            const ListTile(title: Text('需要选择的阅读数据')),
+            for (final key in service.state.conflicts)
+              NovelConflictTile(store: service, recordKey: key),
           ],
-        ),
-      );
-      if (chosen == null) return;
-      await service.resolve(key, revisions[chosen]);
-    }
+        )),
+      ),
+    );
   }
 
   static Future<void> open(
@@ -85,8 +51,9 @@ class NovelEntry {
     BangumiItem anime,
     NovelService service,
   ) async {
-    await conflicts(context, service);
-    if (!context.mounted || service.state.conflicts.isNotEmpty) return;
+    if (!await NovelConflicts.ensure(context, service,
+        () => ['anime/${anime.id}'])) return;
+    if (!context.mounted) return;
     final ids = service.boundEditions(anime.id);
     if (ids.isEmpty) {
       await search(
@@ -101,21 +68,30 @@ class NovelEntry {
     if (ids.length > 1) {
       final selected = await showModalBottomSheet<String>(
         context: context,
-        builder: (ctx) => SafeArea(
+        builder: (ctx) => ListenableBuilder(
+          listenable: service,
+          builder: (_, _) => SafeArea(
           child: ListView(
             shrinkWrap: true,
             children: [
               const ListTile(title: Text('选择小说')),
+              for (final candidate in ids)
+                for (final key in NovelConflicts.displayKeys(service.state, candidate, includeShelf: false))
+                  NovelConflictTile(store: service, recordKey: key),
               for (final edition in service.editions.where(
-                (e) => ids.contains(e.id),
+                (e) => ids.contains(e.id) &&
+                    NovelConflicts.displayKeys(service.state, e.id, includeShelf: false).isEmpty,
               ))
                 ListTile(
-                  title: Text(service.work(edition.workId).title),
-                  subtitle: Text(service.work(edition.workId).author),
+                  title: Text(NovelConflicts.workDeleted(service.state, edition.id)
+                      ? '作品信息已删除' : service.work(edition.workId).title),
+                  subtitle: Text(NovelConflicts.workDeleted(service.state, edition.id)
+                      ? '仍可选择书源继续阅读' : service.work(edition.workId).author),
                   onTap: () => Navigator.pop(ctx, edition.id),
                 ),
             ],
           ),
+        ),
         ),
       );
       if (selected == null || !context.mounted) return;
@@ -137,6 +113,9 @@ class NovelEntry {
     String editionId, {
     int animeId = 0,
   }) async {
+    if (!await NovelConflicts.ensure(context, service,
+        () => NovelConflicts.sourceKeys(service.state, editionId))) return;
+    if (!context.mounted) return;
     final book = service.selectedBook(editionId);
     if (book == null) throw StateError('这本小说尚未选择书源');
     await Navigator.of(context).push<void>(
@@ -148,6 +127,9 @@ class NovelEntry {
           onLeave: (chapters) async {
             if (chapters.isEmpty) return;
             final count = await service.recordReadChapters(editionId, chapters);
+            if (count > 1 && readerContext.mounted &&
+                !await NovelConflicts.ensure(readerContext, service,
+                    () => ['shelf/$editionId'])) return;
             if (count <= 1 ||
                 service.isShelved(editionId) ||
                 !readerContext.mounted)
@@ -467,6 +449,22 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
     try {
       final service = widget.service;
       final rule = service.rule(book.sourceId);
+      if (!await NovelConflicts.ensure(context, service, () => [
+        if (widget.animeId > 0) 'anime/${widget.animeId}',
+        if (widget.existingEditionId != null) ...[
+          'edition/${widget.existingEditionId}',
+          'selected/${widget.existingEditionId}',
+          'source/${widget.existingEditionId}/${book.sourceId}',
+        ],
+        for (final key in service.state.keys('source'))
+          if (
+              service.state.revisions(key).any((revision) {
+                final candidate = revision.value?['book'] as NovelJson?;
+                return candidate?['sourceId'] == book.sourceId &&
+                    candidate?['url'] == book.url;
+              })) ...[key, 'edition/${key.split('/')[1]}'],
+      ])) return;
+      if (!mounted || !owner.isActive) return;
       final id = await service.bind(
         animeId: widget.animeId,
         book: book,

@@ -1,0 +1,35 @@
+appId: com.zgcc.kazumisbook
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "热门番组"
+    timeout: 60000
+- tapOn: "我的"
+- tapOn: "设置"
+- scrollUntilVisible:
+    element: "同步设置"
+    direction: DOWN
+- tapOn: "同步设置"
+- tapOn: "WebDAV"
+- tapOn: "连接你的云盘"
+- tapOn: "服务器地址"
+- inputText: "http://10.0.2.2:8765/dav"
+- tapOn: "用户名"
+- inputText: "fixture"
+- tapOn: "密码或应用授权码"
+- inputText: "fixture"
+- hideKeyboard
+- scrollUntilVisible:
+    element: "保存并测试"
+    direction: DOWN
+- tapOn: "保存并测试"
+- extendedWaitUntil:
+    visible: "连接成功，配置已保存"
+    timeout: 30000
+- tapOn: "返回同步设置"
+- tapOn: "启用 WebDAV"
+- tapOn: "小说阅读进度与书签"
+- extendedWaitUntil:
+    visible: "小说阅读进度与书签已同步"
+    timeout: 60000
+- takeScreenshot: build/android-ui/novel-sync-enabled

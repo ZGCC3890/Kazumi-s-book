@@ -1,5 +1,6 @@
 """Finite, owned content for Android black-box flows; no user credentials/data."""
 import argparse
+import html
 import json
 import struct
 import zlib
@@ -51,8 +52,86 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def dav_path(self):
+        path = urlsplit(self.path).path.rstrip('/')
+        return path if path == '/dav' or path.startswith('/dav/') else None
+
+    def do_OPTIONS(self):
+        if self.dav_path() is None:
+            return self.send('Unsupported OPTIONS', 'text/plain', 405)
+        self.send_response(200)
+        self.send_header('DAV', '1, 2')
+        self.send_header('Content-Length', '0')
+        self.end_headers()
+
+    def do_MKCOL(self):
+        path = self.dav_path()
+        if path is None or path.rsplit('/', 1)[0] not in self.server.directories:
+            return self.send('Missing collection', 'text/plain', 409)
+        status = 405 if path in self.server.directories else 201
+        self.server.directories.add(path)
+        self.send(b'', 'text/plain', status)
+
+    def do_PROPFIND(self):
+        path = self.dav_path()
+        if path not in self.server.directories:
+            return self.send('Missing collection', 'text/plain', 404)
+
+        def entry(name):
+            directory = name in self.server.directories
+            href = html.escape(name + ('/' if directory else ''))
+            length = 0 if directory else len(self.server.files[name])
+            return (f'<d:response><d:href>{href}</d:href><d:propstat><d:prop>'
+                    f'<d:resourcetype>{"<d:collection/>" if directory else ""}</d:resourcetype>'
+                    f'<d:getcontentlength>{length}</d:getcontentlength></d:prop>'
+                    '<d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>')
+
+        children = sorted(name for name in self.server.directories | self.server.files.keys()
+                          if name != path and name.rsplit('/', 1)[0] == path)
+        xml = ('<?xml version="1.0"?><d:multistatus xmlns:d="DAV:">'
+               + entry(path) + ''.join(map(entry, children)) + '</d:multistatus>')
+        self.send(xml, 'application/xml; charset=utf-8', 207)
+
+    def do_PUT(self):
+        path = self.dav_path()
+        if path is None or path.rsplit('/', 1)[0] not in self.server.directories:
+            return self.send('Missing collection', 'text/plain', 409)
+        self.server.files[path] = self.rfile.read(int(self.headers['Content-Length']))
+        self.send(b'', 'text/plain', 201)
+
+    def do_MOVE(self):
+        path = self.dav_path()
+        target = urlsplit(self.headers['Destination']).path.rstrip('/')
+        if path not in self.server.files:
+            return self.send('Missing file', 'text/plain', 404)
+        if target in self.server.files:
+            return self.send('Immutable head exists', 'text/plain', 412)
+        self.server.files[target] = self.server.files.pop(path)
+        self.send(b'', 'text/plain', 201)
+
+    def do_DELETE(self):
+        path = self.dav_path()
+        if path in self.server.directories:
+            return self.send('Collection deletion forbidden', 'text/plain', 405)
+        status = 204 if self.server.files.pop(path, None) is not None else 404
+        self.send(b'', 'text/plain', status)
+
+    def do_HEAD(self):
+        if urlsplit(self.path).path != '/clip.mp4':
+            return self.send('Unsupported HEAD', 'text/plain', 404)
+        self.send_response(200)
+        self.send_header('Content-Type', 'video/mp4')
+        self.send_header('Content-Length', str((self.server.output / 'clip.mp4').stat().st_size))
+        self.send_header('Accept-Ranges', 'bytes')
+        self.end_headers()
+
     def do_GET(self):
         path = urlsplit(self.path).path
+        if self.dav_path() is not None:
+            content = self.server.files.get(self.dav_path())
+            if content is None:
+                return self.send('Missing file', 'text/plain', 404)
+            return self.send(content, 'application/octet-stream')
         if path == "/novels/rules.json":
             return self.send(json.dumps([novel_rule("A"), novel_rule("C")]), "application/json")
         if path == "/novels/catalog.json":
@@ -88,7 +167,24 @@ class Handler(BaseHTTPRequestHandler):
                 {"name": "Episode 1", "url": BASE + "/clip.mp4"},
                 {"name": "Episode 2", "url": BASE + "/clip.mp4"}]}]}}), "application/json")
         if path == "/clip.mp4":
-            return self.send((self.server.output / "clip.mp4").read_bytes(), "video/mp4")
+            content = (self.server.output / 'clip.mp4').read_bytes()
+            if 'Range' in self.headers:
+                start, end = self.headers['Range'].removeprefix('bytes=').split('-')
+                start = int(start)
+                end = int(end) if end else len(content) - 1
+                self.send_response(206)
+                self.send_header('Content-Type', 'video/mp4')
+                self.send_header('Content-Range', f'bytes {start}-{end}/{len(content)}')
+                self.send_header('Content-Length', str(end - start + 1))
+                self.end_headers()
+                self.wfile.write(content[start:end + 1])
+                return
+            return self.send(content, 'video/mp4')
+        if path == '/fixture-state':
+            return self.send(json.dumps({
+                'files': {name: content.decode() for name, content in self.server.files.items()},
+                'directories': sorted(self.server.directories),
+            }), 'application/json')
         self.send("Unregistered fixture path", "text/plain", 404)
 
 
@@ -100,6 +196,8 @@ def main():
     (args.output / "video-rule.json").write_text(json.dumps(video_rule()), encoding="utf-8")
     server = ThreadingHTTPServer(("0.0.0.0", 8765), Handler)
     server.output = args.output
+    server.files = {}
+    server.directories = {'/dav'}
     server.serve_forever()
 
 

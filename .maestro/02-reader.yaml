@@ -5,7 +5,7 @@ appId: com.zgcc.kazumisbook
     visible: "热门番组"
     timeout: 60000
 - tapOn: "搜索"
-- tapOn: "搜索类型"
+- tapOn: "番剧"
 - tapOn: "小说"
 - tapOn: "搜索小说书名"
 - inputText: "Fixture"
@@ -26,8 +26,8 @@ appId: com.zgcc.kazumisbook
 - takeScreenshot: build/android-ui/reader-illustration
 - tapOn: "关闭插图"
 - swipe:
-    start: "50%,80%"
-    end: "50%,30%"
+    start: "2%,80%"
+    end: "2%,30%"
     duration: 600
 - tapOn:
     point: "50%,50%"
@@ -47,6 +47,24 @@ appId: com.zgcc.kazumisbook
 - tapOn: "删除书签"
 - assertVisible: "还没有书签"
 - back
+- tapOn: "添加书签"
+- tapOn: "备注（可留空）"
+- inputText: "LeftMargin"
+- hideKeyboard
+- tapOn: "保存"
+- tapOn:
+    point: "50%,50%"
+- swipe:
+    start: "98%,80%"
+    end: "98%,30%"
+    duration: 600
+- tapOn:
+    point: "50%,50%"
+- tapOn: "添加书签"
+- tapOn: "备注（可留空）"
+- inputText: "RightMargin"
+- hideKeyboard
+- tapOn: "保存"
 - tapOn: "阅读设置"
 - tapOn: "护眼"
 - scrollUntilVisible:
