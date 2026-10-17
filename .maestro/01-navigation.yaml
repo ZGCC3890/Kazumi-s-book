@@ -49,9 +49,11 @@ appId: com.zgcc.kazumisbook
 - tapOn: "添加规则"
 - tapOn: "(?s).*浏览规则仓库.*"
 - tapOn: "规则仓库设置"
-- tapOn: "规则仓库地址"
-- eraseText: 200
+- longPressOn: "规则仓库地址"
+- tapOn: "全选"
+- eraseText: 1
 - inputText: "http://10.0.2.2:8765/novels/catalog.json"
+- assertVisible: 'http://10\.0\.2\.2:8765/novels/catalog\.json'
 - hideKeyboard
 - tapOn: "保存"
 - extendedWaitUntil:

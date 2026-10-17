@@ -2,7 +2,9 @@ appId: com.zgcc.kazumisbook
 env:
   LEGACY: "true"
 ---
-- runFlow: set-layout.yaml
+# The released 0.1.1 rail omits navigation semantics in landscape. Prepare
+# its upgrade data in portrait; upgrade-check and main test the new layout.
+- setOrientation: PORTRAIT
 - launchApp:
     clearState: true
     permissions:

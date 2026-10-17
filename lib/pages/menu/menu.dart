@@ -215,7 +215,13 @@ class _ScaffoldMenu extends State<ScaffoldMenu> with RouteAware {
               onDestinationSelected: _selectDestination,
             ),
           ),
-          Expanded(child: _outlet(context, borderRadius: borderRadius)),
+          Expanded(
+            // Confine the nested Navigator's modal semantics to its pane.
+            child: Semantics(
+              container: true,
+              child: _outlet(context, borderRadius: borderRadius),
+            ),
+          ),
         ],
       ),
     );

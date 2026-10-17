@@ -52,6 +52,15 @@ Future<void> click(WidgetTester tester, Finder finder) async {
 Future<void> text(WidgetTester tester, String value) =>
     click(tester, find.text(value));
 
+Future<void> type(WidgetTester tester, Finder field, String value) async {
+  // IntegrationTest keeps the real IME. showKeyboard caches focusedEditable,
+  // so revisiting an unfocused field requires the same click as a user makes.
+  await click(tester, field);
+  await tester.enterText(field.last, value);
+  expect(tester.widget<TextField>(field.last).controller!.text, value);
+  await tester.pump();
+}
+
 Future<void> back(WidgetTester tester) =>
     click(tester, find.byIcon(Icons.arrow_back));
 
@@ -85,7 +94,7 @@ void main() {
     await visible(tester, find.text('热门番组'));
     await click(tester, find.byTooltip('搜索'));
     await visible(tester, find.text('番剧搜索'));
-    await tester.enterText(find.byType(TextField).first, 'Frieren');
+    await type(tester, find.byType(TextField).first, 'Frieren');
     await click(tester, find.byTooltip('搜索'));
     await visible(tester, find.textContaining('芙莉莲'));
     await screenshot(tester, 'anime-search');
@@ -102,9 +111,7 @@ void main() {
     await back(tester);
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('小说搜索'), findsOneWidget);
-    await tester.enterText(find.byType(TextField).first, 'Fixture');
-    expect(tester.widget<TextField>(find.byType(TextField).first).controller!.text,
-        'Fixture');
+    await type(tester, find.byType(TextField).first, 'Fixture');
     await screenshot(tester, 'novel-query-before-submit');
     await click(tester, find.byTooltip('搜索'));
     await screenshot(tester, 'novel-query-after-submit');
@@ -125,7 +132,7 @@ void main() {
         'Native Windows PageDown must advance reading');
     await tester.tapAt(size.center(Offset.zero));
     await click(tester, find.byTooltip('添加书签'));
-    await tester.enterText(find.byType(TextField).last, 'WindowsBookmark');
+    await type(tester, find.byType(TextField).last, 'WindowsBookmark');
     await text(tester, '保存');
     await until(tester, () => novels.bookmarks(reader.editionId)
         .any((mark) => mark['note'] == 'WindowsBookmark'), 'Native bookmark must persist');
@@ -168,7 +175,7 @@ void main() {
       await visible(tester, field);
       await tester.ensureVisible(field);
       await tester.pump(const Duration(milliseconds: 200));
-      await tester.enterText(field, entry.value);
+      await type(tester, field, entry.value);
     }
     await text(tester, '保存并测试');
     await visible(tester, find.text('连接成功，配置已保存'));
@@ -249,7 +256,7 @@ void main() {
     await click(tester, find.descendant(of: find.byType(NavigationRail),
         matching: find.byIcon(Icons.home_outlined)));
     await click(tester, find.byTooltip('搜索'));
-    await tester.enterText(find.byType(TextField).first, 'Frieren');
+    await type(tester, find.byType(TextField).first, 'Frieren');
     await click(tester, find.byTooltip('搜索'));
     await text(tester, '葬送的芙莉莲');
     await text(tester, '吐槽');
