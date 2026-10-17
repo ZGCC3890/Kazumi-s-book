@@ -22,8 +22,11 @@ appId: com.zgcc.kazumisbook
 - tapOn: {text: "小说规则", waitToSettleTimeoutMs: 100}
 - tapOn: {text: "添加规则", waitToSettleTimeoutMs: 100}
 - tapOn: {text: "(?s).*从剪贴板导入.*", waitToSettleTimeoutMs: 100}
-- tapOn: {text: "规则内容", waitToSettleTimeoutMs: 100}
+- longPressOn: "规则内容"
+- tapOn: {text: "全选", waitToSettleTimeoutMs: 100}
+- eraseText: 1
 - inputText: "http://10.0.2.2:8765/account/rule.json"
+- assertVisible: 'http://10\.0\.2\.2:8765/account/rule\.json'
 - hideKeyboard
 - tapOn: {text: "导入规则", index: 1, waitToSettleTimeoutMs: 100}
 - tapOn: {text: "管理Fixture Account", waitToSettleTimeoutMs: 100}

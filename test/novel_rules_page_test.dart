@@ -171,6 +171,39 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final size in [const Size(480, 900), const Size(1280, 800)]) {
+  testWidgets('a copied rule can be selected and replaced with a new import URL at $size', (tester) async {
+    final service = _Rules();
+    final copied = 'kazumi://${base64Encode(utf8.encode(_raw))}';
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async =>
+      call.method == 'Clipboard.getData' ? {'text': copied} : null);
+    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+    await _open(tester, service, size: size, readText: (url) async {
+      expect(url, 'https://rules.test/account.json');
+      return _raw;
+    });
+    await _add(tester, '从剪贴板导入');
+    final field = find.byType(TextField).last;
+    final controller = tester.widget<TextField>(field).controller!;
+    expect(controller.text, copied);
+    await tester.longPress(field);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Select all'));
+    await tester.pumpAndSettle();
+    expect(controller.selection.textInside(controller.text), copied);
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pump();
+    expect(controller.text, isEmpty);
+    await tester.enterText(field, 'https://rules.test/account.json');
+    await tester.pump();
+    await tester.tap(find.text('导入规则').last);
+    await tester.pumpAndSettle();
+    expect(service.rules.single.id, 'linovel');
+    expect(find.text('规则内容'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+  }
+
   testWidgets('catalog loads on entry, installs with one tap and deletion requires confirmation', (tester) async {
     final service = _Rules();
     final requests = <String>[];
