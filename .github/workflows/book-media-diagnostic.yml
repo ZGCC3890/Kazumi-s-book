@@ -12,6 +12,10 @@ jobs:
   compare:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [swiftshader_indirect, swiftshader]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -47,12 +51,13 @@ jobs:
           arch: x86_64
           profile: pixel_2
           emulator-build: 16428233
+          emulator-options: -no-window -gpu ${{ matrix.backend }} -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
-          script: bash tool/android_ui/media-diagnostic.sh
+          script: bash tool/android_ui/media-diagnostic.sh ${{ matrix.backend }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Android-renderer-diagnostic
+          name: Android-renderer-${{ matrix.backend }}
           path: |
             build/media-diagnostic/
             ~/.maestro/tests/

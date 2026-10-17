@@ -17,7 +17,7 @@ expected = next(line.split()[0] for line in prior.read_text().splitlines() if li
 assert hashlib.sha256(Path('diagnostic-apk/app-x86_64-release.apk').read_bytes()).hexdigest() == expected
 PY
 test "$(adb shell getprop ro.build.fingerprint | tr -d '\r')" = 'google/sdk_gphone64_x86_64/emu64xa:14/UE1A.230829.050/12077443:userdebug/dev-keys'
-"$ANDROID_HOME/emulator/emulator" -version > build/media-diagnostic/emulator-version.txt 2>&1
+cp "$ANDROID_HOME/emulator/source.properties" build/media-diagnostic/emulator-version.txt
 cp "$ANDROID_HOME/system-images/android-34/google_apis/x86_64/package.xml" build/media-diagnostic/system-image-package.xml
 adb shell wm size 480x900
 adb shell wm density 160
@@ -45,7 +45,6 @@ set +e
 maestro test .maestro/media-diagnostic-play.yaml > build/media-diagnostic/auto.log 2>&1
 auto_result=$?
 set -e
-test "$auto_result" = 1
 adb logcat -d > build/media-diagnostic/auto-logcat.txt
 adb exec-out screencap -p > build/media-diagnostic/auto-screen.png
 capture_zero() {
@@ -63,13 +62,18 @@ assert any('Episode 1，正在播放' in label for label in labels), labels
 print(f'{sys.argv[1]} RED: actual player remains at zero with the unchanged signed APK and clip.')
 PY
 }
-capture_zero auto
-maestro test .maestro/media-diagnostic-gpu.yaml > build/media-diagnostic/gpu-setting.log 2>&1
-maestro test .maestro/media-diagnostic-play.yaml > build/media-diagnostic/gpu.log 2>&1
+if [ "$1" = swiftshader_indirect ]; then
+  test "$auto_result" = 1
+  capture_zero auto
+  echo 'Legacy backend red reproduced with the same short default-player flow.'
+  exit 0
+fi
+test "$1" = swiftshader
+test "$auto_result" = 0
 for sample in 1 2; do
-  adb shell uiautomator dump /sdcard/renderer-gpu.xml > "build/media-diagnostic/gpu-${sample}-dump.log"
-  adb pull /sdcard/renderer-gpu.xml "build/media-diagnostic/gpu-${sample}.xml" > "build/media-diagnostic/gpu-${sample}-pull.log"
-  adb exec-out screencap -p > "build/media-diagnostic/gpu-${sample}-screen.png"
+  adb shell uiautomator dump /sdcard/renderer-auto.xml > "build/media-diagnostic/default-auto-${sample}-dump.log"
+  adb pull /sdcard/renderer-auto.xml "build/media-diagnostic/default-auto-${sample}.xml" > "build/media-diagnostic/default-auto-${sample}-pull.log"
+  adb exec-out screencap -p > "build/media-diagnostic/default-auto-${sample}-screen.png"
   sleep 2
 done
 python3 - <<'PY'
@@ -78,31 +82,10 @@ import re
 import xml.etree.ElementTree as ET
 positions = []
 for sample in (1, 2):
-    root = ET.fromstring(Path(f'build/media-diagnostic/gpu-{sample}.xml').read_text())
+    root = ET.fromstring(Path(f'build/media-diagnostic/default-auto-{sample}.xml').read_text())
     matches = [re.search(r'00:(\d{2}) / 00:20', node.attrib.get('content-desc', '')) for node in root.iter('node')]
     positions.append(next(int(match[1]) for match in matches if match))
 assert 0 < positions[0] < positions[1] <= 20, positions
-print(f'GPU TIME GREEN: actual native positions increased: {positions}; video frames await visual review.')
+print(f'DEFAULT AUTO TIME GREEN: native positions increased: {positions}; frames await visual review.')
 PY
-adb logcat -d > build/media-diagnostic/gpu-logcat.txt
-maestro test .maestro/media-diagnostic-auto.yaml > build/media-diagnostic/auto-restored-setting.log 2>&1
-maestro test -e REQUIRE_PROGRESS=false .maestro/media-diagnostic-play.yaml > build/media-diagnostic/auto-restored.log 2>&1
-for sample in 1 2; do
-  sleep 5
-  adb shell uiautomator dump /sdcard/renderer-auto-restored.xml > "build/media-diagnostic/auto-restored-${sample}-dump.log"
-  adb pull /sdcard/renderer-auto-restored.xml "build/media-diagnostic/auto-restored-${sample}.xml" > "build/media-diagnostic/auto-restored-${sample}-pull.log"
-  adb exec-out screencap -p > "build/media-diagnostic/auto-restored-${sample}-screen.png"
-done
-python3 - <<'PY'
-from pathlib import Path
-import re
-import xml.etree.ElementTree as ET
-positions = []
-for sample in (1, 2):
-    root = ET.fromstring(Path(f'build/media-diagnostic/auto-restored-{sample}.xml').read_text())
-    matches = [re.search(r'00:(\d{2}) / 00:20', node.attrib.get('content-desc', '')) for node in root.iter('node')]
-    positions.append(next(int(match[1]) for match in matches if match))
-assert 0 <= positions[0] == positions[1] < 20, positions
-print(f'AUTO RESTORED RED: actual native playback stalled again: {positions}')
-PY
-echo 'A-B-A timing result recorded; both captured gpu video frames still require visual review.'
+echo 'Modern backend default-player timing recorded; both captured video frames require visual review.'
