@@ -141,7 +141,14 @@ appId: com.zgcc.kazumisbook
     when:
       true: ${LAYOUT == 'phone'}
     commands:
-      - runFlow: enter-first-fullscreen.yaml
+      # 00-upgrade-seed already acknowledged Android's fullscreen guidance.
+      - tapOn:
+          point: "50%,50%"
+          text: "全屏"
+          waitToSettleTimeoutMs: 100
+      - extendedWaitUntil:
+          visible: "下一集"
+          timeout: 2000
 - tapOn:
     point: "50%,50%"
     text: "暂停"

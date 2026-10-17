@@ -8,6 +8,7 @@ import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
+from video_frames import probe
 
 BASE = "http://10.0.2.2:8765"
 REPO = Path(__file__).resolve().parents[2]
@@ -182,6 +183,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(content[start:end + 1])
                 return
             return self.send(content, 'video/mp4')
+        if path == '/video-frame-progress':
+            return self.send(json.dumps(probe(self.server.output)), 'application/json')
         if path == '/fixture-state':
             return self.send(json.dumps({
                 'files': {name: content.decode() for name, content in self.server.files.items()},

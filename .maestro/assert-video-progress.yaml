@@ -11,6 +11,22 @@ appId: com.zgcc.kazumisbook
     when:
       true: ${LAYOUT == 'tablet'}
     commands:
+      # The library paints tablet clocks without updating its percentage
+      # semantics. Sample actual video pixels with all controls hidden.
+      - runFlow:
+          when:
+            visible: "暂停"
+          commands:
+            - tapOn:
+                point: "50%,50%"
+                waitToSettleTimeoutMs: 100
       - extendedWaitUntil:
-          visible: "^(?:[1-9]|[1-9][0-9])%, Progress bar$"
-          timeout: 10000
+          notVisible: "暂停"
+          timeout: 2000
+      - runScript: scripts/video-frames.js
+      - tapOn:
+          point: "50%,50%"
+          waitToSettleTimeoutMs: 100
+      - extendedWaitUntil:
+          visible: "暂停"
+          timeout: 2000

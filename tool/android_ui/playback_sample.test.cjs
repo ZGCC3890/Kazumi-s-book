@@ -56,3 +56,25 @@ test('playback flow asserts the distinct playing and paused episode semantics', 
     assert.equal(vm.runInNewContext(expression, { EPISODE: '2', MODE: 'advancing' }), 'Episode 2，正在播放');
   }
 });
+
+const frameFilename = path.resolve(__dirname, '../../.maestro/scripts/video-frames.js');
+const frameSource = fs.readFileSync(frameFilename, 'utf8');
+const goodFrames = { elapsedSeconds: 4, firstLit: 1, secondLit: 1, changedFraction: 0.3 };
+function checkFrames(frames, status = 200) {
+  vm.runInNewContext(frameSource, {
+    http: { get(url) {
+      assert.equal(url, 'http://127.0.0.1:8765/video-frame-progress');
+      return { status, body: JSON.stringify(frames) };
+    } }, console: { log() {} },
+  }, { filename: frameFilename });
+}
+test('accepts bounded actual frame movement', () => checkFrames(goodFrames));
+for (const bad of [
+  { elapsedSeconds: 2.9 }, { elapsedSeconds: 10.1 },
+  { firstLit: 0 }, { secondLit: 0 }, { changedFraction: 0 },
+  { changedFraction: 0.01 }, { elapsedSeconds: null },
+]) {
+  test('rejects invalid frame evidence ' + JSON.stringify(bad), () =>
+    assert.throws(() => checkFrames({ ...goodFrames, ...bad })));
+}
+test('rejects native capture HTTP failure', () => assert.throws(() => checkFrames({}, 500)));
