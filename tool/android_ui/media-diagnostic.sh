@@ -7,7 +7,7 @@ capture() {
 }
 trap capture EXIT
 prior_clip=diagnostic-prior/work/Kazumi-s-book/Kazumi-s-book/build/android-ui/fixtures/clip.mp4
-cp "$prior_clip" build/media-diagnostic/fixtures/clip.mp4
+ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=640x360:rate=24 -f lavfi -i sine=frequency=440 -t 120 -c:v libx264 -threads 1 -pix_fmt yuv420p -c:a aac -movflags +faststart build/media-diagnostic/fixtures/clip.mp4
 sha256sum "$prior_clip" build/media-diagnostic/fixtures/clip.mp4 diagnostic-apk/app-x86_64-release.apk > build/media-diagnostic/input.sha256
 python3 - <<'PY'
 from pathlib import Path
@@ -41,51 +41,44 @@ test "$book_media_ready" = true
 adb push build/media-diagnostic/fixtures/video-rule.json /sdcard/Download/book-test-video.json > build/media-diagnostic/push-fixture.log
 adb install diagnostic-apk/app-x86_64-release.apk > build/media-diagnostic/install.log
 maestro test .maestro/media-diagnostic-prepare.yaml > build/media-diagnostic/prepare.log 2>&1
-set +e
 maestro test .maestro/media-diagnostic-play.yaml > build/media-diagnostic/auto.log 2>&1
-auto_result=$?
-set -e
 adb logcat -d > build/media-diagnostic/auto-logcat.txt
 adb exec-out screencap -p > build/media-diagnostic/auto-screen.png
-capture_zero() {
+sample_progress() {
   local phase="$1"
-  adb shell uiautomator dump /sdcard/renderer-auto.xml > "build/media-diagnostic/${phase}-dump.log"
-  adb pull /sdcard/renderer-auto.xml "build/media-diagnostic/${phase}.xml" > "build/media-diagnostic/${phase}-pull.log"
-  python3 - "$phase" <<'PY'
-from pathlib import Path
-import sys
-import xml.etree.ElementTree as ET
-root = ET.fromstring(Path(f'build/media-diagnostic/{sys.argv[1]}.xml').read_text())
-labels = [node.attrib.get('content-desc', '') for node in root.iter('node')]
-assert any('00:00 / 00:20' in label for label in labels), labels
-assert any('Episode 1，正在播放' in label for label in labels), labels
-print(f'{sys.argv[1]} RED: actual player remains at zero with the unchanged signed APK and clip.')
-PY
-}
-if [ "$1" = swiftshader_indirect ]; then
-  test "$auto_result" = 1
-  capture_zero auto
-  echo 'Legacy backend red reproduced with the same short default-player flow.'
-  exit 0
-fi
-test "$1" = swiftshader
-test "$auto_result" = 0
-for sample in 1 2; do
-  adb shell uiautomator dump /sdcard/renderer-auto.xml > "build/media-diagnostic/default-auto-${sample}-dump.log"
-  adb pull /sdcard/renderer-auto.xml "build/media-diagnostic/default-auto-${sample}.xml" > "build/media-diagnostic/default-auto-${sample}-pull.log"
-  adb exec-out screencap -p > "build/media-diagnostic/default-auto-${sample}-screen.png"
-  sleep 2
-done
-python3 - <<'PY'
+  local episode="$2"
+  local mode="$3"
+  for sample in 1 2; do
+    adb shell uiautomator dump /sdcard/renderer-auto.xml > "build/media-diagnostic/${phase}-${sample}-dump.log"
+    adb pull /sdcard/renderer-auto.xml "build/media-diagnostic/${phase}-${sample}.xml" > "build/media-diagnostic/${phase}-${sample}-pull.log"
+    adb exec-out screencap -p > "build/media-diagnostic/${phase}-${sample}-screen.png"
+    sleep 2
+  done
+  python3 - "$phase" "$episode" "$mode" <<'PY'
 from pathlib import Path
 import re
+import sys
 import xml.etree.ElementTree as ET
 positions = []
 for sample in (1, 2):
-    root = ET.fromstring(Path(f'build/media-diagnostic/default-auto-{sample}.xml').read_text())
-    matches = [re.search(r'00:(\d{2}) / 00:20', node.attrib.get('content-desc', '')) for node in root.iter('node')]
-    positions.append(next(int(match[1]) for match in matches if match))
-assert 0 < positions[0] < positions[1] <= 20, positions
-print(f'DEFAULT AUTO TIME GREEN: native positions increased: {positions}; frames await visual review.')
+    root = ET.fromstring(Path(f'build/media-diagnostic/{sys.argv[1]}-{sample}.xml').read_text())
+    labels = [node.attrib.get('content-desc', '') for node in root.iter('node')]
+    assert any(f'Episode {sys.argv[2]}，正在播放' in label for label in labels), labels
+    matches = [re.search(r'(\d{2}):(\d{2}) / 02:00', label) for label in labels]
+    positions.append(next(int(match[1]) * 60 + int(match[2]) for match in matches if match))
+assert all(0 < position < 120 for position in positions), positions
+if sys.argv[3] == 'steady':
+    assert positions[0] == positions[1], positions
+else:
+    assert positions[0] < positions[1], positions
+print(f'{sys.argv[1]} TIME GREEN: same episode {sys.argv[3]}: {positions}; frames await visual review.')
 PY
-echo 'Modern backend default-player timing recorded; both captured video frames require visual review.'
+}
+sample_progress episode-one 1 advancing
+maestro test .maestro/media-diagnostic-controls.yaml > build/media-diagnostic/controls.log 2>&1
+sample_progress paused 1 steady
+maestro test .maestro/media-diagnostic-resume.yaml > build/media-diagnostic/resume.log 2>&1
+sample_progress resumed 1 advancing
+maestro test .maestro/media-diagnostic-next.yaml > build/media-diagnostic/next.log 2>&1
+sample_progress episode-two 2 advancing
+echo 'Both episode timing records completed with default player settings; review video frames.'

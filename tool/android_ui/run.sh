@@ -15,7 +15,7 @@ capture_host() {
   adb shell dumpsys activity lastanr > "build/android-ui/host-${stage}-lastanr.txt"
   adb shell dumpsys window | awk '/mCurrentFocus=|mFocusedApp=|mTopFocusedDisplayId=|Application Not Responding/' > "build/android-ui/host-${stage}-window.txt"
 }
-ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=640x360:rate=24 -f lavfi -i sine=frequency=440 -t 20 -c:v libx264 -pix_fmt yuv420p -c:a aac -movflags +faststart build/android-ui/fixtures-clip.mp4
+ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=640x360:rate=24 -f lavfi -i sine=frequency=440 -t 120 -c:v libx264 -threads 1 -pix_fmt yuv420p -c:a aac -movflags +faststart build/android-ui/fixtures-clip.mp4
 mkdir -p build/android-ui/fixtures
 mv build/android-ui/fixtures-clip.mp4 build/android-ui/fixtures/clip.mp4
 python3 tool/android_ui/fixture_server.py --output build/android-ui/fixtures > build/android-ui/fixture-server.log 2>&1 &

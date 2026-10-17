@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        backend: [swiftshader_indirect, swiftshader]
+        backend: [swiftshader, swangle]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -36,6 +36,9 @@ jobs:
           java-version: '17'
       - name: Install the existing pinned UI runner
         run: |
+          mkdir -p build/media-diagnostic
+          sudo apt-get update -qq > build/media-diagnostic/packages.log 2>&1
+          sudo apt-get install -y -qq ffmpeg >> build/media-diagnostic/packages.log 2>&1
           curl --fail --location --silent --show-error https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.11.0/maestro.zip --output "$RUNNER_TEMP/maestro.zip"
           unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP/maestro"
           echo "$RUNNER_TEMP/maestro/maestro/bin" >> "$GITHUB_PATH"

@@ -40,7 +40,7 @@ jobs:
       - name: Generate owned native video fixture
         run: |
           mkdir -p build/native-fixture
-          ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=640x360:rate=24 -f lavfi -i sine=frequency=440 -t 20 -c:v libx264 -pix_fmt yuv420p -c:a aac -movflags +faststart build/native-fixture/clip.mp4
+          ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=640x360:rate=24 -f lavfi -i sine=frequency=440 -t 120 -c:v libx264 -threads 1 -pix_fmt yuv420p -c:a aac -movflags +faststart build/native-fixture/clip.mp4
       - uses: actions/upload-artifact@v4
         with:
           name: Owned-native-video-fixture

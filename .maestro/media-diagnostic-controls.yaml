@@ -1,0 +1,23 @@
+appId: com.zgcc.kazumisbook
+env:
+  LAYOUT: "phone"
+---
+- runFlow:
+    when:
+      notVisible: "暂停"
+    commands:
+      - tapOn:
+          point: "50%,25%"
+- extendedWaitUntil:
+    visible: "暂停"
+    timeout: 30000
+- tapOn: "全屏"
+- extendedWaitUntil:
+    visible: "下一集"
+    timeout: 30000
+- tapOn: "暂停"
+- assertVisible: "播放"
+- takeScreenshot: build/media-diagnostic/video-paused
+- back
+- assertVisible: "Episode 1，正在播放"
+- assertVisible: "播放"

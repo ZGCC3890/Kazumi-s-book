@@ -1,0 +1,25 @@
+appId: com.zgcc.kazumisbook
+env:
+  LAYOUT: "phone"
+---
+- runFlow:
+    when:
+      notVisible: "暂停"
+    commands:
+      - tapOn:
+          point: "50%,25%"
+- extendedWaitUntil:
+    visible: "暂停"
+    timeout: 30000
+- tapOn: "全屏"
+- extendedWaitUntil:
+    visible: "下一集"
+    timeout: 30000
+- tapOn: "下一集"
+- extendedWaitUntil:
+    visible: ".*Episode 2.*"
+    timeout: 30000
+- runFlow: assert-video-progress.yaml
+- takeScreenshot: build/media-diagnostic/episode-two-fullscreen
+- back
+- assertVisible: "Episode 2，正在播放"
