@@ -74,6 +74,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send(b'', 'text/plain', status)
 
     def do_PROPFIND(self):
+        self.rfile.read(int(self.headers.get('Content-Length', 0)))
         path = self.dav_path()
         if path not in self.server.directories:
             return self.send('Missing collection', 'text/plain', 404)
