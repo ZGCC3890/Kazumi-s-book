@@ -43,10 +43,13 @@ env:
     timeout: 30000
 - tapOn: "(?s).*Author A.*"
 - extendedWaitUntil:
+    visible: "Got it"
+    timeout: 30000
+- tapOn: "Got it"
+- extendedWaitUntil:
     visible: ".*Chapter 1 opening.*"
     timeout: 30000
-- tapOn:
-    point: "50%,50%"
+- tapOn: ".*Chapter 1 opening.*"
 - tapOn: "添加书签"
 - tapOn: "备注（可留空）"
 - inputText: "LegacyBookmark1"
@@ -55,11 +58,10 @@ env:
 - tapOn: "目录"
 - tapOn: "(?s).*Chapter 2.*"
 - assertVisible: ".*Chapter 2 opening.*"
-- tapOn:
-    point: "50%,50%"
+- tapOn: ".*Chapter 2 opening.*"
 - swipe:
-    start: "2%,80%"
-    end: "2%,30%"
+    start: "50%,80%"
+    end: "50%,30%"
     duration: 600
 - tapOn:
     point: "50%,50%"
