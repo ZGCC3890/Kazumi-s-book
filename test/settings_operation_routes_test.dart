@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui' show SemanticsAction;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -371,6 +372,43 @@ void main() {
     expect(tester.takeException(), isNull);
     await _back(tester);
     expect(find.byType(StorageSettingsPage), findsOneWidget);
+  }, timeout: const Timeout(Duration(seconds: 45)));
+
+  testWidgets('tablet settings exposes scrolled categories outside its nested navigator', (tester) async {
+    final semantics = tester.ensureSemantics();
+    try {
+      await _open(tester, wide: true);
+      final menu = find.descendant(of: find.byType(SettingsPage),
+          matching: find.byType(Scrollable)).first;
+      await tester.scrollUntilVisible(find.text('同步设置').first, 180,
+          scrollable: menu);
+      await _settle(tester);
+      expect(find.text('同步设置').first.hitTestable(), findsOneWidget);
+      bool accessibleCategory() => tester.semantics.simulatedAccessibilityTraversal()
+          .any((node) => node.label.contains('同步设置') &&
+              node.getSemanticsData().hasAction(SemanticsAction.tap));
+      expect(accessibleCategory(), isTrue,
+          reason: 'A visible category must survive the content Navigator barrier.');
+      await tester.tap(find.text('同步设置').first);
+      await _settle(tester);
+      expect(find.text('设置 WebDAV'), findsOneWidget);
+      expect(accessibleCategory(), isTrue);
+
+      final dialog = showDialog<void>(
+        context: tester.element(find.byType(SettingsPage)),
+        builder: (context) => AlertDialog(title: const Text('Root settings modal'),
+          actions: [TextButton(onPressed: () => Navigator.pop(context),
+            child: const Text('Close settings modal'))]));
+      await _settle(tester);
+      expect(accessibleCategory(), isFalse);
+      await tester.tap(find.text('Close settings modal'));
+      await _settle(tester);
+      await dialog;
+      expect(accessibleCategory(), isTrue);
+      await tester.pumpWidget(const SizedBox.shrink());
+    } finally {
+      semantics.dispose();
+    }
   }, timeout: const Timeout(Duration(seconds: 45)));
 
   testWidgets('tablet settings keeps its shell through nested proxy return and category switch', (tester) async {

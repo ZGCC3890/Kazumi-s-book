@@ -61,6 +61,13 @@ Future<void> type(WidgetTester tester, Finder field, String value) async {
   await tester.pump();
 }
 
+Future<void> category(WidgetTester tester, String label, {double delta = 200}) async {
+  final menu = find.descendant(of: find.byType(SettingsPage),
+      matching: find.byType(Scrollable)).first;
+  await tester.scrollUntilVisible(find.text(label).first, delta, scrollable: menu);
+  await text(tester, label);
+}
+
 Future<void> back(WidgetTester tester) =>
     click(tester, find.byIcon(Icons.arrow_back));
 
@@ -162,7 +169,7 @@ void main() {
     await click(tester, find.descendant(of: find.byType(NavigationRail),
         matching: find.byIcon(Icons.settings_outlined)));
     await click(tester, find.byTooltip('全部设置'));
-    await text(tester, '同步设置');
+    await category(tester, '同步设置');
     await text(tester, '设置 WebDAV');
     await text(tester, '连接你的云盘');
     for (final entry in {
@@ -222,7 +229,7 @@ void main() {
     });
     updater.interceptors.add(release);
     try {
-      await text(tester, '关于');
+      await category(tester, '关于');
       await text(tester, '检查更新');
       await visible(tester, find.byType(UpdateAvailableDialog));
       final update = tester.widget<UpdateAvailableDialog>(find.byType(UpdateAvailableDialog)).updateInfo;
@@ -236,7 +243,7 @@ void main() {
     } finally {
       updater.interceptors.remove(release);
     }
-    await text(tester, '规则管理');
+    await category(tester, '规则管理', delta: -200);
     final http = HttpClient();
     final request = await http.getUrl(Uri.parse('http://127.0.0.1:8765/video-rule.json'));
     final response = await request.close();

@@ -262,7 +262,11 @@ class _SettingsPageState extends State<SettingsPage> {
                         data: Theme.of(context).copyWith(
                           pageTransitionsTheme: settingsPageTransitionsTheme,
                         ),
-                        child: RouterOutlet(key: _outletKey),
+                        // Keep nested route barriers from hiding the category menu.
+                        child: Semantics(
+                          container: true,
+                          child: RouterOutlet(key: _outletKey),
+                        ),
                       ),
                     ),
                   ),

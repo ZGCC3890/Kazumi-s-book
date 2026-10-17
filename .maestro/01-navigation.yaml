@@ -92,7 +92,7 @@ appId: com.zgcc.kazumisbook
 - takeScreenshot: build/android-ui/novel-search
 - back
 - tapOn: "(?s).*追番.*"
-- assertVisible: "书架"
+- assertVisible: "(?s)^书架(?:\\n.*)?$"
 - tapOn: "(?s).*书架.*"
 - assertVisible: "搜索小说"
 - takeScreenshot: build/android-ui/bookshelf

@@ -38,24 +38,31 @@ if [ "$book_media_ready" != true ]; then
 fi
 adb push build/android-ui/fixtures/video-rule.json /sdcard/Download/book-test-video.json > build/android-ui/push-fixture.log
 adb logcat -d > build/android-ui/host-before-wm-boot-logcat.txt
-capture_host before-wm
-if [ "$1" = tablet ]; then
-  adb shell wm size 800x1280
-  capture_host after-size
-  adb shell wm density 160
-else
-  adb shell wm size 480x900
-  capture_host after-size
-  adb shell wm density 160
-fi
-capture_host after-density
+# The released baseline hides wide navigation semantics. Seed its data in a
+# fixed compact viewport; only the new package is tested at the target size.
+capture_host legacy-before-wm
+adb shell wm size 480x900
+capture_host legacy-after-size
+adb shell wm density 160
+capture_host legacy-after-density
 sha256sum android-upgrade-apk/app-x86_64-release.apk android-ui-apk/app-x86_64-release.apk > build/android-ui/upgrade-packages.sha256
 adb install -r android-upgrade-apk/app-x86_64-release.apk > build/android-ui/install-baseline.log
-capture_host before-maestro
+capture_host legacy-before-maestro
 maestro test -e LAYOUT="$1" .maestro/00-upgrade-seed.yaml > build/android-ui/maestro.log 2>&1
 curl --fail --silent http://127.0.0.1:8765/fixture-state > build/android-ui/upgrade-legacy-state.json
 python3 tool/android_ui/verify_upgrade.py legacy build/android-ui/upgrade-legacy-state.json
+adb shell am force-stop com.zgcc.kazumisbook
+capture_host current-before-wm
+if [ "$1" = tablet ]; then
+  adb shell wm size 800x1280
+else
+  adb shell wm size 480x900
+fi
+capture_host current-after-size
+adb shell wm density 160
+capture_host current-after-density
 adb install -r android-ui-apk/app-x86_64-release.apk > build/android-ui/install-upgrade.log
+capture_host current-before-maestro
 maestro test -e LAYOUT="$1" .maestro/00-upgrade-check.yaml >> build/android-ui/maestro.log 2>&1
 curl --fail --silent http://127.0.0.1:8765/fixture-state > build/android-ui/upgrade-current-state.json
 python3 tool/android_ui/verify_upgrade.py upgraded build/android-ui/upgrade-current-state.json
