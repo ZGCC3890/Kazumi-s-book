@@ -7,13 +7,16 @@ env:
     visible: "热门番组"
     timeout: 10000
 - tapOn:
+    point: "50%,50%"
     text: "(?s).*我的.*"
     waitToSettleTimeoutMs: 100
 - tapOn:
+    point: "50%,50%"
     text: "(?s)历史记录\\s+查看观看记录"
     waitToSettleTimeoutMs: 100
 - assertVisible: "(?s).*葬送的芙莉莲.*"
 - tapOn:
+    point: "50%,50%"
     text: "继续播放"
     waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
@@ -28,7 +31,7 @@ env:
           waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "暂停"
-    timeout: 10000
+    timeout: 2000
 - runFlow:
     when:
       true: ${REQUIRE_PROGRESS == 'true'}

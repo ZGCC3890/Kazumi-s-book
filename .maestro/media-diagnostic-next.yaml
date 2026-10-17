@@ -13,12 +13,14 @@ env:
     visible: "暂停"
     timeout: 2000
 - tapOn:
+    point: "50%,50%"
     text: "全屏"
     waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "下一集"
     timeout: 2000
 - tapOn:
+    point: "50%,50%"
     text: "下一集"
     waitToSettleTimeoutMs: 100
 - extendedWaitUntil:

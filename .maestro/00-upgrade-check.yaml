@@ -4,28 +4,45 @@ appId: com.zgcc.kazumisbook
 - launchApp
 - extendedWaitUntil:
     visible: "热门番组"
-    timeout: 60000
+    timeout: 10000
 - assertNotVisible: "同意并继续"
-- tapOn: "(?s).*追番.*"
-- tapOn: "(?s).*书架.*"
-- tapOn: "(?s).*葬送的芙莉莲.*"
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*追番.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*书架.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*葬送的芙莉莲.*"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: ".*Chapter 2 paragraph.*"
-    timeout: 30000
+    timeout: 2000
 - tapOn:
+    point: "50%,50%"
+    waitToSettleTimeoutMs: 100
     text: ".*Chapter 2 paragraph.*"
     index: 0
-- tapOn: "书签"
+- tapOn:
+    point: "50%,50%"
+    text: "书签"
+    waitToSettleTimeoutMs: 100
 - assertVisible: "(?s).*LegacyBookmark1.*"
 - assertVisible: "(?s).*LegacyBookmark2.*"
 - takeScreenshot: build/android-ui/upgrade-preserved-bookmarks
 - back
 - back
-- tapOn: "同步小说"
+- tapOn:
+    point: "50%,50%"
+    text: "同步小说"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible:
       text: "同步小说"
       enabled: true
-    timeout: 60000
+    timeout: 15000
 - assertNotVisible: "(?s).*同步失败.*"
 - takeScreenshot: build/android-ui/upgrade-flat-migration

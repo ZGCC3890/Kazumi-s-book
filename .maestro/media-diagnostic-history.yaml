@@ -3,34 +3,73 @@ appId: com.zgcc.kazumisbook
 - launchApp
 - extendedWaitUntil:
     visible: "热门番组"
-    timeout: 60000
-- tapOn: "(?s).*我的.*"
-- tapOn: "设置"
+    timeout: 10000
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*我的.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "设置"
+    waitToSettleTimeoutMs: 100
 - scrollUntilVisible:
     element: "(?s).*同步设置.*"
     direction: DOWN
-- tapOn: "(?s).*同步设置.*"
-- tapOn: "设置 WebDAV"
-- tapOn: "(?s).*连接你的云盘.*"
-- tapOn: "服务器地址"
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*同步设置.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "设置 WebDAV"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*连接你的云盘.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "服务器地址"
+    waitToSettleTimeoutMs: 100
 - inputText: "http://10.0.2.2:8765/dav"
-- tapOn: "用户名"
+- tapOn:
+    point: "50%,50%"
+    text: "用户名"
+    waitToSettleTimeoutMs: 100
 - inputText: "fixture"
-- tapOn: "密码或应用授权码"
+- tapOn:
+    point: "50%,50%"
+    text: "密码或应用授权码"
+    waitToSettleTimeoutMs: 100
 - inputText: "fixture"
 - hideKeyboard
 - scrollUntilVisible:
     element: "保存并测试"
     direction: DOWN
-- tapOn: "保存并测试"
+- tapOn:
+    point: "50%,50%"
+    text: "保存并测试"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "连接成功，配置已保存"
-    timeout: 30000
-- tapOn: "返回同步设置"
-- tapOn: "(?s).*启用 WebDAV.*"
-- tapOn: "(?s).*观看记录.*自动同步播放进度与历史记录.*"
-- tapOn: "立即同步观看记录"
+    timeout: 15000
+- tapOn:
+    point: "50%,50%"
+    text: "返回同步设置"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*启用 WebDAV.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*观看记录.*自动同步播放进度与历史记录.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "立即同步观看记录"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "观看记录已同步"
-    timeout: 60000
+    timeout: 15000
 - takeScreenshot: build/media-diagnostic/history-synced

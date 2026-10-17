@@ -3,28 +3,51 @@ appId: com.zgcc.kazumisbook
 - launchApp
 - extendedWaitUntil:
     visible: "热门番组"
-    timeout: 60000
-- tapOn: "搜索"
-- tapOn: "番剧"
-- tapOn: "小说"
-- tapOn: "搜索小说书名"
+    timeout: 10000
+- tapOn:
+    point: "50%,50%"
+    text: "搜索"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "番剧"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "小说"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "搜索小说书名"
+    waitToSettleTimeoutMs: 100
 - inputText: "Fixture"
-- tapOn: "搜索"
+- tapOn:
+    point: "50%,50%"
+    text: "搜索"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "(?s).*葬送的芙莉莲.*"
-    timeout: 60000
+    timeout: 2000
 - tapOn:
+    point: "50%,50%"
+    waitToSettleTimeoutMs: 100
     text: "(?s).*葬送的芙莉莲.*"
     index: 0
 - extendedWaitUntil:
     visible: ".*Chapter 1 opening.*"
-    timeout: 60000
+    timeout: 2000
 - assertNotVisible: "阅读设置"
 - takeScreenshot: build/android-ui/reader-hidden-controls
-- tapOn: "小说插图，点击放大"
+- tapOn:
+    point: "50%,50%"
+    text: "小说插图，点击放大"
+    waitToSettleTimeoutMs: 100
 - assertVisible: "关闭插图"
 - takeScreenshot: build/android-ui/reader-illustration
-- tapOn: "关闭插图"
+- tapOn:
+    point: "50%,50%"
+    text: "关闭插图"
+    waitToSettleTimeoutMs: 100
 # Compare text anchors after scrolling past the leading illustration.
 - swipe:
     start: "50%,70%"
@@ -39,74 +62,161 @@ appId: com.zgcc.kazumisbook
     end: "2%,30%"
     duration: 600
 - tapOn:
+    waitToSettleTimeoutMs: 100
     point: "50%,50%"
 - assertVisible: "阅读设置"
-- tapOn: "添加书签"
-- tapOn: "取消"
-- tapOn: "书签"
+- tapOn:
+    point: "50%,50%"
+    text: "添加书签"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "取消"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "书签"
+    waitToSettleTimeoutMs: 100
 - assertVisible: "还没有书签"
 - back
-- tapOn: "添加书签"
-- tapOn: "备注（可留空）"
+- tapOn:
+    point: "50%,50%"
+    text: "添加书签"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "备注（可留空）"
+    waitToSettleTimeoutMs: 100
 - inputText: "Bookmark1"
 - hideKeyboard
-- tapOn: "保存"
-- tapOn: "书签"
+- tapOn:
+    point: "50%,50%"
+    text: "保存"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "书签"
+    waitToSettleTimeoutMs: 100
 - assertVisible: "(?s).*Bookmark1.*"
-- tapOn: "删除书签"
+- tapOn:
+    point: "50%,50%"
+    text: "删除书签"
+    waitToSettleTimeoutMs: 100
 - assertVisible: "还没有书签"
 - back
-- tapOn: "添加书签"
-- tapOn: "备注（可留空）"
+- tapOn:
+    point: "50%,50%"
+    text: "添加书签"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "备注（可留空）"
+    waitToSettleTimeoutMs: 100
 - inputText: "LeftMargin"
 - hideKeyboard
-- tapOn: "保存"
 - tapOn:
+    point: "50%,50%"
+    text: "保存"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    waitToSettleTimeoutMs: 100
     point: "50%,50%"
 - swipe:
     start: "98%,80%"
     end: "98%,30%"
     duration: 600
 - tapOn:
+    waitToSettleTimeoutMs: 100
     point: "50%,50%"
-- tapOn: "添加书签"
-- tapOn: "备注（可留空）"
+- tapOn:
+    point: "50%,50%"
+    text: "添加书签"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "备注（可留空）"
+    waitToSettleTimeoutMs: 100
 - inputText: "RightMargin"
 - hideKeyboard
-- tapOn: "保存"
-- tapOn: "阅读设置"
-- tapOn: "护眼"
+- tapOn:
+    point: "50%,50%"
+    text: "保存"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "阅读设置"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "护眼"
+    waitToSettleTimeoutMs: 100
 - scrollUntilVisible:
     element: "左右翻页"
     direction: DOWN
-- tapOn: "左右翻页"
-- tapOn: "滚动"
+- tapOn:
+    point: "50%,50%"
+    text: "左右翻页"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "滚动"
+    waitToSettleTimeoutMs: 100
 - scrollUntilVisible:
     element: "系统字体"
     direction: DOWN
-- tapOn: "系统字体"
-- tapOn: "衬线字体"
+- tapOn:
+    point: "50%,50%"
+    text: "系统字体"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "衬线字体"
+    waitToSettleTimeoutMs: 100
 - scrollUntilVisible:
     element: "跟随系统"
     direction: DOWN
-- tapOn: "跟随系统"
+- tapOn:
+    point: "50%,50%"
+    text: "跟随系统"
+    waitToSettleTimeoutMs: 100
 - takeScreenshot: build/android-ui/reader-settings
 - back
-- tapOn: "目录"
-- tapOn: "(?s).*Chapter 2.*"
+- tapOn:
+    point: "50%,50%"
+    text: "目录"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*Chapter 2.*"
+    waitToSettleTimeoutMs: 100
 - assertVisible: ".*Chapter 2 opening.*"
 - takeScreenshot: build/android-ui/reader-chapter-two
-- tapOn: "阅读进度"
+- tapOn:
+    point: "50%,50%"
+    text: "阅读进度"
+    waitToSettleTimeoutMs: 100
 - assertVisible: "阅读进度"
 - back
 - back
 - assertVisible: "加入书架？"
-- tapOn: "加入书架"
+- tapOn:
+    point: "50%,50%"
+    text: "加入书架"
+    waitToSettleTimeoutMs: 100
 - back
-- tapOn: "(?s).*追番.*"
-- tapOn: "(?s).*书架.*"
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*追番.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*书架.*"
+    waitToSettleTimeoutMs: 100
 - assertVisible: "(?s).*葬送的芙莉莲.*"
 - takeScreenshot: build/android-ui/bookshelf-added
-- tapOn: "(?s).*葬送的芙莉莲.*"
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*葬送的芙莉莲.*"
+    waitToSettleTimeoutMs: 100
 - assertVisible: ".*Chapter 2 opening.*"
 - takeScreenshot: build/android-ui/reader-resumed

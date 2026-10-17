@@ -3,47 +3,77 @@ appId: com.zgcc.kazumisbook
 - launchApp
 - extendedWaitUntil:
     visible: "热门番组"
-    timeout: 60000
-- tapOn: "(?s).*追番.*"
-- tapOn: "(?s).*书架.*"
-- tapOn: "小说操作"
-- tapOn: "更换书源"
+    timeout: 10000
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*追番.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*书架.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "小说操作"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "更换书源"
+    waitToSettleTimeoutMs: 100
 - assertVisible: "选择小说书源"
 - extendedWaitUntil:
     visible: "(?s).*Author B.*"
-    timeout: 30000
-- tapOn: "(?s).*Author B.*"
+    timeout: 2000
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*Author B.*"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: ".*Chapter 2 opening.*"
-    timeout: 30000
+    timeout: 2000
 - takeScreenshot: build/android-ui/cross-source-chapter-restored
 - back
 - extendedWaitUntil:
     visible: "查看番剧详情"
-    timeout: 60000
-- tapOn: "查看番剧详情"
+    timeout: 2000
+- tapOn:
+    point: "50%,50%"
+    text: "查看番剧详情"
+    waitToSettleTimeoutMs: 100
 - assertVisible: "选择番剧"
-- tapOn: ".*芙莉莲.*2023"
+- tapOn:
+    point: "50%,50%"
+    text: ".*芙莉莲.*2023"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "开始观看"
-    timeout: 60000
+    timeout: 15000
 - takeScreenshot: build/android-ui/novel-to-anime-details
-- tapOn: "阅读轻小说"
+- tapOn:
+    point: "50%,50%"
+    text: "阅读轻小说"
+    waitToSettleTimeoutMs: 100
 - assertVisible: "选择小说书源"
 - extendedWaitUntil:
     visible: "(?s).*Author B.*"
-    timeout: 30000
-- tapOn: "(?s).*Author B.*"
+    timeout: 2000
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*Author B.*"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: ".*Chapter 2 opening.*"
-    timeout: 30000
+    timeout: 2000
 - takeScreenshot: build/android-ui/anime-to-novel-restored
 - back
 - back
-- tapOn: "同步小说"
+- tapOn:
+    point: "50%,50%"
+    text: "同步小说"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible:
       text: "同步小说"
       enabled: true
-    timeout: 60000
+    timeout: 15000
 - takeScreenshot: build/android-ui/bookshelf-final-sync

@@ -1,21 +1,33 @@
 appId: com.zgcc.kazumisbook
 ---
 - runFlow: set-layout.yaml
-- tapOn: "(?s).*阅读进度有冲突.*"
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*阅读进度有冲突.*"
+    waitToSettleTimeoutMs: 100
 - assertVisible: "选择要保留的阅读进度"
-- tapOn: "(?s).*remote-ui-device.*"
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*remote-ui-device.*"
+    waitToSettleTimeoutMs: 100
 - assertNotVisible: "选择要保留的阅读进度"
 - assertNotVisible: "(?s).*阅读进度有冲突.*"
-- tapOn: "(?s).*葬送的芙莉莲.*"
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*葬送的芙莉莲.*"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: ".*Chapter 3 opening.*"
-    timeout: 30000
+    timeout: 2000
 - takeScreenshot: build/android-ui/conflict-selected-chapter
 - back
-- tapOn: "同步小说"
+- tapOn:
+    point: "50%,50%"
+    text: "同步小说"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible:
       text: "同步小说"
       enabled: true
-    timeout: 60000
+    timeout: 15000
 - takeScreenshot: build/android-ui/conflict-final-sync

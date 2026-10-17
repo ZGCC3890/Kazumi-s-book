@@ -11,83 +11,185 @@ env:
       all: allow
 - extendedWaitUntil:
     visible: "同意并继续"
-    timeout: 60000
-- tapOn: "同意并继续"
-- tapOn: "继续"
-- tapOn: "继续"
-- tapOn: "开始使用"
-- tapOn: "仍然继续"
+    timeout: 10000
+- tapOn:
+    point: "50%,50%"
+    text: "同意并继续"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "继续"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "继续"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "开始使用"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "仍然继续"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "热门番组"
-    timeout: 60000
-- tapOn: "(?s).*追番.*"
-- tapOn: "(?s).*书架.*"
-- tapOn: "小说规则"
-- tapOn: "添加规则"
-- tapOn: "(?s).*从剪贴板导入.*"
-- tapOn: "规则内容"
+    timeout: 10000
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*追番.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*书架.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "小说规则"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "添加规则"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*从剪贴板导入.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "规则内容"
+    waitToSettleTimeoutMs: 100
 - inputText: "http://10.0.2.2:8765/novels/rules.json"
 - hideKeyboard
 - tapOn:
+    point: "50%,50%"
+    waitToSettleTimeoutMs: 100
     text: "导入规则"
     index: 1
 - extendedWaitUntil:
     visible: "(?s).*Fixture Source A.*"
-    timeout: 30000
+    timeout: 2000
 - back
-- tapOn: "(?s).*追番.*"
-- tapOn: "(?s).*书架.*"
-- tapOn: "搜索小说"
-- tapOn: "书名"
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*追番.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*书架.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "搜索小说"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "书名"
+    waitToSettleTimeoutMs: 100
 - inputText: "Fixture"
-- tapOn: "搜索"
+- tapOn:
+    point: "50%,50%"
+    text: "搜索"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "(?s).*Author A.*"
-    timeout: 30000
-- tapOn: "(?s).*Author A.*"
+    timeout: 2000
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*Author A.*"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "Got it"
-    timeout: 30000
-- tapOn: "Got it"
+    timeout: 2000
+- tapOn:
+    point: "50%,50%"
+    text: "Got it"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: ".*Chapter 1 opening.*"
-    timeout: 30000
-- tapOn: ".*Chapter 1 opening.*"
-- tapOn: "添加书签"
-- tapOn: "备注（可留空）"
+    timeout: 2000
+- tapOn:
+    point: "50%,50%"
+    text: ".*Chapter 1 opening.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "添加书签"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "备注（可留空）"
+    waitToSettleTimeoutMs: 100
 - inputText: "LegacyBookmark1"
 - hideKeyboard
-- tapOn: "保存"
-- tapOn: "目录"
-- tapOn: "(?s).*Chapter 2.*"
+- tapOn:
+    point: "50%,50%"
+    text: "保存"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "目录"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*Chapter 2.*"
+    waitToSettleTimeoutMs: 100
 - assertVisible: ".*Chapter 2 opening.*"
-- tapOn: ".*Chapter 2 opening.*"
+- tapOn:
+    point: "50%,50%"
+    text: ".*Chapter 2 opening.*"
+    waitToSettleTimeoutMs: 100
 - swipe:
     start: "50%,80%"
     end: "50%,30%"
     duration: 600
 - tapOn:
+    waitToSettleTimeoutMs: 100
     point: "50%,50%"
-- tapOn: "添加书签"
-- tapOn: "备注（可留空）"
+- tapOn:
+    point: "50%,50%"
+    text: "添加书签"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "备注（可留空）"
+    waitToSettleTimeoutMs: 100
 - inputText: "LegacyBookmark2"
 - hideKeyboard
-- tapOn: "保存"
+- tapOn:
+    point: "50%,50%"
+    text: "保存"
+    waitToSettleTimeoutMs: 100
 - takeScreenshot: build/android-ui/upgrade-old-reader
-- tapOn: "返回"
-- tapOn: "加入书架"
+- tapOn:
+    point: "50%,50%"
+    text: "返回"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "加入书架"
+    waitToSettleTimeoutMs: 100
 - back
 - runFlow: 03-sync.yaml
 - launchApp
 - extendedWaitUntil:
     visible: "热门番组"
-    timeout: 60000
-- tapOn: "(?s).*追番.*"
-- tapOn: "(?s).*书架.*"
-- tapOn: "同步小说"
+    timeout: 10000
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*追番.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*书架.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "同步小说"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible:
       text: "同步小说"
       enabled: true
-    timeout: 60000
+    timeout: 15000
 - takeScreenshot: build/android-ui/upgrade-old-shelf

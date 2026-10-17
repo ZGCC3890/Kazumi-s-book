@@ -4,22 +4,40 @@ appId: com.zgcc.kazumisbook
 - launchApp
 - extendedWaitUntil:
     visible: "热门番组"
-    timeout: 60000
-- tapOn: "(?s).*追番.*"
-- tapOn: "(?s).*书架.*"
-- tapOn: "同步小说"
+    timeout: 10000
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*追番.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*书架.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "同步小说"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "(?s).*阅读进度有冲突.*"
-    timeout: 60000
-- tapOn: "(?s).*阅读进度有冲突.*"
+    timeout: 15000
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*阅读进度有冲突.*"
+    waitToSettleTimeoutMs: 100
 - assertVisible: "选择要保留的阅读进度"
 - assertVisible: "(?s).*remote-ui-device.*"
-- tapOn: "取消"
+- tapOn:
+    point: "50%,50%"
+    text: "取消"
+    waitToSettleTimeoutMs: 100
 - assertVisible: "(?s).*阅读进度有冲突.*"
-- tapOn: "同步小说"
+- tapOn:
+    point: "50%,50%"
+    text: "同步小说"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible:
       text: "同步小说"
       enabled: true
-    timeout: 60000
+    timeout: 15000
 - takeScreenshot: build/android-ui/conflict-cancelled

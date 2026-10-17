@@ -1,9 +1,11 @@
 appId: com.zgcc.kazumisbook
 ---
 - tapOn:
+    point: "50%,50%"
     text: "全屏"
     waitToSettleTimeoutMs: 100
 - tapOn:
+    point: "50%,50%"
     text: "Got it"
     waitToSettleTimeoutMs: 100
 - runFlow:

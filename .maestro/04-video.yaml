@@ -3,32 +3,68 @@ appId: com.zgcc.kazumisbook
 - launchApp
 - extendedWaitUntil:
     visible: "热门番组"
-    timeout: 60000
-- tapOn: "(?s).*我的.*"
-- tapOn: "设置"
-- tapOn: "(?s).*规则管理.*"
-- tapOn: "添加规则"
-- tapOn: "(?s).*从文件导入.*"
+    timeout: 10000
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*我的.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "设置"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*规则管理.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "添加规则"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*从文件导入.*"
+    waitToSettleTimeoutMs: 100
 - runFlow:
     when:
       visible: "Show roots"
     commands:
-      - tapOn: "Show roots"
-- tapOn: "Downloads"
-- tapOn: "book-test-video.json"
+      - tapOn:
+          point: "50%,50%"
+          text: "Show roots"
+          waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "Downloads"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "book-test-video.json"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "(?s).*Fixture Video.*"
-    timeout: 30000
+    timeout: 2000
 - takeScreenshot: build/android-ui/video-rule-file-import
-- tapOn: "Fixture Video 的更多操作"
-- tapOn: "测试规则"
-- tapOn: "测试关键词"
+- tapOn:
+    point: "50%,50%"
+    text: "Fixture Video 的更多操作"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "测试规则"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "测试关键词"
+    waitToSettleTimeoutMs: 100
 - inputText: "Frieren"
 - hideKeyboard
-- tapOn: "开始测试"
+- tapOn:
+    point: "50%,50%"
+    text: "开始测试"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "(?s).*葬送的芙莉莲.*"
-    timeout: 30000
+    timeout: 2000
 - takeScreenshot: build/android-ui/video-rule-test
 - back
 - back
@@ -37,37 +73,59 @@ appId: com.zgcc.kazumisbook
       true: ${LAYOUT == 'phone'}
     commands:
       - back
-- tapOn: "(?s).*推荐.*"
-- tapOn: "搜索"
-- tapOn: "搜索番剧名称"
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*推荐.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "搜索"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "搜索番剧名称"
+    waitToSettleTimeoutMs: 100
 - inputText: "Frieren"
-- tapOn: "搜索"
+- tapOn:
+    point: "50%,50%"
+    text: "搜索"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "(?s).*芙莉莲.*"
-    timeout: 60000
+    timeout: 15000
 - tapOn:
+    point: "50%,50%"
+    waitToSettleTimeoutMs: 100
     text: "(?s).*芙莉莲.*"
     index: 0
 - extendedWaitUntil:
     visible: "开始观看"
-    timeout: 60000
-- tapOn: "(?s).*吐槽.*"
+    timeout: 15000
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*吐槽.*"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible:
       id: ".*bangumi-comment.*"
-    timeout: 60000
+    timeout: 15000
 - assertNotVisible: "评论加载失败"
 - takeScreenshot: build/android-ui/anime-comments
-- tapOn: "开始观看"
+- tapOn:
+    point: "50%,50%"
+    text: "开始观看"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "(?s).*Fixture Video.*"
-    timeout: 30000
+    timeout: 2000
 - tapOn:
+    point: "50%,50%"
+    waitToSettleTimeoutMs: 100
     text: "(?s).*葬送的芙莉莲.*"
     index: 0
 - extendedWaitUntil:
     notVisible: "视频资源解析中"
-    timeout: 30000
+    timeout: 10000
 - runFlow:
     when:
       notVisible: "暂停"
@@ -77,7 +135,7 @@ appId: com.zgcc.kazumisbook
           waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "暂停"
-    timeout: 30000
+    timeout: 2000
 - runFlow: assert-video-progress.yaml
 - runFlow:
     when:
@@ -85,19 +143,22 @@ appId: com.zgcc.kazumisbook
     commands:
       - runFlow: enter-first-fullscreen.yaml
 - tapOn:
+    point: "50%,50%"
     text: "暂停"
     waitToSettleTimeoutMs: 100
 - assertVisible: "播放"
 - takeScreenshot: build/android-ui/video-paused
 - tapOn:
+    point: "50%,50%"
     text: "播放"
     waitToSettleTimeoutMs: 100
 - tapOn:
+    point: "50%,50%"
     text: "下一集"
     waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: ".*Episode 2.*"
-    timeout: 30000
+    timeout: 10000
 - runFlow: assert-video-progress.yaml
 - assertNotVisible: "暂时无法播放"
 - takeScreenshot: build/android-ui/video-second-episode

@@ -3,13 +3,28 @@ appId: com.zgcc.kazumisbook
 - launchApp
 - extendedWaitUntil:
     visible: "热门番组"
-    timeout: 60000
-- tapOn: "(?s).*我的.*"
-- tapOn: "设置"
-- tapOn: "(?s).*播放设置.*"
+    timeout: 10000
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*我的.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "设置"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*播放设置.*"
+    waitToSettleTimeoutMs: 100
 - scrollUntilVisible:
     element: "(?s).*视频渲染器.*"
     direction: DOWN
-- tapOn: "(?s).*视频渲染器.*"
-- tapOn: "(?s).*自动选择.*"
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*视频渲染器.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    point: "50%,50%"
+    text: "(?s).*自动选择.*"
+    waitToSettleTimeoutMs: 100
 - takeScreenshot: build/media-diagnostic/auto-restored-settings

@@ -5,4 +5,7 @@ appId: com.zgcc.kazumisbook
     when:
       true: ${LAYOUT == 'tablet'}
     commands:
-      - tapOn: "设置"
+      - tapOn:
+          point: "50%,50%"
+          text: "设置"
+          waitToSettleTimeoutMs: 100
