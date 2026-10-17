@@ -17,7 +17,7 @@ final searchModule = createModule(
         provide: _provideSearchController,
         child: (context, state) => SearchPage(
           controller: context.read<SearchPageController>(),
-          novelService: context.read<NovelService>(),
+          novelService: inject<NovelService>(),
         ),
       )
       ..route(
@@ -32,7 +32,7 @@ final searchModule = createModule(
         provide: _provideSearchController,
         child: (context, state) => SearchPage(
           controller: context.read<SearchPageController>(),
-          novelService: context.read<NovelService>(),
+          novelService: inject<NovelService>(),
           inputTag: state['tag'] ?? '',
         ),
       );
