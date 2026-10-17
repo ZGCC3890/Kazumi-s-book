@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dio/dio.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:kazumi/main.dart' as app;
+import 'package:kazumi/novel/novel_book_cover.dart';
 import 'package:kazumi/novel/novel_reader_page.dart';
 import 'package:kazumi/novel/novel_service.dart';
 import 'package:kazumi/pages/player/player_item.dart';
@@ -64,7 +65,7 @@ Future<void> type(WidgetTester tester, Finder field, String value) async {
 Future<void> category(WidgetTester tester, String label, {double delta = 200}) async {
   final menu = find.descendant(of: find.byType(SettingsPage),
       matching: find.byType(Scrollable)).first;
-  await tester.scrollUntilVisible(find.text(label).first, delta, scrollable: menu);
+  await tester.scrollUntilVisible(find.text(label), delta, scrollable: menu);
   await text(tester, label);
 }
 
@@ -121,6 +122,8 @@ void main() {
     await type(tester, find.byType(TextField).first, 'Fixture');
     await screenshot(tester, 'novel-query-before-submit');
     await click(tester, find.byTooltip('搜索'));
+    await visible(tester, find.text('Author A'));
+    await visible(tester, find.text('Author C'));
     await screenshot(tester, 'novel-query-after-submit');
     await text(tester, 'Author A');
     await visible(tester, find.byType(NovelReaderPage));
@@ -158,6 +161,13 @@ void main() {
     await text(tester, '书架');
     await visible(tester, find.text('葬送的芙莉莲'));
     expect(novels.isShelved(reader.editionId), isTrue);
+    expect(novels.selectedBook(reader.editionId)!.cover,
+        'http://127.0.0.1:8765/cover.png');
+    final cover = find.descendant(of: find.byType(NovelBookCover),
+        matching: find.byType(RawImage));
+    await until(tester, () => cover.evaluate().any(
+        (element) => (element.widget as RawImage).image != null),
+        'The source cover must be decoded before recording the bookshelf');
     await screenshot(tester, 'bookshelf');
     await text(tester, '葬送的芙莉莲');
     await visible(tester, find.byType(NovelReaderPage));

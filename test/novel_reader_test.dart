@@ -24,6 +24,7 @@ class _ReaderStore extends ChangeNotifier implements NovelReaderStore {
   final List<String> requested = [];
   final Map<String, NovelChapter> mappings = {};
   final List<NovelJson> marks = [];
+  final List<String> deletedBookmarks = [];
   int mappingWrites = 0;
   bool failSave = false;
   bool failContentRefresh = false;
@@ -100,7 +101,11 @@ class _ReaderStore extends ChangeNotifier implements NovelReaderStore {
   @override Future<void> addBookmark(NovelPosition position, String note) async {
     marks.add({'id': 'added', 'note': note, 'position': position.toJson()});
   }
-  @override Future<void> deleteBookmark(String id) async {}
+  @override Future<void> deleteBookmark(String id) async {
+    deletedBookmarks.add(id);
+    marks.removeWhere((mark) => mark['id'] == id);
+    notifyListeners();
+  }
   @override List<NovelJson> bookmarks(String editionId) => marks;
   @override Future<void> resolve(String key, NovelRevision selected, {required String expectedToken}) async {
     _state = _state.resolve(key, selected, 'test-device', expectedToken: expectedToken);
@@ -563,6 +568,46 @@ void main() {
     await tester.pumpAndSettle();
     expect(store.marks.single['note'], '想要重读的段落');
     expect(store.marks.single['position']['chapter']['url'], _one.url);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ordinary bookmarks cancel, save an empty note and delete to an empty list', (tester) async {
+    final store = _ReaderStore({_one.url: const [NovelBlock.text('普通书签操作保持阅读位置。')]});
+    await _open(tester, store);
+    final position = store.saved.last.toJson();
+    await tester.tap(find.byTooltip('添加书签'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '取消时不保存');
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(store.marks, isEmpty);
+    expect(store.deletedBookmarks, isEmpty);
+
+    await tester.tap(find.byTooltip('书签'));
+    await tester.pumpAndSettle();
+    expect(find.text('还没有书签'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('添加书签'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(store.marks.single['note'], isEmpty);
+    expect(store.marks.single['position'], position);
+    final id = store.marks.single['id'] as String;
+
+    await tester.tap(find.byTooltip('书签'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ListTile, _one.title), findsOneWidget);
+    expect(find.text('还没有书签'), findsNothing);
+    await tester.tap(find.byTooltip('删除书签'));
+    await tester.pumpAndSettle();
+    expect(store.deletedBookmarks, [id]);
+    expect(store.marks, isEmpty);
+    expect(find.text('我的书签'), findsOneWidget);
+    expect(find.text('还没有书签'), findsOneWidget);
+    expect(find.byTooltip('删除书签'), findsNothing);
+    expect(store.saved.last.toJson(), position);
     expect(tester.takeException(), isNull);
   });
 

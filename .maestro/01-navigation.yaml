@@ -98,7 +98,7 @@ appId: com.zgcc.kazumisbook
 - takeScreenshot: build/android-ui/bookshelf
 - tapOn: "(?s).*我的.*"
 - tapOn: "设置"
-- assertVisible: "播放设置"
+- assertVisible: '(?s)^播放设置(?:\n.*)?$'
 - takeScreenshot: build/android-ui/settings
 - tapOn: "(?s).*播放设置.*"
 - assertVisible: "播放设置"
@@ -143,18 +143,42 @@ appId: com.zgcc.kazumisbook
 - tapOn: "(?s).*网络设置.*"
 - assertVisible: "网络设置"
 - runFlow: back-to-settings.yaml
+- runFlow:
+    when:
+      true: ${LAYOUT == 'tablet'}
+    commands:
+      - swipe:
+          from:
+            text: "网络设置"
+          direction: UP
 - scrollUntilVisible:
     element: "(?s).*更新设置.*"
     direction: DOWN
 - tapOn: "(?s).*更新设置.*"
 - assertVisible: "更新设置"
 - runFlow: back-to-settings.yaml
+- runFlow:
+    when:
+      true: ${LAYOUT == 'tablet'}
+    commands:
+      - swipe:
+          from:
+            text: "网络设置"
+          direction: UP
 - scrollUntilVisible:
     element: "(?s).*存储与日志.*"
     direction: DOWN
 - tapOn: "(?s).*存储与日志.*"
 - assertVisible: "存储与日志"
 - runFlow: back-to-settings.yaml
+- runFlow:
+    when:
+      true: ${LAYOUT == 'tablet'}
+    commands:
+      - swipe:
+          from:
+            text: "网络设置"
+          direction: UP
 - scrollUntilVisible:
     element: "(?s).*关于.*"
     direction: DOWN
