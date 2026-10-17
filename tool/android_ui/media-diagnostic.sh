@@ -82,7 +82,7 @@ for sample in (1, 2):
     matches = [re.search(r'00:(\d{2}) / 00:20', node.attrib.get('content-desc', '')) for node in root.iter('node')]
     positions.append(next(int(match[1]) for match in matches if match))
 assert 0 < positions[0] < positions[1] <= 20, positions
-print(f'GPU GREEN: actual native playback positions increased: {positions}')
+print(f'GPU TIME GREEN: actual native positions increased: {positions}; video frames await visual review.')
 PY
 adb logcat -d > build/media-diagnostic/gpu-logcat.txt
 maestro test .maestro/media-diagnostic-auto.yaml > build/media-diagnostic/auto-restored-setting.log 2>&1
@@ -105,4 +105,4 @@ for sample in (1, 2):
 assert 0 <= positions[0] == positions[1] < 20, positions
 print(f'AUTO RESTORED RED: actual native playback stalled again: {positions}')
 PY
-echo 'A-B-A confirmed: only the renderer changed; review both captured gpu video frames.'
+echo 'A-B-A timing result recorded; both captured gpu video frames still require visual review.'

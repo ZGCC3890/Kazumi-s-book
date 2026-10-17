@@ -8,8 +8,8 @@ appId: com.zgcc.kazumisbook
 - tapOn: "设置"
 - tapOn: "(?s).*播放设置.*"
 - scrollUntilVisible:
-    element: "视频渲染器"
+    element: "(?s).*视频渲染器.*"
     direction: DOWN
-- tapOn: "视频渲染器"
+- tapOn: "(?s).*视频渲染器.*"
 - tapOn: "(?s).*基于 OpenGL, 通用和稳健的选项.*"
 - takeScreenshot: build/media-diagnostic/gpu-settings
