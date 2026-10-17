@@ -73,6 +73,7 @@ Future<void> _open(WidgetTester tester, {bool wide = false}) async {
       routerConfig: ModularApp.routerConfigOf(context),
     )),
   ));
+  await _settle(tester);
   await _tap(tester, '打开设置入口');
   expect(find.byType(SettingsPage), findsOneWidget);
 }
