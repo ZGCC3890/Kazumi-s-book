@@ -4,6 +4,12 @@ mkdir -p build/media-diagnostic/fixtures
 capture() {
   adb logcat -d > build/media-diagnostic/final-logcat.txt
   adb exec-out screencap -p > build/media-diagnostic/final-screen.png
+  for phase in prepare auto controls resume next; do
+    if [ -f "build/media-diagnostic/${phase}.log" ]; then
+      printf '\n%s\n' "Diagnostic ${phase}:"
+      tail -n 12 "build/media-diagnostic/${phase}.log"
+    fi
+  done
 }
 trap capture EXIT
 prior_clip=diagnostic-prior/work/Kazumi-s-book/Kazumi-s-book/build/android-ui/fixtures/clip.mp4
