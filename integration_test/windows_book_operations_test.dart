@@ -133,7 +133,7 @@ void main() {
     await until(tester, () => novels.position(reader.editionId)!.chapter.title == 'Chapter 2',
         'Bookshelf must resume chapter two');
     await screenshot(tester, 'reader-resumed');
-    await tester.tapAt(size.center(Offset.zero));
+    await click(tester, find.textContaining('Chapter 2 opening'));
     await click(tester, find.byType(BackButton));
     await click(tester, find.descendant(of: find.byType(NavigationRail),
         matching: find.byIcon(Icons.settings_outlined)));
