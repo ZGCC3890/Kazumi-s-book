@@ -11,19 +11,19 @@ env:
           waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "暂停"
-    timeout: 30000
+    timeout: 2000
 - tapOn:
     text: "全屏"
     waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "下一集"
-    timeout: 30000
+    timeout: 2000
 - tapOn:
     text: "下一集"
     waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: ".*Episode 2.*"
-    timeout: 30000
+    timeout: 10000
 - runFlow: assert-video-progress.yaml
 - takeScreenshot: build/media-diagnostic/episode-two-fullscreen
 - back

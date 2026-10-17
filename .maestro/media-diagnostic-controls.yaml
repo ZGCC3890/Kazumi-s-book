@@ -19,5 +19,4 @@ env:
 - assertVisible: "播放"
 - takeScreenshot: build/media-diagnostic/video-paused
 - back
-- assertVisible: "Episode 1，正在播放"
-- assertVisible: "播放"
+- assertVisible: "Episode 1，当前选集"

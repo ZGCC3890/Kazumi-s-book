@@ -1,8 +1,15 @@
 appId: com.zgcc.kazumisbook
 ---
+- runFlow:
+    when:
+      notVisible: "播放"
+    commands:
+      - tapOn:
+          point: "50%,25%"
+          waitToSettleTimeoutMs: 100
 - tapOn:
     text: "播放"
     waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "暂停"
-    timeout: 30000
+    timeout: 2000

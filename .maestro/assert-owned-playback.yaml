@@ -1,6 +1,6 @@
 appId: com.zgcc.kazumisbook
 ---
-- assertVisible: ${'Episode ' + EPISODE + '，正在播放'}
+- assertVisible: "${'Episode ' + EPISODE + '，' + (MODE == 'steady' ? '当前选集' : '正在播放')}"
 - copyTextFrom: '(?s).*\d{2}:\d{2} / 02:00.*'
 - runScript:
     file: scripts/playback-sample.js
@@ -32,5 +32,5 @@ appId: com.zgcc.kazumisbook
     file: scripts/playback-sample.js
     env:
       SAMPLE: after
-- assertVisible: ${'Episode ' + EPISODE + '，正在播放'}
+- assertVisible: "${'Episode ' + EPISODE + '，' + (MODE == 'steady' ? '当前选集' : '正在播放')}"
 - takeScreenshot: ${'build/media-diagnostic/' + PHASE + '-2-screen'}

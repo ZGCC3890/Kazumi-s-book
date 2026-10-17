@@ -45,3 +45,14 @@ test('enforces the ten-second observation limit', () => {
   sample('00:18 / 02:00', { stage: 'after', output, now: 11000 });
   assert.throws(() => sample('00:18 / 02:00', { stage: 'after', output, now: 11001 }), /exceeded/);
 });
+
+test('playback flow asserts the distinct playing and paused episode semantics', () => {
+  const flow = fs.readFileSync(path.resolve(__dirname, '../../.maestro/assert-owned-playback.yaml'), 'utf8');
+  const expressions = [...flow.matchAll(/^- assertVisible: "\$\{(.+)\}"$/gm)].map(match => match[1]);
+  assert.equal(expressions.length, 2);
+  for (const expression of expressions) {
+    assert.equal(vm.runInNewContext(expression, { EPISODE: '1', MODE: 'steady' }), 'Episode 1，当前选集');
+    assert.equal(vm.runInNewContext(expression, { EPISODE: '1', MODE: 'advancing' }), 'Episode 1，正在播放');
+    assert.equal(vm.runInNewContext(expression, { EPISODE: '2', MODE: 'advancing' }), 'Episode 2，正在播放');
+  }
+});
