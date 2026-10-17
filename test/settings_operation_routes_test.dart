@@ -91,6 +91,7 @@ Future<void> _settle(WidgetTester tester) async {
 Future<void> _tap(WidgetTester tester, String text) async {
   final target = find.text(text).last;
   await tester.ensureVisible(target);
+  await _settle(tester);
   // Click-created Hive writes must not belong to a disposed FakeAsync zone.
   await tester.runAsync(() => tester.tap(target));
   await _settle(tester);
@@ -262,7 +263,13 @@ void main() {
     await _tap(tester, '网络设置');
     await _tap(tester, '代理配置');
     expect(find.byType(ProxyEditorPage), findsOneWidget);
-    await _back(tester);
+    // The wide shell has its own exit button as well as the editor's back
+    // button. Test the leaf control, rather than the outer shell's exit.
+    final editorBack = find.descendant(of: find.byType(ProxyEditorPage),
+        matching: find.byType(BackButton));
+    expect(editorBack, findsOneWidget);
+    await tester.tap(editorBack);
+    await _settle(tester);
     expect(find.byType(ProxySettingsPage), findsOneWidget);
     await _tap(tester, '外观设置');
     expect(find.byType(ThemeSettingsPage), findsOneWidget);

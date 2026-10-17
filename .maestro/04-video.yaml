@@ -68,16 +68,29 @@ appId: com.zgcc.kazumisbook
 - extendedWaitUntil:
     notVisible: "视频资源解析中"
     timeout: 30000
-- tapOn:
-    point: "50%,25%"
+- runFlow:
+    when:
+      notVisible: "暂停"
+    commands:
+      - tapOn:
+          point: "50%,25%"
 - extendedWaitUntil:
     visible: "暂停"
     timeout: 30000
+- extendedWaitUntil:
+    visible: ".*00:(0[1-9]|1[0-9]) / 00:20.*"
+    timeout: 15000
 - tapOn: "暂停"
 - assertVisible: "播放"
 - takeScreenshot: build/android-ui/video-paused
 - tapOn: "播放"
 - tapOn: "下一集"
+- extendedWaitUntil:
+    visible: ".*Episode 2.*"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: ".*00:(0[1-9]|1[0-9]) / 00:20.*"
+    timeout: 15000
 - assertNotVisible: "暂时无法播放"
 - takeScreenshot: build/android-ui/video-second-episode
 - back
