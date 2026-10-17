@@ -21,6 +21,10 @@ import 'package:kazumi/request/core/dio_factory.dart';
 import 'package:kazumi/request/config/api_endpoints.dart';
 import 'package:kazumi/bean/dialog/update_available_dialog.dart';
 import 'package:kazumi/services/update/auto_updater.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+
+import 'support/native_test_profile.dart';
 
 Future<void> until(WidgetTester tester, bool Function() ready, String reason) async {
   final deadline = DateTime.now().add(const Duration(seconds: 60));
@@ -79,7 +83,7 @@ Future<void> screenshot(WidgetTester tester, String name) async {
   );
   final image = await boundary.toImage();
   final png = await image.toByteData(format: ui.ImageByteFormat.png);
-  final file = File('${Platform.environment['GITHUB_WORKSPACE']}/build/windows-ui/$name.png');
+  final file = File('build/windows-ui/$name.png');
   await file.parent.create(recursive: true);
   await file.writeAsBytes(png!.buffer.asUint8List());
   image.dispose();
@@ -89,11 +93,12 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   WidgetController.hitTestWarningShouldBeFatal = true;
   testWidgets('native Windows main search, import, reader, bookmarks and shelf', (tester) async {
-    // main initializes the real application data directory. Never run this
-    // unattended against a person's installed application's data.
     expect(Platform.isWindows, isTrue);
-    expect(Platform.environment['GITHUB_ACTIONS'], 'true',
-        reason: 'This native flow requires a fresh isolated CI user profile.');
+    final artifacts = await Directory('build/windows-ui').absolute.create(recursive: true);
+    final profile = await artifacts.createTemp('profile-');
+    PathProviderPlatform.instance = NativeTestProfile(profile);
+    expect((await getApplicationSupportDirectory()).path, '${profile.path}/support');
+    debugPrintSynchronously('NATIVE_TEST_PROFILE: ${profile.path}');
     app.main();
     await text(tester, '暂不创建');
     for (final label in ['同意并继续', '继续', '开始使用', '仍然继续']) {

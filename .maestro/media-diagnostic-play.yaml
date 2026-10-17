@@ -5,27 +5,34 @@ env:
 - launchApp
 - extendedWaitUntil:
     visible: "热门番组"
-    timeout: 60000
-- tapOn: "(?s).*我的.*"
-- tapOn: "历史记录"
+    timeout: 10000
+- tapOn:
+    text: "(?s).*我的.*"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    text: "(?s)历史记录\\s+查看观看记录"
+    waitToSettleTimeoutMs: 100
 - assertVisible: "(?s).*葬送的芙莉莲.*"
-- tapOn: "继续播放"
+- tapOn:
+    text: "继续播放"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     notVisible: "视频资源解析中"
-    timeout: 30000
+    timeout: 10000
 - runFlow:
     when:
       notVisible: "暂停"
     commands:
       - tapOn:
           point: "50%,25%"
+          waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "暂停"
-    timeout: 30000
+    timeout: 10000
 - runFlow:
     when:
       true: ${REQUIRE_PROGRESS == 'true'}
     commands:
       - extendedWaitUntil:
           visible: "(?s).*(?:00:(?:0[1-9]|[1-5][0-9])|01:[0-5][0-9]) / 02:00.*"
-          timeout: 30000
+          timeout: 10000

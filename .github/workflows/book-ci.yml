@@ -251,6 +251,8 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_2
+          emulator-build: 16428233
+          emulator-options: -no-window -gpu swiftshader -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
           script: bash tool/android_ui/run.sh ${{ matrix.layout }}
       - uses: actions/upload-artifact@v4

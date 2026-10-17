@@ -8,6 +8,7 @@ import 'package:kazumi/request/apis/bangumi_api.dart';
 import 'package:kazumi/request/core/dio_factory.dart';
 import 'package:kazumi/services/network/book_network_migration.dart';
 import 'package:kazumi/services/storage/storage.dart';
+import 'package:logger/logger.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
 class _Paths extends PathProviderPlatform {
@@ -59,7 +60,16 @@ void main() {
     '0.1.0 migration restores upstream public search and comments; HTTP errors stay errors',
     () async {
       final paths = PathProviderPlatform.instance;
+      final logLevel = Logger.level;
+      Logger.level = Level.off;
       final dir = await Directory.systemTemp.createTemp('book-network-test-');
+      addTearDown(() async {
+        DioFactory.reset();
+        await Hive.close();
+        PathProviderPlatform.instance = paths;
+        Logger.level = logLevel;
+        await dir.delete(recursive: true);
+      });
       PathProviderPlatform.instance = _Paths(dir.path);
       Hive.init(dir.path);
       final settings = await Hive.openBox<dynamic>('setting');
@@ -95,10 +105,6 @@ void main() {
         'ech',
         reason: 'migration must not overwrite subsequent choices',
       );
-      DioFactory.reset();
-      await Hive.close();
-      PathProviderPlatform.instance = paths;
-      await dir.delete(recursive: true);
     },
   );
 }
