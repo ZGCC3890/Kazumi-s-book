@@ -29,7 +29,11 @@ appId: com.zgcc.kazumisbook
 - tapOn: "返回同步设置"
 - tapOn: "(?s).*启用 WebDAV.*"
 - tapOn: "(?s).*小说阅读进度与书签.*"
-- extendedWaitUntil:
-    visible: "小说阅读进度与书签已同步"
-    timeout: 60000
+- runFlow:
+    when:
+      true: ${LEGACY == 'false'}
+    commands:
+      - extendedWaitUntil:
+          visible: "小说阅读进度与书签已同步"
+          timeout: 60000
 - takeScreenshot: build/android-ui/novel-sync-enabled

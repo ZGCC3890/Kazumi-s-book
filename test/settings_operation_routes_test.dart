@@ -251,9 +251,18 @@ void main() {
   testWidgets('production storage route reads the actual temporary log file', (tester) async {
     await _open(tester);
     await _tap(tester, '存储与日志');
-    await _tap(tester, '错误日志');
+    await tester.runAsync(() => tester.tap(find.text('错误日志')));
+    await tester.pump(const Duration(milliseconds: 300));
+    final content = find.textContaining('settings-route-log-sentinel');
+    // Path lookup, exists and readAsString are separate real I/O turns.
+    // Advancing only the fake animation clock starves later file reads.
+    for (var turn = 0; turn < 100 && content.evaluate().isEmpty; turn++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
     expect(find.byType(LogsPage), findsOneWidget);
-    expect(find.textContaining('settings-route-log-sentinel'), findsWidgets);
+    expect(content, findsWidgets);
+    expect(tester.takeException(), isNull);
     await _back(tester);
     expect(find.byType(StorageSettingsPage), findsOneWidget);
   }, timeout: const Timeout(Duration(seconds: 45)));

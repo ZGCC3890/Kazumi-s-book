@@ -1,0 +1,78 @@
+appId: com.zgcc.kazumisbook
+env:
+  LEGACY: "true"
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+- extendedWaitUntil:
+    visible: "同意并继续"
+    timeout: 60000
+- tapOn: "同意并继续"
+- tapOn: "继续"
+- tapOn: "继续"
+- tapOn: "开始使用"
+- tapOn: "仍然继续"
+- extendedWaitUntil:
+    visible: "热门番组"
+    timeout: 60000
+- tapOn: "(?s).*追番.*"
+- tapOn: "(?s).*书架.*"
+- tapOn: "小说规则"
+- tapOn: "添加规则"
+- tapOn: "(?s).*从剪贴板导入.*"
+- tapOn: "规则内容"
+- inputText: "http://10.0.2.2:8765/novels/rules.json"
+- hideKeyboard
+- tapOn:
+    text: "导入规则"
+    index: 1
+- extendedWaitUntil:
+    visible: "(?s).*Fixture Source A.*"
+    timeout: 30000
+- back
+- tapOn: "搜索小说"
+- tapOn: "书名"
+- inputText: "Fixture"
+- tapOn: "搜索"
+- extendedWaitUntil:
+    visible: "(?s).*Author A.*"
+    timeout: 30000
+- tapOn: "(?s).*Author A.*"
+- extendedWaitUntil:
+    visible: ".*Chapter 1 opening.*"
+    timeout: 30000
+- tapOn:
+    point: "50%,50%"
+- tapOn: "添加书签"
+- tapOn: "备注（可留空）"
+- inputText: "LegacyBookmark1"
+- hideKeyboard
+- tapOn: "保存"
+- tapOn: "目录"
+- tapOn: "(?s).*Chapter 2.*"
+- assertVisible: ".*Chapter 2 opening.*"
+- tapOn: "添加书签"
+- tapOn: "备注（可留空）"
+- inputText: "LegacyBookmark2"
+- hideKeyboard
+- tapOn: "保存"
+- takeScreenshot: build/android-ui/upgrade-old-reader
+- back
+- tapOn: "加入书架"
+- back
+- runFlow: 03-sync.yaml
+- launchApp
+- extendedWaitUntil:
+    visible: "热门番组"
+    timeout: 60000
+- tapOn: "(?s).*追番.*"
+- tapOn: "(?s).*书架.*"
+- tapOn: "同步小说"
+- extendedWaitUntil:
+    visible:
+      text: "同步小说"
+      enabled: true
+    timeout: 60000
+- takeScreenshot: build/android-ui/upgrade-old-shelf

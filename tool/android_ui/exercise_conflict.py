@@ -52,7 +52,12 @@ else:
         assert len(revisions) == 1, 'Explicit selection did not resolve the position'
         assert revisions[0]['value']['chapter']['title'] == 'Chapter 3'
         assert revisions[0]['clock']['remote-ui-device'] == 1
-        assert len(revisions[0]['clock']) > 1, 'Resolution did not observe both devices'
+        original_clock = manifest['before'][key][0]['clock']
+        for device, counter in original_clock.items():
+            assert revisions[0]['clock'][device] >= counter, f'Resolution forgot {device}'
+        assert any(revisions[0]['clock'][device] > counter for device, counter in original_clock.items()), 'Local resolution revision did not advance'
+        for field in ('editionId', 'sourceId', 'chapter'):
+            assert revisions[0]['value'][field] == manifest['remote']['value'][field], f'Resolution changed selected {field}'
     else:
         raise ValueError(stage)
     for before_key, before_value in manifest['before'].items():

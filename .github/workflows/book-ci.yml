@@ -143,6 +143,28 @@ jobs:
               output.write('BOOK_KEYSTORE_PASSWORD=' + key['password'] + '\n')
           PY
       - run: flutter build apk --release --split-per-abi --target-platform android-arm64,android-x64 "--dart-define=DANDANAPI_APPID=$DANDANAPI_APPID" "--dart-define=DANDANAPI_KEY=$DANDANAPI_KEY"
+      - uses: actions/cache@v4
+        id: upgrade-baseline
+        with:
+          path: build/upgrade-baseline/app-x86_64-release.apk
+          key: book-upgrade-cd6b741fabec4fe0f97a2a5291ddbbda51769d65-fixed-certificate-x64
+      - name: Build the signed 0.1.1 source baseline for upgrade operations
+        if: steps.upgrade-baseline.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          baseline="$RUNNER_TEMP/book-upgrade-baseline"
+          git fetch --no-tags origin tag 0.1.1
+          test "$(git rev-parse '0.1.1^{commit}')" = cd6b741fabec4fe0f97a2a5291ddbbda51769d65
+          git worktree add --detach "$baseline" 0.1.1
+          cp android/app/book-release.p12 "$baseline/android/app/book-release.p12"
+          mkdir -p build/upgrade-baseline
+          baseline_log="$GITHUB_WORKSPACE/build/upgrade-baseline/build.log"
+          (
+            cd "$baseline"
+            flutter pub get
+            flutter build apk --release --split-per-abi --target-platform android-x64
+          ) > "$baseline_log" 2>&1 || { tail -n 50 "$baseline_log"; exit 1; }
+          cp "$baseline/build/app/outputs/flutter-apk/app-x86_64-release.apk" build/upgrade-baseline/
       - run: cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk build/app/outputs/flutter-apk/app-release.apk
       - name: Verify independent Android application ID
         shell: bash
@@ -161,6 +183,10 @@ jobs:
             exit 1
           fi
           echo 'Verified the fixed Kazumis book release signing certificate.'
+          baseline_metadata=$("${aapt_tools[0]}" dump badging build/upgrade-baseline/app-x86_64-release.apk)
+          [[ "$baseline_metadata" == *"package: name='com.zgcc.kazumisbook' versionCode='24' versionName='0.1.1'"* ]]
+          baseline_signature=$("${signing_tools[0]}" verify --print-certs build/upgrade-baseline/app-x86_64-release.apk)
+          [[ "$baseline_signature" == *'85fa5bfda7fd385f44cabf8da36970bcde6c049e297f4dc67ca3e24252e4ee41'* ]]
       - uses: actions/upload-artifact@v4
         with:
           name: Kazumis-book-Android-development
@@ -169,6 +195,10 @@ jobs:
         with:
           name: Kazumis-book-Android-ui-test
           path: build/app/outputs/flutter-apk/app-x86_64-release.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kazumis-book-Android-upgrade-baseline
+          path: build/upgrade-baseline/app-x86_64-release.apk
   android_ui:
     needs: android
     runs-on: ubuntu-latest
@@ -183,6 +213,10 @@ jobs:
         with:
           name: Kazumis-book-Android-ui-test
           path: android-ui-apk
+      - uses: actions/download-artifact@v4
+        with:
+          name: Kazumis-book-Android-upgrade-baseline
+          path: android-upgrade-apk
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
