@@ -3,6 +3,8 @@ set -euo pipefail
 mkdir -p build/media-diagnostic/fixtures
 capture() {
   adb logcat -d > build/media-diagnostic/final-logcat.txt
+  adb shell dumpsys media.codec > build/media-diagnostic/media-codec.txt
+  adb shell dumpsys media.metrics > build/media-diagnostic/media-metrics.txt
   adb exec-out screencap -p > build/media-diagnostic/final-screen.png
   for phase in flow; do
     if [ -f "build/media-diagnostic/${phase}.log" ]; then
@@ -29,6 +31,7 @@ adb shell wm size 480x900
 adb shell wm density 160
 adb shell pm list features > build/media-diagnostic/device-features.txt
 adb shell getprop > build/media-diagnostic/device-properties.txt
+test "$(adb shell getprop ro.boot.qemu.hwcodec.avcdec | tr -d '\r')" != '2'
 adb shell dumpsys SurfaceFlinger > build/media-diagnostic/surface-flinger.txt
 python3 tool/android_ui/fixture_server.py --output build/media-diagnostic/fixtures > build/media-diagnostic/fixture-server.log 2>&1 &
 fixture_pid=$!
