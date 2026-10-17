@@ -6,10 +6,17 @@ env:
 - extendedWaitUntil:
     visible: "热门番组"
     timeout: 10000
+# Startup's semantics can arrive while the first navigation frame is moving.
+# This bounded visual check is followed by a mandatory destination assertion.
+- waitForAnimationToEnd:
+    timeout: 1500
 - tapOn:
     point: "50%,50%"
     text: "(?s).*我的.*"
     waitToSettleTimeoutMs: 100
+- extendedWaitUntil:
+    visible: "(?s)历史记录\\s+查看观看记录"
+    timeout: 2000
 - tapOn:
     point: "50%,50%"
     text: "(?s)历史记录\\s+查看观看记录"

@@ -36,19 +36,8 @@ appId: com.zgcc.kazumisbook
     text: "搜索"
     waitToSettleTimeoutMs: 100
 - assertVisible: "番剧搜索"
-- tapOn:
-    point: "50%,50%"
-    text: "搜索番剧名称"
-    waitToSettleTimeoutMs: 100
-- inputText: "Frieren"
-- tapOn:
-    point: "50%,50%"
-    text: "搜索"
-    waitToSettleTimeoutMs: 100
-- extendedWaitUntil:
-    visible: ".*芙莉莲.*"
-    timeout: 15000
-- takeScreenshot: build/android-ui/anime-search
+# The same live search and result assertions run once in 04-video, after
+# the owned novel fixtures, alongside the real comments/playback entry.
 - tapOn:
     point: "50%,50%"
     text: "番剧"

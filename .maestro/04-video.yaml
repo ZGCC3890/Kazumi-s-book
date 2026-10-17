@@ -93,6 +93,7 @@ appId: com.zgcc.kazumisbook
 - extendedWaitUntil:
     visible: "(?s).*芙莉莲.*"
     timeout: 15000
+- takeScreenshot: build/android-ui/anime-search
 - tapOn:
     point: "50%,50%"
     waitToSettleTimeoutMs: 100

@@ -69,6 +69,11 @@ env:
 - extendedWaitUntil:
     visible: "(?s).*Fixture Source A.*"
     timeout: 2000
+# Let the four-second import snackbar finish before it follows navigation
+# onto the bookshelf and shifts the search FAB during its tap.
+- extendedWaitUntil:
+    notVisible: "已导入 2 条小说规则"
+    timeout: 5000
 - back
 - tapOn:
     point: "50%,50%"
@@ -82,6 +87,9 @@ env:
     point: "50%,50%"
     text: "搜索小说"
     waitToSettleTimeoutMs: 100
+- extendedWaitUntil:
+    visible: "书名"
+    timeout: 2000
 - tapOn:
     point: "50%,50%"
     text: "书名"
