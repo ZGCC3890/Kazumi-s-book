@@ -8,14 +8,19 @@ env:
     commands:
       - tapOn:
           point: "50%,25%"
+          waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "暂停"
     timeout: 30000
-- tapOn: "全屏"
+- tapOn:
+    text: "全屏"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "下一集"
     timeout: 30000
-- tapOn: "下一集"
+- tapOn:
+    text: "下一集"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: ".*Episode 2.*"
     timeout: 30000

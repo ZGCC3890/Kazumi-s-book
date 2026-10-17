@@ -74,6 +74,7 @@ appId: com.zgcc.kazumisbook
     commands:
       - tapOn:
           point: "50%,25%"
+          waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "暂停"
     timeout: 30000
@@ -82,15 +83,23 @@ appId: com.zgcc.kazumisbook
     when:
       true: ${LAYOUT == 'phone'}
     commands:
-      - tapOn: "全屏"
+      - tapOn:
+          text: "全屏"
+          waitToSettleTimeoutMs: 100
       - extendedWaitUntil:
           visible: "下一集"
           timeout: 30000
-- tapOn: "暂停"
+- tapOn:
+    text: "暂停"
+    waitToSettleTimeoutMs: 100
 - assertVisible: "播放"
 - takeScreenshot: build/android-ui/video-paused
-- tapOn: "播放"
-- tapOn: "下一集"
+- tapOn:
+    text: "播放"
+    waitToSettleTimeoutMs: 100
+- tapOn:
+    text: "下一集"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: ".*Episode 2.*"
     timeout: 30000

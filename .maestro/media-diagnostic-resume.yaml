@@ -1,6 +1,8 @@
 appId: com.zgcc.kazumisbook
 ---
-- tapOn: "播放"
+- tapOn:
+    text: "播放"
+    waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: "暂停"
     timeout: 30000
