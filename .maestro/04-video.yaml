@@ -51,7 +51,7 @@ appId: com.zgcc.kazumisbook
 - extendedWaitUntil:
     visible: "开始观看"
     timeout: 60000
-- tapOn: "吐槽"
+- tapOn: "(?s).*吐槽.*"
 - extendedWaitUntil:
     visible:
       id: ".*bangumi-comment.*"

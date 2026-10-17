@@ -33,6 +33,14 @@ appId: com.zgcc.kazumisbook
     when:
       true: ${LEGACY == 'false'}
     commands:
+      - runFlow:
+          when:
+            true: ${LAYOUT == 'tablet'}
+          commands:
+            - swipe:
+                from:
+                  text: "(?s).*小说阅读进度与书签.*"
+                direction: UP
       - extendedWaitUntil:
           visible: "小说阅读进度与书签已同步"
           timeout: 60000
