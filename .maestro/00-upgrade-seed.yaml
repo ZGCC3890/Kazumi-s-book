@@ -34,7 +34,7 @@ env:
     waitToSettleTimeoutMs: 100
 # The baseline release checks the newer published version on first launch.
 - extendedWaitUntil:
-    visible: "发现新版本"
+    visible: "(?s)^发现新版本(?:\\n.*)?$"
     timeout: 10000
 - tapOn:
     text: "不再自动检查"
