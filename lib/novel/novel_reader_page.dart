@@ -71,8 +71,6 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     WidgetsBinding.instance.removeObserver(this);
     _scroll?.dispose();
     _pages?.dispose();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    if (_orientationChanged) SystemChrome.setPreferredOrientations([]);
     super.dispose();
   }
 
@@ -337,7 +335,11 @@ class _NovelReaderPageState extends State<NovelReaderPage>
       }
       if (!leaveWithoutWriting && !await _save()) return;
       await widget.onLeave?.call(Set.unmodifiable(_readChapters));
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      if (_orientationChanged) await SystemChrome.setPreferredOrientations([]);
       if (mounted) setState(() => _leaving = true);
+      // Restore the shell's insets before the reverse route transition exposes it.
+      await WidgetsBinding.instance.endOfFrame;
       if (mounted) Navigator.pop(context);
     } catch (error) {
       if (mounted) {

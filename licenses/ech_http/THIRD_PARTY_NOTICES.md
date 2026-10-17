@@ -8,10 +8,10 @@ The `ech_http` native library statically links and bundles the following open-so
 
 | Component | Pinned Version / Source | License Type | License File in Repository |
 | :--- | :--- | :--- | :--- |
-| **libcurl** | 8.22.0<br>[Source Archive](https://curl.se/download/curl-8.22.0.tar.xz) | curl License (MIT/X-style) | [`src/CURL_LICENSE`](src/CURL_LICENSE) |
-| **BoringSSL** | Git Commit: [`cff1385e`](https://github.com/google/boringssl/tree/cff1385e77b9b2095558fa625b3c35d589ffe09b) | OpenSSL / ISC / BSD / Apache-2.0 | [`src/BORINGSSL_LICENSE`](src/BORINGSSL_LICENSE) |
-| **Mozilla Root CA Bundle** | Mozilla Snapshot: `2026-08-13`<br>[curl CA Extract](https://curl.se/docs/caextract.html) | Mozilla Public License 2.0 (MPL-2.0) | [`src/CA_BUNDLE_LICENSE`](src/CA_BUNDLE_LICENSE) |
-| **Android NDK libc++** | Statically linked on Android target ABIs | Apache-2.0 with LLVM Exceptions | [`src/LIBCXX_LICENSE`](src/LIBCXX_LICENSE) |
+| **libcurl** | 8.22.0<br>[Source Archive](https://curl.se/download/curl-8.22.0.tar.xz) | curl License (MIT/X-style) | [CURL_LICENSE](CURL_LICENSE) |
+| **BoringSSL** | Git Commit: [`cff1385e`](https://github.com/google/boringssl/tree/cff1385e77b9b2095558fa625b3c35d589ffe09b) | OpenSSL / ISC / BSD / Apache-2.0 | [BORINGSSL_LICENSE](BORINGSSL_LICENSE) |
+| **Mozilla Root CA Bundle** | Mozilla Snapshot: `2026-08-13`<br>[curl CA Extract](https://curl.se/docs/caextract.html) | Mozilla Public License 2.0 (MPL-2.0) | [CA_BUNDLE_LICENSE](CA_BUNDLE_LICENSE) |
+| **Android NDK libc++** | Statically linked on Android target ABIs | Apache-2.0 with LLVM Exceptions | [LIBCXX_LICENSE](LIBCXX_LICENSE) |
 
 ---
 

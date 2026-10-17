@@ -28,4 +28,4 @@ jobs:
           mv release/windows/Kazumis_book_windows.zip "release/Kazumis-book-Windows-${GITHUB_REF_NAME}.zip"
           cd release
           sha256sum *.apk *.zip > SHA256SUMS.txt
-          gh release create "$GITHUB_REF_NAME" *.apk *.zip SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --verify-tag --title "Kazumi's book $GITHUB_REF_NAME" --notes-file ../docs/novel/RELEASE_NOTES.md
+          gh release create "$GITHUB_REF_NAME" *.apk *.zip SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --verify-tag --title "Kazumi's book $GITHUB_REF_NAME" --notes-file ../CHANGELOG.md

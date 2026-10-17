@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:hive_ce/hive.dart';
@@ -235,6 +236,10 @@ Future<void> _submit(WidgetTester tester, String query) async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (_) async => null);
+  });
   late Directory root;
   late PathProviderPlatform paths;
   setUpAll(() async {

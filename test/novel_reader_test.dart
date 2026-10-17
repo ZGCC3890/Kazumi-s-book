@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -120,6 +121,8 @@ NovelPosition _position(NovelChapter chapter, String text, int offset) => NovelL
 
 Future<void> _open(WidgetTester tester, _ReaderStore store, {double scale = 1, bool awaitsChoice = false,
   bool showControls = true, Size size = const Size(480, 800),
+  PreferredSizeWidget? shelfAppBar,
+  List<NavigatorObserver> observers = const [],
   ValueNotifier<ThemeMode>? themeMode,
   Future<void> Function(Set<String>)? onLeave}) async {
   tester.view.devicePixelRatio = 1;
@@ -132,13 +135,14 @@ Future<void> _open(WidgetTester tester, _ReaderStore store, {double scale = 1, b
   await tester.pumpWidget(ValueListenableBuilder<ThemeMode>(
     valueListenable: mode,
     builder: (_, value, child) => MaterialApp(
+    navigatorObservers: observers,
     theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue)),
     darkTheme: ThemeData(colorScheme: ColorScheme.fromSeed(
       seedColor: Colors.blue, brightness: Brightness.dark).copyWith(surface: Colors.black)),
     themeMode: value,
     builder: (context, child) => MediaQuery(
       data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)), child: child!),
-    home: Builder(builder: (context) => Scaffold(body: TextButton(
+    home: Builder(builder: (context) => Scaffold(appBar: shelfAppBar, body: TextButton(
       onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
         NovelReaderPage(service: store, editionId: 'edition', book: _book, onLeave: onLeave))),
       child: const Text('Open reader')))),
@@ -164,7 +168,69 @@ Future<void> _showControls(WidgetTester tester) async {
 
 ScrollController _scroll(WidgetTester tester) => tester.widget<ListView>(find.byType(ListView).first).controller!;
 
+class _PopObserver extends NavigatorObserver {
+  _PopObserver(this.onPop);
+  final VoidCallback onPop;
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) => onPop();
+}
+
 void main() {
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (_) async => null);
+  });
+  for (final controlsVisible in [false, true]) {
+    testWidgets('reader restores system insets before revealing the shelf (controls: $controlsVisible)', (tester) async {
+      const bars = FakeViewPadding(top: 24, bottom: 24);
+      tester.view.padding = bars;
+      tester.view.viewPadding = bars;
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
+      final restore = Completer<void>();
+      var exiting = false;
+      final pops = <double>[];
+      final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'SystemChrome.setEnabledSystemUIMode') {
+          final visible = call.arguments == 'SystemUiMode.edgeToEdge';
+          if (exiting && visible) await restore.future;
+          await Future<void>.value();
+          tester.view.padding = visible ? bars : const FakeViewPadding();
+          tester.view.viewPadding = visible ? bars : const FakeViewPadding();
+        }
+        return null;
+      });
+      addTearDown(() {
+        if (!restore.isCompleted) restore.complete();
+        messenger.setMockMethodCallHandler(SystemChannels.platform, null);
+      });
+      final store = _ReaderStore({_one.url: const [NovelBlock.text('退出阅读后书架工具栏的位置应保持稳定。')]});
+      await _open(tester, store, showControls: controlsVisible,
+        shelfAppBar: AppBar(title: const Text('书架'), actions: const [Icon(Icons.search)]),
+        observers: [_PopObserver(() => pops.add(tester.view.padding.top))]);
+      exiting = true;
+      if (controlsVisible) {
+        await tester.tap(find.byType(BackButton));
+      } else {
+        await tester.binding.handlePopRoute();
+      }
+      await tester.pump();
+      expect(pops, isEmpty, reason: 'The shelf must remain covered while system bars are being restored.');
+      restore.complete();
+      final toolbarPositions = <double>{};
+      for (var frame = 0; frame < 60 && find.byType(NovelReaderPage).evaluate().isNotEmpty; frame++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        final search = find.byIcon(Icons.search);
+        if (search.evaluate().isNotEmpty) toolbarPositions.add(tester.getCenter(search).dy);
+      }
+      expect(pops, [24]);
+      expect(find.byType(NovelReaderPage), findsNothing);
+      expect(toolbarPositions, {24 + kToolbarHeight / 2});
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('unrelated book and bookmark conflicts do not stop reading or settings', (tester) async {
     final store = _ReaderStore({_one.url: const [NovelBlock.text('正常正文继续阅读。')]});
     store._state = NovelSyncState().edit('position/other', {'title': 'A'}, 'a')

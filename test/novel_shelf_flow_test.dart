@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
@@ -189,6 +189,13 @@ Future<void> _accept(WidgetTester tester, Completer<void> completed) async {
     await tester.tap(find.text('加入书架'));
     await completed.future;
   });
+  await _settleLeave(tester);
+}
+
+Future<void> _settleLeave(WidgetTester tester) async {
+  // The leave callback started in runAsync resumes there after the inset frame.
+  await tester.pumpAndSettle();
+  await tester.runAsync(() => Future<void>.value());
   await tester.pumpAndSettle();
 }
 
@@ -205,6 +212,8 @@ void main() {
     await GStorage.init();
   });
   setUp(() async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (_) async => null);
     await GStorage.collectibles.clear();
     await GStorage.collectChanges.clear();
     animeAdapter = _AnimeAdapter();
@@ -251,7 +260,7 @@ void main() {
       final saved = service.saved!.toJson();
       expect(service.saved!.chapter.url, _chapters[1].url);
       await tester.runAsync(() => tester.tap(find.text('暂不添加')));
-      await tester.pumpAndSettle();
+      await _settleLeave(tester);
       expect(find.byType(NovelReaderPage), findsNothing);
       expect(find.text('打开小说'), findsOneWidget);
       expect(service.saved!.toJson(), saved);

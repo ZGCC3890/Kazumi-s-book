@@ -4,9 +4,9 @@
 
 独立的番剧与轻小说阅读软件，基于 [Predidit/Kazumi](https://github.com/Predidit/Kazumi) 的 GPL-3.0 源码继续开发。Android 标识为 `com.zgcc.kazumisbook`，Windows 使用独立可执行文件和数据目录；应用更新仅检查本仓库 Releases。
 
-当前开发分支：[`feature/novel-reader`](https://github.com/ZGCC3890/Kazumi-s-book/tree/feature/novel-reader)。[使用与维护](docs/novel/使用与维护.md)、[实施方案](docs/novel/Kazumi-轻小说实施方案.md)、[Astra 审查记录](docs/novel/Kazumi-架构审查记录.md)、[独立小说规则](novel_rules/README.md)。进度以方案中的里程碑和验证记录为准。
+当前开发分支：[`feature/novel-reader`](https://github.com/ZGCC3890/Kazumi-s-book/tree/feature/novel-reader)。[小说规则与使用说明](novel_rules/README.md) · [版本说明](CHANGELOG.md)。
 
-[下载 0.1.0 测试版](https://github.com/ZGCC3890/Kazumi-s-book/releases/tag/0.1.0)：Android arm64 APK、Windows x64 ZIP及SHA256校验文件。286项自动测试、固定Android签名及Windows原生启动检查已通过，真实设备阅读交互待用户验收。
+[下载 Kazumi's book](https://github.com/ZGCC3890/Kazumi-s-book/releases/latest)：提供 Android arm64 APK、Windows x64 ZIP 和 SHA256 校验文件。Android 可覆盖升级本项目相同签名的版本；Windows 需完整解压 ZIP 后运行 `kazumis_book.exe`。
 
 以下保留上游项目介绍与署名。
 
@@ -22,6 +22,23 @@
 
 <p>使用 Flutter 开发的基于自定义规则的番剧采集与在线观看程序。使用最多五行基于 <code>Xpath</code> 语法的选择器构建自己的规则。支持规则导入与规则分享。支持基于 <code>Anime4K</code> 的实时超分辨率。绝赞开发中 (～￣▽￣)～</p>
 </div>
+
+## 小说使用
+
+以下说明对应当前开发分支；发行包功能以对应版本说明为准。
+
+- 在搜索栏切换“番剧／小说”。两种搜索共用历史记录，无痕模式不保存历史。小说结果以封面网格显示，点击作品进入详情，再选择书源阅读。
+- 在“追番”旁切换到“书架”。书架以封面卡片展示小说，卡片菜单可以更换书源或删除书籍。删除只移出书架，保留本地阅读位置和书签。
+- 阅读器支持滚动、翻页、目录、书签及插图缩放。点击正文中间显示或隐藏工具栏，在阅读设置中调整字体、行距、页边距、纸色与屏幕方向；明暗跟随应用主题。
+- 默认书源在首次使用时获取。需要登录的书源通过“书源账号”登录，会话仅保存在本机。添加、更新规则和登录要求见[小说规则说明](novel_rules/README.md)。
+
+## WebDAV 同步
+
+在“设置 → 多设备同步”填写服务器地址、用户名和密码，保存并测试连接后启用 WebDAV。小说阅读位置和书签平时保存到本地；启用小说同步后，点击“立即同步小说”或书架右上角同步按钮与云盘合并。启用开关、退出阅读和切换前后台不会自动同步小说。并发修改需要选择保留的进度。
+
+导入官方 Kazumi 的已有观看记录时，填写原来相同的 WebDAV 基址，启用“观看记录”并点击“立即同步观看记录”。应用自动使用基址下的 `kazumiSync/`，不要在基址中重复填写这个目录。小说数据位于 `kazumiSync/novels/`，仅支持小说的客户端会使用它；书源账号、规则、正文和图片缓存不随小说进度同步。
+
+Nextcloud 地址格式为 `https://你的域名/remote.php/dav/files/登录ID/指定目录/`。目录名含中文时直接填写中文并保留末尾 `/`，不要预先转换为百分号编码。密码使用 Nextcloud“个人设置 → 安全 → 设备和会话”生成的应用密码。
 
 ## 支持平台
 
@@ -75,9 +92,9 @@
 - [ ]  番剧更新提醒
 - [ ]  还有更多 (/・ω・＼)
 
-## 下载
+## 上游项目发行渠道
 
-通过本页面 [Releases](https://github.com/Predidit/Kazumi/releases/latest) 选项卡下载：
+以下渠道提供官方 Kazumi。Kazumi's book 的 Android 和 Windows 版本请使用[本仓库 Releases](https://github.com/ZGCC3890/Kazumi-s-book/releases/latest)。
 
 <a href="https://github.com/Predidit/Kazumi/releases">
   <img src="static/svg/get_it_on_github.svg" alt="Get it on Github" width="200"/>
