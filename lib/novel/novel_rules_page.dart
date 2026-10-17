@@ -104,6 +104,7 @@ class _NovelRulesPageState extends State<NovelRulesPage> {
   @override
   Widget build(BuildContext context) => SettingsDetailScaffold(
     title: const Text('小说规则'),
+    leading: BackButton(onPressed: () => Navigator.of(context).pop()),
     floatingActionButton: FloatingActionButton.extended(
       onPressed: _busy ? null : _add,
       icon: const Icon(Icons.add),

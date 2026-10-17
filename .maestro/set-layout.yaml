@@ -1,0 +1,3 @@
+appId: com.zgcc.kazumisbook
+---
+- setOrientation: "${LAYOUT == 'tablet' ? 'LANDSCAPE_LEFT' : 'PORTRAIT'}"

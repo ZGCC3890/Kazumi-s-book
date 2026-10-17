@@ -69,6 +69,7 @@ class _NovelRuleCatalogPageState extends State<NovelRuleCatalogPage> {
   @override
   Widget build(BuildContext context) => SettingsDetailScaffold(
     title: const Text('小说规则仓库'),
+    leading: BackButton(onPressed: () => Navigator.of(context).pop()),
     actions: [
       IconButton(tooltip: '刷新', onPressed: _loading || _installing != null ? null : _load,
         icon: const Icon(Icons.refresh)),

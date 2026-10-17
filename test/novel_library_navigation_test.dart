@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +11,7 @@ import 'package:kazumi/novel/novel_library_page.dart';
 import 'package:kazumi/novel/novel_models.dart';
 import 'package:kazumi/novel/novel_rule.dart';
 import 'package:kazumi/novel/novel_rules_page.dart';
+import 'package:kazumi/novel/novel_rule_catalog_page.dart';
 import 'package:kazumi/novel/novel_entry.dart';
 import 'package:kazumi/novel/novel_service.dart';
 import 'package:kazumi/novel/novel_sync_state.dart';
@@ -19,6 +21,7 @@ import 'package:kazumi/pages/collect/collect_page.dart';
 import 'package:kazumi/pages/collect/collect_library_tabs.dart';
 import 'package:kazumi/pages/collect/collect_controller.dart';
 import 'package:kazumi/repositories/collect_crud_repository.dart';
+import 'package:kazumi/request/core/dio_factory.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/services/sync/webdav.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
@@ -45,6 +48,8 @@ class _Library extends NovelService {
   final images = <(String, String)>[];
   @override
   List<NovelRule> get rules => const [];
+  @override
+  String? get ruleCatalogUrl => 'https://rules.test/catalog.json';
   @override
   Future<void> ensureDefaultRules() async {}
   @override
@@ -78,6 +83,22 @@ class _Collection extends CollectCrudRepository {
       'images': <String, String>{},
     }), DateTime(2026), 1,
   )];
+}
+
+class _CatalogNetwork implements HttpClientAdapter {
+  final requests = <String>[];
+  @override
+  Future<ResponseBody> fetch(RequestOptions options, Stream<Uint8List>? requestStream,
+      Future<void>? cancelFuture) async {
+    requests.add(options.uri.toString());
+    return ResponseBody.fromString(
+      '{"version":1,"rules":[{"id":"fixture","name":"路由测试书源",'
+      '"file":"rule.json","description":"受控仓库响应"}]}', 200,
+      headers: {Headers.contentTypeHeader: ['application/json']},
+    );
+  }
+  @override
+  void close({bool force = false}) {}
 }
 
 void main() {
@@ -115,9 +136,13 @@ void main() {
             .edit('edition/e2', const NovelEdition('e2', 'w', '中文', 'zh').toJson(), 'a')
             .edit('anime/42', {'animeId': 42, 'editionIds': ['e', 'e2']}, 'a');
         final repository = _Collection();
+        final network = _CatalogNetwork();
+        final previousAdapter = DioFactory.pluginDio.httpClientAdapter;
+        DioFactory.pluginDio.httpClientAdapter = network;
         addTearDown(() async {
           await tester.pumpWidget(const SizedBox.shrink());
           service.dispose();
+          DioFactory.pluginDio.httpClientAdapter = previousAdapter;
           tester.view.resetPhysicalSize();
           tester.view.resetDevicePixelRatio();
         });
@@ -188,6 +213,28 @@ void main() {
         expect(find.byType(NovelLibraryPage), findsOneWidget,
             reason: 'System back from novel rules must restore the same bookshelf.');
         expect(find.byType(NovelRulesPage), findsNothing);
+        await tester.tap(find.byTooltip('小说规则'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('添加规则'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('浏览规则仓库'));
+        await tester.pumpAndSettle();
+        expect(find.byType(NovelRuleCatalogPage), findsOneWidget);
+        expect(find.text('路由测试书源'), findsOneWidget);
+        expect(network.requests, ['https://rules.test/catalog.json']);
+        await tester.tap(find.descendant(of: find.byType(NovelRuleCatalogPage),
+            matching: find.byIcon(Icons.arrow_back)));
+        await tester.pumpAndSettle();
+        expect(find.byType(NovelRuleCatalogPage), findsNothing,
+            reason: 'The catalog app bar arrow must only pop the catalog route.');
+        expect(find.byType(NovelRulesPage), findsOneWidget);
+        await tester.tap(find.descendant(of: find.byType(NovelRulesPage),
+            matching: find.byIcon(Icons.arrow_back)));
+        await tester.pumpAndSettle();
+        expect(find.byType(NovelRulesPage), findsNothing,
+            reason: 'The rules app bar arrow must pop its own imperative route.');
+        expect(find.byType(NovelLibraryPage), findsOneWidget);
+        expect(find.text('page:popular'), findsNothing);
         await tester.tap(find.text('搜索小说'));
         await tester.pumpAndSettle();
         expect(find.byType(NovelSearchPage), findsOneWidget);

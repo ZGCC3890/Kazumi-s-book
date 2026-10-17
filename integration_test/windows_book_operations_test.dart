@@ -26,7 +26,7 @@ Future<void> until(WidgetTester tester, bool Function() ready, String reason) as
     await tester.pump(const Duration(milliseconds: 200));
     expect(tester.takeException(), isNull, reason: reason);
   }
-  if (!ready()) debugDumpApp();
+  if (!ready()) stdout.writeln('NATIVE_OPERATION_TIMEOUT: $reason');
   expect(ready(), isTrue, reason: reason);
 }
 
@@ -35,6 +35,7 @@ Future<void> visible(WidgetTester tester, Finder finder) =>
 
 Future<void> click(WidgetTester tester, Finder finder) async {
   await visible(tester, finder);
+  stdout.writeln('NATIVE_TAP: ${finder.describeMatch(Plurality.zero)}');
   await tester.ensureVisible(finder.last);
   await tester.pump(const Duration(milliseconds: 200));
   await tester.tap(finder.last);
@@ -43,6 +44,9 @@ Future<void> click(WidgetTester tester, Finder finder) async {
 
 Future<void> text(WidgetTester tester, String value) =>
     click(tester, find.text(value));
+
+Future<void> back(WidgetTester tester) =>
+    click(tester, find.byIcon(Icons.arrow_back));
 
 Future<void> screenshot(WidgetTester tester, String name) async {
   await tester.pump();
@@ -87,7 +91,7 @@ void main() {
     await text(tester, '从剪贴板导入');
     await text(tester, '导入规则');
     await visible(tester, find.text('Fixture Source A'));
-    await click(tester, find.byType(BackButton));
+    await back(tester);
     await tester.pump(const Duration(milliseconds: 300));
     await tester.enterText(find.byType(TextField).first, 'Fixture');
     await click(tester, find.byTooltip('搜索'));
@@ -117,10 +121,10 @@ void main() {
     await until(tester, () => novels.position(reader.editionId)!.chapter.title == 'Chapter 2',
         'Directory selection must save chapter two');
     await screenshot(tester, 'reader-chapter-two');
-    await click(tester, find.byType(BackButton));
+    await back(tester);
     await text(tester, '加入书架');
     await visible(tester, find.text('小说搜索'));
-    await click(tester, find.byType(BackButton));
+    await back(tester);
     await tester.pump(const Duration(milliseconds: 300));
     await click(tester, find.descendant(of: find.byType(NavigationRail),
         matching: find.byIcon(Icons.favorite_border)));
@@ -134,7 +138,7 @@ void main() {
         'Bookshelf must resume chapter two');
     await screenshot(tester, 'reader-resumed');
     await click(tester, find.textContaining('Chapter 2 opening'));
-    await click(tester, find.byType(BackButton));
+    await back(tester);
     await click(tester, find.descendant(of: find.byType(NavigationRail),
         matching: find.byIcon(Icons.settings_outlined)));
     await click(tester, find.byTooltip('全部设置'));
@@ -224,8 +228,8 @@ void main() {
     await text(tester, '从剪贴板导入');
     await text(tester, '导入规则');
     await visible(tester, find.text('Fixture Video'));
-    for (var back = 0; back < 3 && find.byType(SettingsPage).evaluate().isNotEmpty; back++) {
-      await click(tester, find.byType(BackButton));
+    for (var step = 0; step < 3 && find.byType(SettingsPage).evaluate().isNotEmpty; step++) {
+      await back(tester);
       await tester.pump(const Duration(milliseconds: 300));
     }
     expect(find.byType(SettingsPage), findsNothing);

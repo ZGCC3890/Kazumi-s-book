@@ -10,6 +10,8 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import 'package:kazumi/navigation.dart';
 import 'package:kazumi/modules/search/search_history_module.dart';
 import 'package:kazumi/novel/novel_service.dart';
+import 'package:kazumi/novel/novel_rule.dart';
+import 'package:kazumi/novel/novel_rules_page.dart';
 import 'package:kazumi/pages/menu/menu.dart';
 import 'package:kazumi/pages/popular/popular_controller.dart';
 import 'package:kazumi/pages/popular/popular_page.dart';
@@ -32,6 +34,12 @@ class _Paths extends PathProviderPlatform {
 class _Popular extends PopularController {
   @override
   Future<void> queryBangumiByTrend({String type = 'add'}) async {}
+}
+
+class _RulesService extends NovelService {
+  _RulesService() : super(WebDav());
+  @override
+  List<NovelRule> get rules => const [];
 }
 
 // Keep this route test about production DI/navigation. Filesystem persistence
@@ -240,6 +248,35 @@ void main() {
         expect(tester.takeException(), isNull);
       },
     );
+  }
+
+  for (final size in [const Size(480, 900), const Size(1280, 800)]) {
+    testWidgets('novel rules app bar returns to the production search route $size', (tester) async {
+      final service = _RulesService();
+      addTearDown(service.dispose);
+      await _open(tester, service, size: size);
+      await _clickSearch(tester, size);
+      final original = tester.widget<SearchPage>(find.byType(SearchPage));
+      await tester.tap(find.byTooltip('搜索类型'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('小说').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), '尚未提交的书名');
+      await tester.tap(find.byTooltip('小说规则'));
+      await tester.pumpAndSettle();
+      expect(find.byType(NovelRulesPage), findsOneWidget);
+      await tester.tap(find.descendant(of: find.byType(NovelRulesPage),
+          matching: find.byIcon(Icons.arrow_back)));
+      await tester.pumpAndSettle();
+      expect(find.byType(NovelRulesPage), findsNothing);
+      expect(find.byType(SearchPage), findsOneWidget);
+      expect(tester.widget<SearchPage>(find.byType(SearchPage)).controller,
+          same(original.controller));
+      expect(find.text('小说搜索'), findsOneWidget);
+      expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
+          '尚未提交的书名');
+      expect(tester.takeException(), isNull);
+    });
   }
 
   testWidgets('production encoded tag route opens and submits the tag filter', (

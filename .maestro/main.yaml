@@ -2,6 +2,7 @@ appId: com.zgcc.kazumisbook
 env:
   LEGACY: "false"
 ---
+- runFlow: set-layout.yaml
 - runFlow: 01-navigation.yaml
 - runFlow: 02-reader.yaml
 - runFlow: 03-sync.yaml

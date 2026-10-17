@@ -1,5 +1,6 @@
 appId: com.zgcc.kazumisbook
 ---
+- runFlow: set-layout.yaml
 - launchApp
 - extendedWaitUntil:
     visible: "热门番组"

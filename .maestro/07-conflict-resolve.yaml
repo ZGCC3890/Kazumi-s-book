@@ -1,5 +1,6 @@
 appId: com.zgcc.kazumisbook
 ---
+- runFlow: set-layout.yaml
 - tapOn: "(?s).*阅读进度有冲突.*"
 - assertVisible: "选择要保留的阅读进度"
 - tapOn: "(?s).*remote-ui-device.*"

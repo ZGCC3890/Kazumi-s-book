@@ -2,6 +2,7 @@ appId: com.zgcc.kazumisbook
 env:
   LEGACY: "true"
 ---
+- runFlow: set-layout.yaml
 - launchApp:
     clearState: true
     permissions:
