@@ -21,10 +21,11 @@ appId: com.zgcc.kazumisbook
     text: "更换书源"
     waitToSettleTimeoutMs: 100
 - assertVisible: "小说搜索"
-- extendedWaitUntil:
-    visible:
+- scrollUntilVisible:
+    element:
       id: ".*novel-read-fixture-b-.*"
-    timeout: 2000
+    direction: DOWN
+    timeout: 10000
 - tapOn:
     id: ".*novel-read-fixture-b-.*"
     waitToSettleTimeoutMs: 100

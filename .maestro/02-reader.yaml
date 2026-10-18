@@ -25,10 +25,11 @@ appId: com.zgcc.kazumisbook
     point: "50%,50%"
     text: "搜索"
     waitToSettleTimeoutMs: 100
-- extendedWaitUntil:
-    visible:
+- scrollUntilVisible:
+    element:
       id: ".*novel-read-fixture-a-.*"
-    timeout: 2000
+    direction: DOWN
+    timeout: 10000
 - tapOn:
     point: "50%,50%"
     waitToSettleTimeoutMs: 100

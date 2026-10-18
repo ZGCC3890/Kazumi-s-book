@@ -18,6 +18,22 @@ appId: com.zgcc.kazumisbook
     point: "50%,50%"
     text: "阅读轻小说"
     waitToSettleTimeoutMs: 100
+- assertVisible: "小说搜索"
+- scrollUntilVisible:
+    element:
+      id: ".*novel-read-fixture-b-.*"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: ".*novel-read-fixture-b-.*"
+    waitToSettleTimeoutMs: 100
+- extendedWaitUntil:
+    visible: ".*Chapter 2 opening.*"
+    timeout: 2000
+- back
+- tapOn:
+    text: "阅读轻小说"
+    waitToSettleTimeoutMs: 100
 - assertNotVisible: "小说搜索"
 - extendedWaitUntil:
     visible: ".*Chapter 2 opening.*"

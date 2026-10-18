@@ -144,8 +144,9 @@ class _Service extends NovelService {
 Future<void> _start(
   WidgetTester tester,
   _Service service,
-  CollectController collect,
-) async {
+  CollectController collect, {
+  bool fromAnime = false,
+}) async {
   final boot = bootstrapModule(
     createModule(
       register: (c) {
@@ -163,8 +164,13 @@ Future<void> _start(
       home: Builder(
         builder: (context) => Scaffold(
           body: TextButton(
-            onPressed: () =>
-                NovelEntry.read(context, service, 'edition', animeId: 42),
+            onPressed: () => fromAnime
+                ? NovelEntry.open(context, BangumiItem.fromJson({
+                    'id': 42, 'name': '测试番剧', 'name_cn': '测试番剧',
+                    'rating': {'rank': 1, 'total': 1, 'score': 8.0},
+                    'images': <String, String>{},
+                  }), service)
+                : NovelEntry.read(context, service, 'edition', animeId: 42),
             child: const Text('打开小说'),
           ),
         ),
@@ -228,6 +234,27 @@ void main() {
     expect(root.parent.absolute.path, Directory.systemTemp.absolute.path);
     await root.delete(recursive: true);
   });
+  testWidgets('bound anime opens the selected source and resumes without searching', (tester) async {
+    final (service, repo) = (await tester.runAsync(
+      () async => (_Service(), _CollectRepository()),
+    ))!;
+    service.shelved = true;
+    service.state = service.state.edit('anime/42', {
+      'animeId': 42, 'editionIds': ['edition'], 'confirmed': true,
+    }, 'test');
+    await _start(tester, service, CollectController(repo), fromAnime: true);
+    expect(find.byType(NovelSearchPage), findsNothing);
+    expect(service.saved!.chapter.url, _chapters[1].url);
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开小说'));
+    await tester.pumpAndSettle();
+    expect(find.byType(NovelReaderPage), findsOneWidget);
+    expect(find.byType(NovelSearchPage), findsNothing);
+    expect(find.text('第二章的正文'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'accepting the exit offer shelves the novel without adding an anime collection',
     (tester) async {

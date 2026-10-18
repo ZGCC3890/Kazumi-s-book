@@ -26,6 +26,38 @@ class _Service extends NovelService {
 }
 
 void main() {
+  testWidgets('phone scroll reaches the last arriving source read action', (tester) async {
+    tester.view.physicalSize = const Size(480, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final semantics = tester.ensureSemantics();
+    final service = _Service();
+    addTearDown(service.dispose);
+    final books = [_book('同一本小说', url: 'c'), _book('同一本小说', url: 'b'),
+      _book('同一本小说', source: 'wenku8', url: 'a')];
+    NovelBook? selected;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(
+      appBar: AppBar(title: const Text('小说搜索')),
+      body: Padding(padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: ListView(children: [
+          const SizedBox(height: 88),
+          Padding(padding: const EdgeInsets.all(16), child: NovelSearchGrid(
+            service: service, books: books, onRead: (book) => selected = book)),
+        ])),
+    )));
+    final target = find.bySemanticsIdentifier('novel-read-wenku8-2');
+    expect(target.hitTestable(), findsNothing);
+    await tester.scrollUntilVisible(target.hitTestable(), 300,
+      scrollable: find.byType(Scrollable).first);
+    await tester.tap(target);
+    await tester.pumpAndSettle();
+    expect(selected, same(books.last));
+    expect(find.text('小说详情'), findsNothing);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
   for (final size in [const Size(360, 800), const Size(1280, 800)]) {
     for (final scale in [1.0, 2.0]) {
       testWidgets('source cards read directly and query anime only on click at $size scale $scale', (tester) async {
