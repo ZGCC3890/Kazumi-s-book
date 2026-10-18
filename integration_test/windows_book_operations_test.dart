@@ -369,6 +369,14 @@ void main() {
     await visible(tester, find.byType(VideoPage));
     final video = tester.widget<VideoPage>(find.byType(VideoPage));
     final player = video.playerController;
+    // A fresh Windows runner creates WebView2 before it can request the source.
+    // Measure that loading phase separately from actual native playback.
+    final sourceStartup = Stopwatch()..start();
+    await until(tester, () => !video.videoPageController.loading,
+        'Windows WebView must finish resolving the video source',
+        timeout: const Duration(seconds: 20));
+    expect(video.videoPageController.errorMessage, isNull);
+    debugPrintSynchronously('NATIVE_VIDEO_SOURCE_READY_MS: ${sourceStartup.elapsedMilliseconds}');
     await until(tester, () => player.playback.playing &&
         player.playback.currentPosition > const Duration(seconds: 1),
         'Native Windows media must actually play the owned video',
