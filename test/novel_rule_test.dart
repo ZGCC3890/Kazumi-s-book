@@ -10,6 +10,18 @@ const _chapter = NovelChapter(url: 'https://initial.test/chapter',
     title: '第一章', volume: '第一卷', kind: 'chapter', number: 1);
 
 void main() {
+  test('image headers are opt-in and require string header values', () {
+    final ordinary = _rule('wenku8');
+    expect(ordinary.imageHeaders, ordinary.headers);
+    final lightnovel = _rule('lightnovel');
+    expect(lightnovel.imageHeaders['Referer'], '');
+    expect(lightnovel.imageHeaders['User-Agent'], lightnovel.headers['User-Agent']);
+    expect(lightnovel.headers['Referer'], 'https://www.lightnovel.fun/');
+    final json = jsonDecode(ordinary.encode()) as Map<String, dynamic>;
+    json['imageHeaders'] = {'Referer': 42};
+    expect(() => NovelRule.decode(jsonEncode(json)), throwsA(isA<TypeError>()));
+  });
+
   test('source websites honor explicit metadata and declared referer or search origins', () {
     expect(_rule('wenku8').website.toString(), 'https://www.wenku8.net');
     expect(_rule('syosetu').website.toString(), 'https://syosetu.com');

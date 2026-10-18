@@ -10,6 +10,13 @@ void main() {
     (360.0, CollectLayout.cards, 1.0),
     (360.0, CollectLayout.cards, 2.0),
     (360.0, CollectLayout.list, 2.0),
+    (600.0, CollectLayout.cards, 1.0),
+    (800.0, CollectLayout.cards, 1.0),
+    (1080.0, CollectLayout.cards, 1.0),
+    (1280.0, CollectLayout.cards, 1.0),
+    (1440.0, CollectLayout.cards, 1.0),
+    (1440.0, CollectLayout.cards, 1.3),
+    (1440.0, CollectLayout.cards, 2.0),
     (1440.0, CollectLayout.list, 1.0),
   ]) {
     testWidgets('collection quick actions ${scenario.$1} ${scenario.$2.name} scale ${scenario.$3}', (tester) async {
@@ -43,6 +50,12 @@ void main() {
       await tester.tap(play);
       await tester.pump();
       await tester.ensureVisible(book);
+      if (scenario.$2 == CollectLayout.cards) {
+        final card = find.byKey(const ValueKey('collect-42'));
+        expect(tester.getRect(book).bottom, lessThanOrEqualTo(tester.getRect(card).bottom));
+        expect(tester.getRect(book).right, lessThanOrEqualTo(tester.getRect(card).right));
+        expect(book.hitTestable(), findsOneWidget);
+      }
       await tester.tap(book);
       await tester.pump();
       expect(played, [42]);

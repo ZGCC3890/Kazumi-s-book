@@ -7,6 +7,41 @@ import 'package:kazumi/novel/novel_rule.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('LightNovel image requests omit the site referer without changing document requests', () async {
+    final original = HttpOverrides.current;
+    HttpOverrides.global = null;
+    addTearDown(() => HttpOverrides.global = original);
+    final directory = await Directory.systemTemp.createTemp('novel_image_headers_');
+    addTearDown(() => directory.delete(recursive: true));
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    final base = 'http://127.0.0.1:${server.port}';
+    final requests = <String>[];
+    final subscription = server.listen((request) async {
+      requests.add(request.uri.path);
+      if (request.uri.path == '/image') {
+        if ((request.headers.value('referer') ?? '').isNotEmpty) {
+          request.response.statusCode = HttpStatus.forbidden;
+          request.response.write('denied by Referer ACL');
+        } else {
+          request.response.add([1, 2, 3]);
+        }
+      } else {
+        expect(request.headers.value('referer'), 'https://www.lightnovel.fun/');
+        request.response.write('chapter');
+      }
+      await request.response.close();
+    });
+    addTearDown(subscription.cancel);
+    final dio = Dio();
+    addTearDown(() => dio.close(force: true));
+    final session = NovelHttpSession(() => dio, directory.path);
+    final rule = NovelRule.decode(await File('novel_rules/lightnovel.json').readAsString());
+    expect((await session.fetch(rule, '$base/chapter', 'GET', rule.headers, {})).body, 'chapter');
+    expect(await session.image(rule, '$base/image'), [1, 2, 3]);
+    expect(requests, ['/chapter', '/image']);
+  });
+
   test('one source login persists its session across restarts without storing password', () async {
     final original = HttpOverrides.current;
     HttpOverrides.global = null;

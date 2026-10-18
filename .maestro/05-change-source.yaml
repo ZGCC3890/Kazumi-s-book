@@ -23,21 +23,10 @@ appId: com.zgcc.kazumisbook
 - assertVisible: "小说搜索"
 - extendedWaitUntil:
     visible:
-      id: ".*novel-search-result-0.*"
+      id: ".*novel-read-fixture-b-.*"
     timeout: 2000
 - tapOn:
-    id: ".*novel-search-result-0.*"
-    waitToSettleTimeoutMs: 100
-- assertVisible: "小说详情"
-- tapOn:
-    text: "选择书源阅读"
-    waitToSettleTimeoutMs: 100
-- extendedWaitUntil:
-    visible: "(?s).*Author B.*"
-    timeout: 2000
-- tapOn:
-    point: "50%,50%"
-    text: "(?s).*Author B.*"
+    id: ".*novel-read-fixture-b-.*"
     waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible: ".*Chapter 2 opening.*"

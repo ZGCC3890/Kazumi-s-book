@@ -363,11 +363,7 @@ void main() {
       expect(find.text('Fixture novel'), findsOneWidget);
       await tester.tap(find.text('Fixture novel'));
       await tester.pumpAndSettle();
-      expect(find.text('Author A'), findsOneWidget);
-      await tester.tap(find.text('选择书源阅读'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('novel-source-linovel-https://test/book')));
-      await tester.pumpAndSettle();
+      expect(find.text('小说详情'), findsNothing);
       expect(service.selected?.title, 'Fixture novel');
       expect(find.byType(NovelReaderPage), findsOneWidget);
       expect(find.text('规则页返回后真正打开的正文。'), findsOneWidget);

@@ -19,6 +19,20 @@ const _chapter = NovelChapter(
 );
 
 void main() {
+  for (final nested in [false, true]) {
+    test('LightNovel public detail extracts a ${nested ? "nested" : "direct"} cover image', () async {
+      const image = '<img src="/sample-assets/legacy/default_article_cover_v.jpg">';
+      final adapter = XPathNovelAdapter(_rule('lightnovel'), (url, method, headers, body) async =>
+        NovelResponse('''<span class="pc-book-cover detail-cover">${nested ? '<span class="pc-book-cover-empty">$image</span>' : image}</span>
+          <div class="detail-info"><h1>辉夜姬想让人告白</h1></div>
+          <div class="detail-info-line"><span>作者：<strong>羊山十一郎</strong></span></div>''', url));
+      final book = await adapter.bookFromUrl(_book.url);
+      expect(book.title, '辉夜姬想让人告白');
+      expect(book.author, '羊山十一郎');
+      expect(book.cover, 'https://www.lightnovel.fun/sample-assets/legacy/default_article_cover_v.jpg');
+    });
+  }
+
   test(
     'JSON source reads every volume and chapter page and rejects incomplete catalogs',
     () async {

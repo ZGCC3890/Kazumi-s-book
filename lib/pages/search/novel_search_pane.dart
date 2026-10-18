@@ -26,7 +26,7 @@ class NovelSearchPane extends StatelessWidget {
             header,
             const Padding(
               padding: EdgeInsets.all(24),
-              child: Text('输入书名搜索小说，进入详情后选择书源阅读。'),
+              child: Text('输入书名搜索小说，点击封面或“阅读”直接打开对应书源。'),
             ),
             discovery,
           ],

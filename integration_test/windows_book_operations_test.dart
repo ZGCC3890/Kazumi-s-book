@@ -164,15 +164,11 @@ void main() {
     await type(tester, find.byType(TextField).first, 'Fixture');
     await screenshot(tester, 'novel-query-before-submit');
     await click(tester, find.byTooltip('搜索'));
-    await visible(tester, find.text('葬送的芙莉莲'));
+    await visible(tester, find.text('葬送的芙莉莲').first);
     await screenshot(tester, 'novel-query-after-submit');
-    await text(tester, '葬送的芙莉莲');
-    await visible(tester, find.text('小说详情'));
-    await text(tester, '选择书源阅读');
-    await visible(tester, find.textContaining('Author A'));
-    await visible(tester, find.textContaining('Author C'));
-    await screenshot(tester, 'novel-details-source-choice');
-    await text(tester, 'Fixture Source A');
+    final sourceCard = find.ancestor(of: find.text('Fixture Source A'),
+        matching: find.byType(Material)).first;
+    await click(tester, find.descendant(of: sourceCard, matching: find.text('阅读')));
     await visible(tester, find.byType(NovelReaderPage));
     final reader = tester.widget<NovelReaderPage>(find.byType(NovelReaderPage));
     final novels = inject<NovelService>();

@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kazumi/novel/novel_entry.dart';
 import 'package:kazumi/novel/novel_models.dart';
 import 'package:kazumi/novel/novel_rule.dart';
+import 'package:kazumi/novel/novel_search_results.dart';
 import 'package:kazumi/novel/novel_service.dart';
 import 'package:kazumi/bean/dialog/adaptive_bottom_sheet.dart';
 import 'package:kazumi/services/sync/webdav.dart';
@@ -133,23 +134,23 @@ Future<void> _open(WidgetTester tester, _Service service) async {
   );
   await tester.tap(find.text('选择小说'));
   await tester.pump();
+  await tester.pump();
   await tester.pump(const Duration(milliseconds: 400));
-  await tester.ensureVisible(find.text('书源状态'));
-  await tester.pump(const Duration(milliseconds: 100));
-  await tester.tap(find.text('书源状态'));
-  await tester.pump(const Duration(milliseconds: 300));
 }
 
-Future<void> _chooseSource(WidgetTester tester) async {
-  await tester.tap(find.text('选择书源阅读'));
-  await tester.pumpAndSettle();
-  final source = find.byWidgetPredicate((widget) => widget is ListTile &&
-      widget.key is ValueKey<String> &&
-      (widget.key! as ValueKey<String>).value.startsWith('novel-source-'));
-  await tester.ensureVisible(source.first);
+Future<void> _scrollTo(WidgetTester tester, Finder target, {double delta = 250}) async {
+  await tester.scrollUntilVisible(target, delta,
+    scrollable: find.descendant(of: find.byType(NovelSearchPage),
+      matching: find.byWidgetPredicate((widget) => widget is Scrollable &&
+          widget.axisDirection == AxisDirection.down)).first);
   await tester.pump();
-  await tester.tap(source.first);
-  await tester.pumpAndSettle();
+}
+
+Future<void> _openStatus(WidgetTester tester) async {
+  await _scrollTo(tester, find.text('书源状态'));
+  await tester.tap(find.text('书源状态'));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 void main() {
@@ -176,7 +177,7 @@ void main() {
           source.complete(0, '搜索到的小说');
         }
         await tester.pumpAndSettle();
-        expect(find.text('搜索到的小说'), findsOneWidget);
+        expect(find.text('搜索到的小说'), findsNWidgets(2));
       }
     });
   }
@@ -200,7 +201,7 @@ void main() {
       source.complete(1, '关联作品');
     }
     await tester.pumpAndSettle();
-    expect(find.text('关联作品'), findsOneWidget);
+    expect(find.text('关联作品'), findsNWidgets(2));
   });
   testWidgets('same-ID default upgrade re-searches the changed source and ignores its old response', (tester) async {
     final service = _Service()..pendingDefaults = true..defaultInstallGate = Completer<void>();
@@ -224,6 +225,40 @@ void main() {
     expect(find.text('新规则小说'), findsOneWidget);
     expect(find.text('过时旧规则小说'), findsNothing);
     expect(service.sources['lightnovel']!.requests.length, 1);
+  });
+
+  testWidgets('late source results preserve visible cards and each source opens directly', (tester) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final service = _Service();
+    service.sources
+      ..clear()
+      ..addAll({'lightnovel': _Adapter('lightnovel'), 'wenku8': _Adapter('wenku8')});
+    await _open(tester, service);
+    const wenku = NovelBook(sourceId: 'wenku8', url: 'https://test/wenku/1',
+      title: '辉夜姬想让人告白(辉夜大小姐想让我告白)');
+    service.sources['wenku8']!.requests.single.$2.complete([
+      wenku, const NovelBook(sourceId: 'wenku8', url: 'https://test/wenku/2', title: '文库独有作品'),
+    ]);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.widget<NovelSearchGrid>(find.byType(NovelSearchGrid)).books.first, same(wenku));
+    service.sources['lightnovel']!.requests.single.$2.complete([
+      const NovelBook(sourceId: 'lightnovel', url: 'https://test/light/1',
+        title: '辉夜大小姐想让我告白小说版 ～秀知院学园的七大不可思议～'),
+      const NovelBook(sourceId: 'lightnovel', url: 'https://test/light/2', title: '超时空辉夜姬'),
+    ]);
+    await tester.pumpAndSettle();
+    final results = tester.widget<NovelSearchGrid>(find.byType(NovelSearchGrid)).books;
+    expect(results.map((book) => book.title), [wenku.title, '文库独有作品',
+      '辉夜大小姐想让我告白小说版 ～秀知院学园的七大不可思议～', '超时空辉夜姬']);
+    expect(results.map((book) => book.sourceId), ['wenku8', 'wenku8', 'lightnovel', 'lightnovel']);
+    await tester.tap(find.text(wenku.title));
+    await tester.pumpAndSettle();
+    expect(service.selected, same(wenku));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('cover grid shows all results and resets for a new search', (tester) async {
@@ -270,7 +305,6 @@ void main() {
     expect(find.textContaining('已安装书源可继续使用'), findsNothing);
     await tester.tap(find.text('仍可阅读的小说'));
     await tester.pumpAndSettle();
-    await _chooseSource(tester);
     expect(service.selected?.title, '仍可阅读的小说');
   });
 
@@ -297,6 +331,7 @@ void main() {
       for (final source in service.sources.values)
         source.complete(0, '${source.source}结果');
       await tester.pumpAndSettle();
+      await _openStatus(tester);
       await tester.ensureVisible(find.byType(PopupMenuButton<String>).first);
       await tester.pump();
       await tester.tap(find.byType(PopupMenuButton<String>).first);
@@ -328,12 +363,13 @@ void main() {
       await tester.pump();
       expect(find.text('源甲小说'), findsOneWidget);
       await tester.pump();
-      expect(find.byTooltip('查看番剧详情'), findsNothing);
+      expect(find.text('看番'), findsOneWidget);
+      await _scrollTo(tester, find.text('1 个书源正在搜索…'));
       expect(find.text('1 个书源正在搜索…'), findsOneWidget);
+      await _scrollTo(tester, find.text('源甲小说'), delta: -250);
       await tester.tap(find.text('源甲小说'));
       await tester.pumpAndSettle();
-      expect(find.byTooltip('查看番剧详情'), findsOneWidget);
-      await _chooseSource(tester);
+      expect(find.byType(NovelSearchPage), findsNothing);
       expect(service.selected!.sourceId, 'linovel');
       expect(service.boundEdition, 'already-reading');
       expect(find.text('确认对应小说和版本'), findsNothing);
@@ -351,6 +387,7 @@ void main() {
         source.complete(0, '${source.source}结果');
       }
       await tester.pumpAndSettle();
+      await _openStatus(tester);
       await tester.ensureVisible(find.byType(PopupMenuButton<String>).first);
       await tester.pump();
       await tester.tap(find.byType(PopupMenuButton<String>).first);
@@ -385,6 +422,7 @@ void main() {
       );
       service.sources['lightnovel']!.complete(0, '公开小说');
       await tester.pumpAndSettle();
+      await _openStatus(tester);
       await tester.ensureVisible(find.text('首次登录'));
       await tester.pump();
       await tester.tap(find.text('首次登录'));
@@ -403,6 +441,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('登录并搜索'), findsNothing);
       expect(service.sources['linovel']!.requests, hasLength(1));
+      await _scrollTo(tester, find.text('公开小说'), delta: -250);
       expect(find.text('公开小说'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
@@ -423,6 +462,7 @@ void main() {
       expect(find.text('过期结果'), findsNothing);
       expect(find.text('linovel新结果'), findsOneWidget);
       await tester.enterText(find.byType(TextField), '未提交的词');
+      await _openStatus(tester);
       await tester.ensureVisible(find.byType(PopupMenuButton<String>).first);
       await tester.pump();
       await tester.tap(find.byType(PopupMenuButton<String>).first);
@@ -433,6 +473,7 @@ void main() {
       expect(service.sources['linovel']!.requests.last.$1, '新词');
       service.sources['linovel']!.complete(2, '重试结果');
       await tester.pumpAndSettle();
+      await _scrollTo(tester, find.text('重试结果'), delta: -250);
       expect(find.text('重试结果'), findsOneWidget);
       await tester.tap(find.byTooltip('关闭'));
       await tester.pumpAndSettle();

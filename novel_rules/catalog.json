@@ -5,7 +5,7 @@
       "id": "lightnovel",
       "name": "LightNovel（中文译文）",
       "file": "lightnovel.json",
-      "replaces": [],
+      "replaces": ["d7d2a3a817af558d2689d2fdd24df169755d8c029c7a1fc36916a46f4a2f2d93"],
       "description": "公开章节支持匿名搜索和原位插图；站点部分章节有访问限制，章节粒度可能为整卷。"
     },
     {

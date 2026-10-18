@@ -10,6 +10,7 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 import 'package:kazumi/modules/search/search_history_module.dart';
 import 'package:kazumi/novel/novel_models.dart';
+import 'package:kazumi/novel/novel_entry.dart';
 import 'package:kazumi/novel/novel_reader_page.dart';
 import 'package:kazumi/novel/novel_rule.dart';
 import 'package:kazumi/novel/novel_service.dart';
@@ -100,6 +101,9 @@ class _Novels extends NovelService {
   final source = _Source();
   NovelBook? selected;
   NovelPosition? saved;
+  List<String> bindings = [];
+  @override
+  List<String> boundEditions(int animeId) => bindings;
   @override
   List<NovelRule> get rules => [
     NovelRule.decode(File('novel_rules/linovel.json').readAsStringSync()),
@@ -156,6 +160,7 @@ class _Novels extends NovelService {
       volume: '第一卷',
       kind: '正文',
     ),
+    const NovelChapter(url: 'https://test/2', title: '第二章', volume: '第一卷', kind: '正文'),
   ];
   @override
   Future<List<NovelBlock>> content(
@@ -357,12 +362,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('直接阅读的小说'));
       await tester.pumpAndSettle();
-      expect(novels.selected, isNull);
-      expect(find.text('小说详情'), findsOneWidget);
-      await tester.tap(find.text('选择书源阅读'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('novel-source-linovel-https://test/直接阅读的小说')));
-      await tester.pumpAndSettle();
+      expect(novels.selected?.sourceId, 'linovel');
+      expect(find.text('小说详情'), findsNothing);
       expect(find.byType(NovelReaderPage), findsOneWidget);
       await tester.tapAt(const Offset(240, 450));
       await tester.pumpAndSettle();
@@ -374,6 +375,33 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('bound anime reads its saved chapter directly without searching', (tester) async {
+    final novels = _Novels()
+      ..bindings = ['edition']
+      ..selected = const NovelBook(sourceId: 'linovel', url: 'https://test/bound', title: '已绑定的小说')
+      ..saved = const NovelPosition(editionId: 'edition', sourceId: 'linovel',
+        chapter: NovelChapter(url: 'https://test/2', title: '第二章', volume: '第一卷', kind: '正文'),
+        textOffset: 0, quote: '', prefix: '', suffix: '', updatedAt: 1, chapterDigest: '');
+    addTearDown(novels.dispose);
+    final anime = BangumiItem.fromJson({'id': 42, 'name': '已绑定番剧', 'name_cn': '已绑定番剧',
+      'rating': {'rank': 1, 'score': 8, 'total': 1}, 'images': <String, String>{}});
+    await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => Scaffold(
+      body: TextButton(onPressed: () => NovelEntry.open(context, anime, novels), child: const Text('阅读'))))));
+    await tester.tap(find.text('阅读'));
+    await tester.pumpAndSettle();
+    expect(find.byType(NovelSearchPage), findsNothing);
+    expect(find.byType(NovelReaderPage), findsOneWidget);
+    expect(novels.source.requests, isEmpty);
+    expect(novels.saved?.chapter.title, '第二章');
+    await tester.tapAt(const Offset(240, 450));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(find.text('阅读'), findsOneWidget);
+    expect(find.byType(NovelSearchPage), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
   for (final size in [
     const Size(360, 800),

@@ -12,11 +12,15 @@ class NovelAnimeLink extends StatefulWidget {
     required this.book,
     this.editionId,
     this.showAi = false,
+    this.lazy = false,
+    this.onOpen,
   });
   final NovelService service;
   final NovelBook book;
   final String? editionId;
   final bool showAi;
+  final bool lazy;
+  final Future<void> Function(BangumiItem)? onOpen;
   @override
   State<NovelAnimeLink> createState() => _NovelAnimeLinkState();
 }
@@ -24,6 +28,7 @@ class NovelAnimeLink extends StatefulWidget {
 class _NovelAnimeLinkState extends State<NovelAnimeLink> {
   late Future<List<BangumiItem>> _matches;
   late String _binding;
+  bool _opening = false;
   String _bindingKey() =>
       (widget.service
               .animeIdsForBook(widget.book, editionId: widget.editionId)
@@ -32,11 +37,13 @@ class _NovelAnimeLinkState extends State<NovelAnimeLink> {
           .join(',');
   void _load({bool refresh = false}) {
     _binding = _bindingKey();
-    _matches = widget.service.relatedAnime(
-      widget.book,
-      editionId: widget.editionId,
-      refresh: refresh,
-    );
+    if (!widget.lazy) {
+      _matches = widget.service.relatedAnime(
+        widget.book,
+        editionId: widget.editionId,
+        refresh: refresh,
+      );
+    }
   }
 
   @override
@@ -67,7 +74,8 @@ class _NovelAnimeLinkState extends State<NovelAnimeLink> {
         oldWidget.book.sourceId != widget.book.sourceId ||
         oldWidget.book.url != widget.book.url ||
         oldWidget.book.title != widget.book.title ||
-        oldWidget.editionId != widget.editionId) {
+        oldWidget.editionId != widget.editionId ||
+        oldWidget.lazy != widget.lazy) {
       _load();
     }
   }
@@ -92,7 +100,30 @@ class _NovelAnimeLinkState extends State<NovelAnimeLink> {
             ),
           );
     if (anime != null && mounted) {
-      await context.pushNamed('/info/', arguments: anime);
+      if (widget.onOpen != null) {
+        await widget.onOpen!(anime);
+      } else {
+        await context.pushNamed('/info/', arguments: anime);
+      }
+    }
+  }
+
+  Future<void> _lookUp() async {
+    setState(() => _opening = true);
+    try {
+      final matches = await widget.service.relatedAnime(widget.book, editionId: widget.editionId);
+      if (!mounted) return;
+      setState(() => _opening = false);
+      if (matches.isEmpty) {
+        _message('没有找到关联番剧，可使用旁边的 AI 关联按钮查找');
+      } else {
+        await _open(matches);
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _opening = false);
+        _message(error.toString());
+      }
     }
   }
 
@@ -118,8 +149,16 @@ class _NovelAnimeLinkState extends State<NovelAnimeLink> {
 
   @override
   Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
-    if (widget.showAi) IconButton(tooltip: 'AI 关联番剧', icon: const Icon(Icons.auto_awesome_outlined), onPressed: _ai),
-    FutureBuilder<List<BangumiItem>>(
+    if (widget.showAi) IconButton(tooltip: 'AI 关联番剧', icon: const Icon(Icons.auto_awesome_outlined), onPressed: _opening ? null : _ai),
+    if (widget.lazy)
+      TextButton(
+        style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+        onPressed: _opening ? null : _lookUp,
+        child: _opening
+          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+          : const Text('看番'),
+      )
+    else FutureBuilder<List<BangumiItem>>(
     future: _matches,
     builder: (context, snapshot) {
       if (snapshot.connectionState != ConnectionState.done) {

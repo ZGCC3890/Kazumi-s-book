@@ -113,7 +113,7 @@ class NovelHttpSession {
 
   Future<Uint8List> image(NovelRule rule, String url) async =>
       Uint8List.fromList(
-        (await _request(rule, url, 'GET', rule.headers, {})).data!,
+        (await _request(rule, url, 'GET', rule.imageHeaders, {})).data!,
       );
 
   Future<void> login(NovelRule rule, String username, String password) async {

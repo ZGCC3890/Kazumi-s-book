@@ -45,6 +45,11 @@ class NovelRule {
   String get directBookUrlPattern => json['directBookUrlPattern'] as String;
   Map<String, String> get headers =>
       Map<String, String>.from(json['headers'] as Map);
+  Map<String, String> get imageHeaders => {
+    ...headers,
+    if (json.containsKey('imageHeaders'))
+      ...Map<String, String>.from(json['imageHeaders'] as Map),
+  };
   factory NovelRule.decode(String text) {
     final j = jsonDecode(text) as NovelJson;
     if (j['version'] != 1 || j['type'] != 'novel-xpath') {
@@ -79,6 +84,9 @@ class NovelRule {
       throw const FormatException('HTML 搜索 itemsMode 必须是 css');
     }
     Map<String, String>.from(j['headers'] as Map);
+    if (j.containsKey('imageHeaders')) {
+      Map<String, String>.from(j['imageHeaders'] as Map);
+    }
     if (!['utf-8', 'gbk'].contains(j['encoding'])) {
       throw const FormatException('encoding 必须显式指定 utf-8 或 gbk');
     }

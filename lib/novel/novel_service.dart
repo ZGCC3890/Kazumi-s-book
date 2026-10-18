@@ -146,7 +146,7 @@ class NovelService extends ChangeNotifier implements NovelReaderStore {
 
   /// Install the separate rule repository once. Deletions remain intentional;
   /// a failed download is reported to the caller and can be retried.
-  bool get needsDefaultRules => _box.get('defaultRulesInstalled') != '3';
+  bool get needsDefaultRules => _box.get('defaultRulesInstalled') != '4';
 
   Future<void> ensureDefaultRules() {
     if (!needsDefaultRules) return Future.value();
@@ -202,7 +202,7 @@ class NovelService extends ChangeNotifier implements NovelReaderStore {
         final first = (catalog['rules'] as List).where((entry) => _rules.containsKey(entry['id'])).firstOrNull;
         if (first != null) await selectSource(first['id'] as String);
       }
-      await _box.put('defaultRulesInstalled', '3');
+      await _box.put('defaultRulesInstalled', '4');
       await _box.flush();
     });
     notifyListeners();

@@ -108,13 +108,7 @@ class NovelEntry {
       id = selected;
     }
     if (!context.mounted) return;
-    await search(
-      context,
-      service,
-      anime.id,
-      novelQueryFromAnime(anime.nameCn.isEmpty ? anime.name : anime.nameCn),
-      editionId: id,
-    );
+    await read(context, service, id, animeId: anime.id);
   }
 
   static Future<void> read(
@@ -478,18 +472,6 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
     if (mounted && owner.isActive) await _prepare();
   }
 
-  Future<void> _openDetails(NovelSearchResult result) async {
-    final owner = ModalRoute.of(context)!;
-    final generation = _generation;
-    final selected = await Navigator.of(context, rootNavigator: true).push<NovelBook>(
-      MaterialPageRoute(builder: (_) => NovelSearchDetailPage(
-        service: widget.service, result: result)),
-    );
-    if (selected != null && mounted && owner.isCurrent && generation == _generation) {
-      await _bind(selected);
-    }
-  }
-
   @override
   Widget build(BuildContext context) => widget.embedded ? _content() : Scaffold(
     appBar: AppBar(
@@ -575,10 +557,8 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
                 padding: const EdgeInsets.all(16),
                 child: NovelSearchGrid(
                   service: widget.service,
-                  results: NovelSearchResult.group([
-                    for (final rule in widget.service.rules) ...?_results[rule.id],
-                  ]),
-                  onOpen: _busy ? null : _openDetails,
+                  books: _results.values.expand((books) => books).toList(),
+                  onRead: _busy ? null : _bind,
                 ),
               ),
               ExpansionTile(

@@ -7,6 +7,11 @@ import 'package:hive_ce/hive.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 import 'package:kazumi/modules/search/plugin_search_module.dart';
 import 'package:kazumi/navigation.dart';
+import 'package:kazumi/novel/novel_models.dart';
+import 'package:kazumi/novel/novel_rule.dart';
+import 'package:kazumi/novel/novel_search_results.dart';
+import 'package:kazumi/novel/novel_service.dart';
+import 'package:kazumi/services/sync/webdav.dart';
 import 'package:kazumi/pages/collect/collect_controller.dart';
 import 'package:kazumi/pages/info/source_sheet.dart';
 import 'package:kazumi/pages/info/watch_entry.dart';
@@ -23,6 +28,15 @@ class _Paths extends PathProviderPlatform {
   final String path;
   @override
   Future<String?> getApplicationSupportPath() async => path;
+}
+
+class _Novels extends NovelService {
+  _Novels(this.anime) : super(WebDav());
+  final BangumiItem anime;
+  @override
+  List<NovelRule> get rules => [NovelRule.decode(File('novel_rules/linovel.json').readAsStringSync())];
+  @override
+  Future<List<BangumiItem>> relatedAnime(NovelBook book, {String? editionId, bool refresh = false}) async => [anime];
 }
 
 // Only the external source query is controlled. WatchEntry, SourceSheet,
@@ -67,7 +81,8 @@ void main() {
   });
 
   for (final size in [const Size(480, 900), const Size(1280, 900)]) {
-    testWidgets('quick playback source system back preserves collection at $size',
+    for (final novelCard in [false, true]) {
+    testWidgets('quick playback source system back preserves collection at $size (novel: $novelCard)',
         (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = size;
@@ -83,6 +98,9 @@ void main() {
         'rating': {'rank': 1, 'score': 8.0, 'total': 1},
         'images': <String, String>{},
       });
+      final novels = _Novels(item);
+      addTearDown(novels.dispose);
+      final action = novelCard ? '看番' : '快速播放';
       final module = createModule(register: (c) {
         c.addSingleton<PluginsController>(() => plugins);
         c.addSingleton<CollectController>(
@@ -96,6 +114,11 @@ void main() {
           }
           sub.route('/collect/', child: (context, _) => Column(children: [
             const Text('collection host'),
+            if (novelCard) Expanded(child: ListView(children: [
+              NovelSearchGrid(service: novels,
+                books: const [NovelBook(sourceId: 'linovel', url: 'https://test/book', title: '关联小说')],
+                onRead: (_) => fail('看番 must not open the reader')),
+            ])) else
             TextButton(
               onPressed: () => WatchEntry.open(context, item),
               child: const Text('快速播放'),
@@ -114,7 +137,7 @@ void main() {
         )),
       ));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('快速播放'));
+      await tester.tap(find.text(action));
       await tester.pumpAndSettle();
       expect(find.byType(SourceSheet), findsOneWidget);
       expect(find.text('已找到的播放结果'), findsOneWidget);
@@ -131,7 +154,7 @@ void main() {
         expect(tester.widget<NavigationRail>(find.byType(NavigationRail)).selectedIndex, 2);
       }
       // The underlying collection route remains usable after closing the sheet.
-      await tester.tap(find.text('快速播放'));
+      await tester.tap(find.text(action));
       await tester.pumpAndSettle();
       expect(find.byType(SourceSheet), findsOneWidget);
       expect(source.queries, ['测试番剧', '测试番剧']);
@@ -140,5 +163,6 @@ void main() {
       expect(find.text('collection host'), findsOneWidget);
       expect(tester.takeException(), isNull);
     }, timeout: const Timeout(Duration(seconds: 45)));
+    }
   }
 }

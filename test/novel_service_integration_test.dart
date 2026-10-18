@@ -478,6 +478,41 @@ void main() {
     expect(service.rules.single.name, '本机自定义文库');
   });
 
+  for (final customized in [false, true]) {
+    test('installed 0.1.3 LightNovel image rule upgrades without replacing custom rules ($customized)', () async {
+      final service = await device('installed-013-$customized');
+      final old = jsonDecode(await File('novel_rules/lightnovel.json').readAsString()) as Map<String, dynamic>;
+      old.remove('imageHeaders');
+      old['revision'] = '2026-10-17.1';
+      old['search']['singleCover'] = "//span[contains(@class,'detail-cover')]/img";
+      await service.importRule(jsonEncode(old));
+      final index = jsonDecode(await File('novel_rules/catalog.json').readAsString()) as Map<String, dynamic>;
+      final oldHash = sha256.convert(utf8.encode(service.rule('lightnovel').encode())).toString();
+      expect((index['rules'] as List).singleWhere((r) => r['id'] == 'lightnovel')['replaces'], contains(oldHash));
+      if (customized) {
+        old['name'] = '本机自定义 LightNovel';
+        await service.importRule(jsonEncode(old));
+      }
+      await Hive.box<String>('novel_v1').put('defaultRulesInstalled', '3');
+      await service.removeRule('syosetu');
+      remote.files['/rules/catalog.json'] = utf8.encode(jsonEncode(index));
+      for (final id in ['wenku8', 'linovel', 'lightnovel']) {
+        remote.files['/rules/$id.json'] = await File('novel_rules/$id.json').readAsBytes();
+      }
+      await service.saveRuleCatalogUrl('${remote.url}/rules/catalog.json');
+      expect(service.needsDefaultRules, isTrue);
+      await service.ensureDefaultRules();
+      expect(service.rule('lightnovel').imageHeaders['Referer'],
+        customized ? 'https://www.lightnovel.fun/' : '');
+      if (customized) expect(service.rule('lightnovel').name, '本机自定义 LightNovel');
+      expect(service.rules.any((rule) => rule.id == 'syosetu'), isFalse);
+      expect(service.needsDefaultRules, isFalse);
+      final requests = remote.requests.length;
+      await service.ensureDefaultRules();
+      expect(remote.requests.length, requests);
+    });
+  }
+
   test('installed 0.1.2 default rule upgrades once while preserving source removal choices', () async {
     final service = await device('installed-012');
     final old = jsonDecode(await File('novel_rules/wenku8.json').readAsString()) as Map<String, dynamic>;

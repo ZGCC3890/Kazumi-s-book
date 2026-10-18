@@ -94,6 +94,8 @@ Future<void> _open(
   VoidCallback onRead, {
   ValueNotifier<NovelBook>? selection,
   bool showAi = false,
+  bool lazy = false,
+  Future<void> Function(BangumiItem)? onOpen,
 }) async {
   addTearDown(() async {
     await tester.pumpWidget(const SizedBox.shrink());
@@ -104,7 +106,8 @@ Future<void> _open(
       Widget row(NovelBook book) => ListTile(
         title: Text(book.title),
         onTap: onRead,
-        trailing: NovelAnimeLink(service: service, book: book, showAi: showAi),
+        trailing: NovelAnimeLink(service: service, book: book, showAi: showAi,
+            lazy: lazy, onOpen: onOpen),
       );
       c.route(
         '/',
@@ -141,6 +144,84 @@ Future<void> _open(
 }
 
 void main() {
+  testWidgets('watch queries on click, reports errors and can retry without reading', (tester) async {
+    final anime = _anime(42, '关联动画');
+    final service = _Service([anime])..fail = true;
+    BangumiItem? watched;
+    var reads = 0;
+    await _open(tester, service, () => reads++, lazy: true, showAi: true,
+      onOpen: (item) async { watched = item; });
+    expect(service.requests, 0);
+    await tester.tap(find.text('看番'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('fixture association request failed'), findsOneWidget);
+    expect(watched, isNull);
+    service.fail = false;
+    await tester.tap(find.text('看番'));
+    await tester.pumpAndSettle();
+    expect(watched, same(anime));
+    expect(service.requests, 2);
+    expect(service.binds, 0);
+    expect(reads, 0);
+  });
+
+  testWidgets('watch lets the user cancel or select among related anime', (tester) async {
+    final service = _Service([_anime(1, '动画甲'), _anime(2, '动画乙')]);
+    BangumiItem? watched;
+    await _open(tester, service, () {}, lazy: true,
+      onOpen: (item) async { watched = item; });
+    await tester.tap(find.text('看番'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pumpAndSettle();
+    expect(watched, isNull);
+    await tester.tap(find.text('看番'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('动画乙 · 2026'));
+    await tester.pumpAndSettle();
+    expect(watched?.id, 2);
+    expect(find.text('看番'), findsOneWidget);
+  });
+
+  for (final fails in [false, true]) {
+    testWidgets('pending watch cannot repeat and closing ignores its result ($fails)', (tester) async {
+      final service = _Service([])..pending = Completer<List<BangumiItem>>();
+      var opened = 0;
+      await _open(tester, service, () {}, lazy: true, showAi: true,
+        onOpen: (_) async { opened++; });
+      await tester.tap(find.text('看番'));
+      await tester.pump();
+      expect(tester.widget<TextButton>(find.byType(TextButton)).onPressed, isNull);
+      expect(tester.widget<IconButton>(find.byType(IconButton)).onPressed, isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      if (fails) {
+        service.pending!.completeError(StateError('closed query failed'));
+      } else {
+        service.pending!.complete([_anime(42, '已经离开')]);
+      }
+      await tester.pump();
+      expect(opened, 0);
+      expect(service.requests, 1);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('AI card action invokes the watch callback for its selected title', (tester) async {
+    final service = _Service([])..aiMatches = [_anime(91, '动画译名')];
+    BangumiItem? watched;
+    await _open(tester, service, () {}, lazy: true, showAi: true,
+      onOpen: (item) async { watched = item; });
+    await tester.tap(find.byTooltip('AI 关联番剧'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('动画译名'));
+    await tester.pumpAndSettle();
+    expect(watched?.id, 91);
+    expect(service.requests, 0);
+    expect(service.binds, 0);
+  });
+
   testWidgets('AI novel association confirms a name and opens the searched anime', (tester) async {
     final service = _Service([])..aiMatches = [_anime(91, '动画译名')];
     await _open(tester, service, () {}, showAi: true);

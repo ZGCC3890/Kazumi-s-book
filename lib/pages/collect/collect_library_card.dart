@@ -32,7 +32,7 @@ class _CollectPosterCard extends StatelessWidget {
     final footerHeight = 20 + _titleHeight(scaler, compact: _isCompact(width)) +
         (showRating || showStatus ? 4 + _detailsHeight(scaler) +
           (_isCompact(width) && showRating && showStatus ? _statusHeight(scaler) + 2 : 0) : 0) +
-        (width - 16 < scaler.scale(14) * 2 + 138 ? 96 : 48);
+        _CollectQuickActions.stackedHeight;
     return width / _coverRatio + footerHeight;
   }
 
@@ -105,7 +105,7 @@ class _CollectPosterCard extends StatelessWidget {
           if (showDetails) ...[const SizedBox(height: 4), detailsBlock],
           const SizedBox(height: 4),
           _CollectQuickActions(entry: entry, onChanged: onChangeType,
-            onPlay: onPlay, onRead: onRead),
+            onPlay: onPlay, onRead: onRead, stacked: true),
         ]));
 
       return Material(
@@ -264,17 +264,32 @@ class _CollectListTile extends StatelessWidget {
 
 class _CollectQuickActions extends StatelessWidget {
   const _CollectQuickActions({required this.entry, required this.onChanged,
-    required this.onPlay, required this.onRead});
+    required this.onPlay, required this.onRead, this.stacked = false});
+  static const _rowHeight = 48.0;
+  static const stackedHeight = _rowHeight * 2;
   final CollectedBangumi entry;
   final ValueChanged<CollectType>? onChanged;
   final VoidCallback? onPlay, onRead;
+  final bool stacked;
   @override
-  Widget build(BuildContext context) => Wrap(crossAxisAlignment: WrapCrossAlignment.center,
-    children: [_CollectEntryMenu(entry: entry, onChanged: onChanged, showStatusLabel: true),
+  Widget build(BuildContext context) {
+    final menu = _CollectEntryMenu(entry: entry, onChanged: onChanged, showStatusLabel: true);
+    final buttons = [
       IconButton(tooltip: '播放《${CollectLibraryQuery.titleOf(entry)}》', onPressed: onPlay,
         icon: const Icon(Icons.play_arrow_rounded)),
       IconButton(tooltip: '阅读《${CollectLibraryQuery.titleOf(entry)}》的轻小说', onPressed: onRead,
-        icon: const Icon(Icons.menu_book_outlined))]);
+        icon: const Icon(Icons.menu_book_outlined)),
+    ];
+    if (stacked) {
+      return Column(mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(height: _rowHeight, child: menu),
+          SizedBox(height: _rowHeight, child: Row(children: buttons)),
+        ]);
+    }
+    return Wrap(crossAxisAlignment: WrapCrossAlignment.center,
+      children: [menu, ...buttons]);
+  }
 }
 
 class _CollectCover extends StatelessWidget {
