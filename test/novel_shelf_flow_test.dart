@@ -146,7 +146,13 @@ Future<void> _start(
   _Service service,
   CollectController collect, {
   bool fromAnime = false,
+  Size size = const Size(800, 600),
+  double scale = 1,
 }) async {
+  tester.view.devicePixelRatio = 1;
+  tester.view.physicalSize = size;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
   final boot = bootstrapModule(
     createModule(
       register: (c) {
@@ -161,6 +167,8 @@ Future<void> _start(
   });
   await tester.pumpWidget(
     MaterialApp(
+      builder: (context, child) => MediaQuery(data: MediaQuery.of(context)
+          .copyWith(textScaler: TextScaler.linear(scale)), child: child!),
       home: Builder(
         builder: (context) => Scaffold(
           body: TextButton(
@@ -179,7 +187,7 @@ Future<void> _start(
   );
   await tester.tap(find.text('打开小说'));
   await tester.pumpAndSettle();
-  await tester.tapAt(const Offset(400, 300));
+  await tester.tapAt(size.center(Offset.zero));
   await tester.pumpAndSettle();
   await tester.tap(find.byTooltip('下一章'));
   await tester.pumpAndSettle();
@@ -274,6 +282,33 @@ void main() {
     },
     timeout: const Timeout(Duration(seconds: 45)),
   );
+  for (final size in [const Size(360, 800), const Size(1280, 800)]) {
+    testWidgets('reader shelf button saves in place without changing anime status $size', (tester) async {
+      final (service, repo) = (await tester.runAsync(
+        () async => (_Service(), _CollectRepository()),
+      ))!;
+      await _start(tester, service, CollectController(repo), size: size, scale: 2);
+      final position = service.saved!.toJson();
+      final reader = tester.state(find.byType(NovelReaderPage));
+      expect(find.byTooltip('加入书架').hitTestable(), findsOneWidget);
+      expect(find.byTooltip('更换书源').hitTestable(), findsOneWidget);
+      await tester.tap(find.byTooltip('加入书架'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('已在书架'), findsOneWidget);
+      expect(tester.state(find.byType(NovelReaderPage)), same(reader));
+      expect(service.saved!.toJson(), position);
+      expect(service.shelfAnimeId, 42);
+      expect(repo.writes, 0);
+      expect(GStorage.collectibles, isEmpty);
+      expect(animeAdapter.requests, isEmpty);
+      await tester.runAsync(() => tester.tap(find.byType(BackButton)));
+      await _settleLeave(tester);
+      expect(find.text('加入书架？'), findsNothing);
+      expect(find.byType(NovelReaderPage), findsNothing);
+      expect(find.text('打开小说'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
   testWidgets(
     'declining the exit offer keeps progress without shelving or changing anime status',
     (tester) async {

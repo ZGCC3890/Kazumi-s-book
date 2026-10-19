@@ -7,6 +7,8 @@ import 'package:url_launcher_platform_interface/url_launcher_platform_interface.
 import 'package:url_launcher_platform_interface/link.dart';
 import 'package:kazumi/novel/novel_ai.dart';
 import 'package:kazumi/novel/novel_ai_page.dart';
+import 'package:kazumi/novel/novel_ai_choice.dart';
+import 'package:kazumi/novel/novel_ai_providers.dart';
 import 'package:kazumi/novel/novel_account_dialog.dart';
 import 'package:kazumi/novel/novel_rule.dart';
 import 'package:kazumi/novel/novel_service.dart';
@@ -39,7 +41,7 @@ class _Service extends NovelService {
     value.validate(); settings = value; saves++;
   }
   @override Future<List<String>> suggestTitles(String title, {required bool toAnime,
-      NovelAiSettings? settings, CancelToken? cancelToken}) async {
+      bool sameNovel = false, NovelAiSettings? settings, CancelToken? cancelToken}) async {
     queries++;
     cancel = cancelToken;
     if (failure != null) throw failure!;
@@ -80,6 +82,21 @@ Future<void> _home(WidgetTester tester, _Service service, {bool account = false,
   await tester.pump(const Duration(milliseconds: 400));
 }
 
+Future<void> _tap(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
+}
+
+Finder _choice(String label) => find.byWidgetPredicate((w) => w is NovelAiChoice && w.label == label);
+
+Future<void> _select(WidgetTester tester, String label, String query, String result) async {
+  await _tap(tester, _choice(label));
+  await tester.enterText(find.widgetWithText(TextField, '搜索$label'), query);
+  await tester.pump();
+  await _tap(tester, find.widgetWithText(ListTile, result));
+}
+
 void main() {
   late _Service service;
   late _Launcher launcher;
@@ -87,29 +104,105 @@ void main() {
   tearDown(() => service.dispose());
   testWidgets('AI settings validate, save, reopen and test without implicitly saving', (tester) async {
     await tester.pumpWidget(MaterialApp(home: NovelAiPage(service: service)));
-    await tester.tap(find.text('保存'));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('请填写模型'), findsOneWidget);
+    await _tap(tester, find.text('保存'));
+    expect(find.textContaining('请选择模型'), findsOneWidget);
+    await _select(tester, '供应商 Provider', '自定义', '自定义 OpenAI 兼容接口');
     await tester.enterText(find.widgetWithText(TextField, 'API 基址'), 'https://api.test/v1');
-    await tester.enterText(find.widgetWithText(TextField, '模型'), 'fixture-model');
-    await tester.enterText(find.widgetWithText(TextField, 'API Token'), 'fixture-token');
-    await tester.tap(find.widgetWithText(SwitchListTile, '启用 AI 作品关联'));
-    await tester.tap(find.widgetWithText(SwitchListTile, '联网检索作品资料'));
-    await tester.tap(find.text('验证连接'));
-    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '模型 ID'), 'fixture-model');
+    await tester.enterText(find.widgetWithText(TextField, 'API Key'), 'fixture-token');
+    await _tap(tester, find.widgetWithText(SwitchListTile, '启用 AI 作品关联'));
+    await _tap(tester, find.widgetWithText(SwitchListTile, '联网检索作品资料'));
+    await _tap(tester, find.text('验证连接'));
     expect(service.saves, 0);
     expect(find.text('连接验证成功，设置尚未保存'), findsOneWidget);
-    await tester.tap(find.text('保存'));
-    await tester.pumpAndSettle();
+    await _tap(tester, find.text('保存'));
     expect(service.settings.enabled, true);
     expect(service.settings.token, 'fixture-token');
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpWidget(MaterialApp(home: NovelAiPage(service: service)));
-    expect(tester.widget<TextField>(find.widgetWithText(TextField, 'API Token')).controller!.text, 'fixture-token');
+    expect(tester.widget<TextField>(find.widgetWithText(TextField, 'API Key')).controller!.text, 'fixture-token');
     service.failure = DioException(requestOptions: RequestOptions(), type: DioExceptionType.connectionTimeout);
-    await tester.tap(find.text('验证连接'));
-    await tester.pumpAndSettle();
+    await _tap(tester, find.text('验证连接'));
     expect(find.textContaining('connectionTimeout'), findsOneWidget);
+  });
+  test('provider matching recognizes existing endpoints without rewriting custom URLs', () {
+    for (final provider in novelAiProviders) {
+      expect(NovelAiProvider.forEndpoint('${provider.endpoint}/'), same(provider));
+    }
+    expect(NovelAiProvider.forEndpoint('https://api.deepseek.com/v1')!.id, 'deepseek');
+    expect(NovelAiProvider.forEndpoint('https://api.deepseek.com/proxy'), isNull);
+    expect(NovelAiProvider.forEndpoint('https://api.test/v1'), isNull);
+  });
+  for (final width in [360.0, 1280.0]) {
+    testWidgets('searchable provider and model selection saves exact IDs at width $width', (tester) async {
+      tester.view.physicalSize = Size(width, 850);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      service.settings = const NovelAiSettings(token: 'previous-key');
+      await tester.pumpWidget(MaterialApp(builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(1.5)), child: child!),
+        home: NovelAiPage(service: service)));
+      final key = find.widgetWithText(TextField, 'API Key');
+      await _select(tester, '供应商 Provider', 'OPENAI', 'OpenAI');
+      expect(tester.widget<TextField>(key).controller!.text, isEmpty);
+      expect(tester.widget<NovelAiChoice>(_choice('模型')).value, isEmpty);
+      expect(tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, '联网检索作品资料')).value, false);
+      await _tap(tester, _choice('模型'));
+      await tester.enterText(find.widgetWithText(TextField, '搜索模型'), 'not-a-real-model');
+      await tester.pump();
+      expect(find.text('没有匹配项'), findsOneWidget);
+      await _tap(tester, find.text('取消'));
+      await _tap(tester, find.text('保存'));
+      expect(service.saves, 0);
+      await _select(tester, '模型', '4.1-mini', 'gpt-4.1-mini');
+      await tester.ensureVisible(key);
+      await tester.enterText(key, 'openai-fixture-key');
+      await _select(tester, '供应商 Provider', 'OPENAI', 'OpenAI');
+      expect(tester.widget<TextField>(key).controller!.text, 'openai-fixture-key');
+      await _tap(tester, find.text('保存'));
+      expect(service.settings.endpoint, 'https://api.openai.com/v1');
+      expect(service.settings.model, 'gpt-4.1-mini');
+      expect(service.settings.token, 'openai-fixture-key');
+      expect(service.settings.webSearch, false);
+      await _select(tester, '供应商 Provider', 'deepseek', 'DeepSeek');
+      await _select(tester, '模型', 'flash', 'deepseek-flash');
+      expect(tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, '联网检索作品资料')).value, true);
+      expect(tester.widget<TextField>(key).controller!.text, isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets('saved unlisted model is preserved and custom endpoint changes clear old credentials', (tester) async {
+    service.settings = const NovelAiSettings(endpoint: 'https://api.deepseek.com/v1/',
+      model: 'legacy-model', token: 'saved-key');
+    await tester.pumpWidget(MaterialApp(home: NovelAiPage(service: service)));
+    expect(find.text('legacy-model（当前配置）'), findsOneWidget);
+    await _select(tester, '模型', 'legacy', 'legacy-model（当前配置）');
+    await _tap(tester, find.text('保存'));
+    expect(service.settings.model, 'legacy-model');
+    expect(service.settings.endpoint, 'https://api.deepseek.com/v1/');
+    expect(service.settings.token, 'saved-key');
+    await _select(tester, '供应商 Provider', 'custom', '自定义 OpenAI 兼容接口');
+    await tester.enterText(find.widgetWithText(TextField, 'API 基址'), 'https://new.test/v1');
+    expect(tester.widget<TextField>(find.widgetWithText(TextField, 'API Key')).controller!.text, isEmpty);
+  });
+  testWidgets('pending connection validation locks provider and model selection and cancels on exit', (tester) async {
+    service.settings = const NovelAiSettings(token: 'saved-key');
+    service.pending = Completer<List<String>>();
+    await tester.pumpWidget(MaterialApp(home: NovelAiPage(service: service)));
+    await tester.ensureVisible(find.text('验证连接'));
+    await tester.tap(find.text('验证连接'));
+    await tester.pump();
+    for (final choice in tester.widgetList<NovelAiChoice>(find.byType(NovelAiChoice))) {
+      expect(choice.onChanged, isNull);
+    }
+    expect(tester.widget<TextField>(find.widgetWithText(TextField, 'API Key')).enabled, false);
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(service.cancel!.isCancelled, true);
+    service.pending!.complete(['候选']);
+    await tester.pump();
+    expect(service.saves, 0);
+    expect(tester.takeException(), isNull);
   });
   testWidgets('disabled AI opens settings and cancel never requests a title', (tester) async {
     String? selection = 'unchanged';

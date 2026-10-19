@@ -12,6 +12,7 @@ import 'novel_rules_page.dart';
 import 'novel_conflicts.dart';
 import 'novel_account_dialog.dart';
 import 'novel_ai_page.dart';
+import 'novel_shelf_action.dart';
 
 class NovelEntry {
   static Future<void> conflicts(
@@ -128,6 +129,12 @@ class NovelEntry {
           service: service,
           editionId: editionId,
           book: book,
+          shelfAction: NovelShelfAction(service: service, editionId: editionId, animeId: animeId),
+          onChangeSource: (context, current) async {
+            final selected = await _selectSource(context, service, animeId,
+                current.title, editionId: editionId);
+            return selected == null ? null : service.selectedBook(selected)!;
+          },
           onLeave: (chapters) async {
             if (chapters.isEmpty) return;
             final count = await service.recordReadChapters(editionId, chapters);
@@ -138,12 +145,6 @@ class NovelEntry {
                 service.isShelved(editionId) ||
                 !readerContext.mounted)
               return;
-            final associations = service.animeIdsForEdition(editionId);
-            final targetAnimeId = animeId > 0
-                ? animeId
-                : associations.length == 1
-                ? associations.single
-                : 0;
             final add = await showDialog<bool>(
               context: readerContext,
               builder: (ctx) => AlertDialog(
@@ -162,7 +163,7 @@ class NovelEntry {
               ),
             );
             if (add != true) return;
-            await service.addToShelf(editionId, animeId: targetAnimeId);
+            await addNovelToShelf(service, editionId, animeId: animeId);
           },
         ),
       ),
@@ -177,7 +178,21 @@ class NovelEntry {
     String? editionId,
     String? workId,
   }) async {
-    final selected = await showAdaptiveBottomSheet<String>(
+    final selected = await _selectSource(context, service, animeId, title,
+        editionId: editionId, workId: workId);
+    if (selected != null && context.mounted) {
+      await read(context, service, selected, animeId: animeId);
+    }
+  }
+
+  static Future<String?> _selectSource(
+    BuildContext context,
+    NovelService service,
+    int animeId,
+    String title, {
+    String? editionId,
+    String? workId,
+  }) => showAdaptiveBottomSheet<String>(
       context: context,
       useRootNavigator: true,
       maxHeightFactor: .88,
@@ -189,10 +204,6 @@ class NovelEntry {
         existingWorkId: workId,
       ),
     );
-    if (selected != null && context.mounted) {
-      await read(context, service, selected, animeId: animeId);
-    }
-  }
 }
 
 class NovelSearchPage extends StatefulWidget {
@@ -472,19 +483,20 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
     if (mounted && owner.isActive) await _prepare();
   }
 
+  Future<void> _searchWithAi() async {
+    final title = await chooseAiTitle(context, widget.service, _query.text,
+      toAnime: false, sameNovel: widget.existingEditionId != null);
+    if (title == null || !mounted) return;
+    _query.text = title;
+    await _search();
+  }
+
   @override
   Widget build(BuildContext context) => widget.embedded ? _content() : Scaffold(
     appBar: AppBar(
       automaticallyImplyLeading: false,
       title: const Text('小说搜索'),
       actions: [
-        IconButton(tooltip: 'AI 关联小说', icon: const Icon(Icons.auto_awesome_outlined),
-          onPressed: _busy ? null : () async {
-            final title = await chooseAiTitle(context, widget.service, _query.text, toAnime: false);
-            if (title == null || !mounted) return;
-            _query.text = title;
-            await _search();
-          }),
         IconButton(
           tooltip: '管理小说规则',
           onPressed: _busy ? null : _manageRules,
@@ -513,11 +525,16 @@ class _NovelSearchPageState extends State<NovelSearchPage> {
                 onSubmitted: (_) => _search(),
                 decoration: InputDecoration(
                   labelText: '书名',
-                  suffixIcon: IconButton(
-                    tooltip: '搜索',
-                    onPressed: _busy ? null : _search,
-                    icon: const Icon(Icons.search),
-                  ),
+                  suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
+                    IconButton(
+                      tooltip: '搜索',
+                      onPressed: _busy ? null : _search,
+                      icon: const Icon(Icons.search),
+                    ),
+                    IconButton(tooltip: 'AI 搜索',
+                      onPressed: _busy ? null : _searchWithAi,
+                      icon: const Icon(Icons.auto_awesome_outlined)),
+                  ]),
                 ),
               ),
             ],

@@ -12,6 +12,8 @@ import 'package:dio/dio.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:kazumi/main.dart' as app;
 import 'package:kazumi/novel/novel_book_cover.dart';
+import 'package:kazumi/novel/novel_entry.dart';
+import 'package:kazumi/novel/novel_ai_choice.dart';
 import 'package:kazumi/novel/novel_reader_page.dart';
 import 'package:kazumi/novel/novel_service.dart';
 import 'package:kazumi/novel/novel_accounts.dart';
@@ -66,7 +68,8 @@ Future<void> type(WidgetTester tester, Finder field, String value) async {
   // so revisiting an unfocused field requires the same click as a user makes.
   await click(tester, field);
   await tester.enterText(field.last, value);
-  expect(tester.widget<TextField>(field.last).controller!.text, value);
+  expect(tester.widget<EditableText>(find.descendant(of: field.last,
+    matching: find.byType(EditableText))).controller.text, value);
   await tester.pump();
 }
 
@@ -138,6 +141,7 @@ void main() {
     await text(tester, '登录并验证');
     await visible(tester, find.text('Fixture Source A'));
     final accountService = inject<NovelService>();
+    expect(accountService.rules.any((rule) => rule.id == 'syosetu'), false);
     final stored = await const NovelCredentialStore().read(accountService.rule('fixture-l'));
     expect(stored!.password, 'fixture-password');
     final encryptedFiles = await Directory('${profile.path}/support').list(recursive: true).where((file) =>
@@ -213,8 +217,30 @@ void main() {
     await until(tester, () => novels.position(reader.editionId)!.chapter.title == 'Chapter 2',
         'Directory selection must save chapter two');
     await screenshot(tester, 'reader-chapter-two');
+    await click(tester, find.byTooltip('更换书源'));
+    await visible(tester, find.byType(NovelSearchPage));
+    expect(find.descendant(of: find.byType(TextField), matching: find.byTooltip('AI 搜索')), findsOneWidget);
+    await click(tester, find.byTooltip('关闭'));
+    expect(novels.selectedBook(reader.editionId)!.sourceId, 'fixture-a');
+    expect(novels.position(reader.editionId)!.chapter.title, 'Chapter 2');
+    for (final source in ['C', 'A']) {
+      await click(tester, find.byTooltip('更换书源'));
+      await visible(tester, find.text('Fixture Source $source'));
+      final card = find.ancestor(of: find.text('Fixture Source $source'),
+          matching: find.byType(Material)).first;
+      await click(tester, find.descendant(of: card, matching: find.text('阅读')));
+      await until(tester, () => novels.position(reader.editionId)!.sourceId ==
+          'fixture-${source.toLowerCase()}', 'Reader must resume in the selected source');
+      expect(find.byType(NovelReaderPage), findsOneWidget);
+      expect(novels.position(reader.editionId)!.chapter.title, 'Chapter 2');
+      expect(novels.bookmarks(reader.editionId)
+          .any((mark) => mark['note'] == 'WindowsBookmark'), isTrue);
+    }
+    await screenshot(tester, 'reader-source-changed');
+    await click(tester, find.byTooltip('加入书架'));
+    await visible(tester, find.byTooltip('已在书架'));
+    expect(novels.isShelved(reader.editionId), isTrue);
     await back(tester);
-    await text(tester, '加入书架');
     await visible(tester, find.text('小说搜索'));
     await back(tester);
     await tester.pump(const Duration(milliseconds: 300));
@@ -253,8 +279,17 @@ void main() {
         matching: find.byIcon(Icons.settings_outlined)));
     await click(tester, find.byTooltip('全部设置'));
     await category(tester, 'AI 作品关联');
-    await visible(tester, find.text('API Token'));
+    await visible(tester, find.text('API Key'));
     expect(tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, '启用 AI 作品关联')).value, false);
+    await click(tester, find.byWidgetPredicate((w) => w is NovelAiChoice && w.label == '供应商 Provider'));
+    await type(tester, find.widgetWithText(TextField, '搜索供应商 Provider'), 'OpenAI');
+    await click(tester, find.widgetWithText(ListTile, 'OpenAI'));
+    await click(tester, find.byWidgetPredicate((w) => w is NovelAiChoice && w.label == '模型'));
+    await type(tester, find.widgetWithText(TextField, '搜索模型'), '4.1-mini');
+    await click(tester, find.widgetWithText(ListTile, 'gpt-4.1-mini'));
+    expect(find.text('https://api.openai.com/v1'), findsOneWidget);
+    expect(novels.aiSettings.endpoint, 'https://api.deepseek.com');
+    expect(novels.aiSettings.enabled, false);
     await screenshot(tester, 'ai-association-settings');
     await category(tester, '同步设置');
     await text(tester, '设置 WebDAV');

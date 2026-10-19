@@ -26,6 +26,8 @@ class _ReaderStore extends ChangeNotifier implements NovelReaderStore {
   final Future<Uint8List> Function(String)? imageLoader;
   final List<NovelPosition> saved = [];
   final List<String> requested = [];
+  final List<String> contentSources = [];
+  final Set<String> failedCatalogSources = {};
   List<NovelChapter>? chapters;
   final List<String> imageRequests = [];
   final Map<String, NovelChapter> mappings = {};
@@ -88,12 +90,14 @@ class _ReaderStore extends ChangeNotifier implements NovelReaderStore {
   }
   @override Future<List<NovelChapter>> catalog(NovelBook book, {bool refresh = false}) async {
     catalogRefreshes.add(refresh);
+    if (failedCatalogSources.contains(book.sourceId)) throw StateError('source catalog unavailable');
     if (chapters != null) return chapters!;
     final available = refresh && refreshedBlocks != null ? refreshedBlocks! : blocks;
     return [_one, if (available.containsKey(_two.url)) _two];
   }
   @override Future<List<NovelBlock>> content(String sourceId, NovelChapter chapter, {bool refresh = false}) async {
     requested.add(chapter.url);
+    contentSources.add(sourceId);
     contentRefreshes.add(refresh);
     if (refresh && failContentRefresh) throw StateError('simulated refresh network failure');
     return (refresh && refreshedBlocks != null ? refreshedBlocks! : blocks)[chapter.url]!;
@@ -140,6 +144,7 @@ Future<void> _open(WidgetTester tester, _ReaderStore store, {double scale = 1, b
   PreferredSizeWidget? shelfAppBar,
   List<NavigatorObserver> observers = const [],
   ValueNotifier<ThemeMode>? themeMode,
+  Future<NovelBook?> Function(BuildContext, NovelBook)? onChangeSource,
   Future<void> Function(Set<String>)? onLeave}) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = size;
@@ -160,7 +165,8 @@ Future<void> _open(WidgetTester tester, _ReaderStore store, {double scale = 1, b
       data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)), child: child!),
     home: Builder(builder: (context) => Scaffold(appBar: shelfAppBar, body: TextButton(
       onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
-        NovelReaderPage(service: store, editionId: 'edition', book: _book, onLeave: onLeave))),
+        NovelReaderPage(service: store, editionId: 'edition', book: _book,
+          onLeave: onLeave, onChangeSource: onChangeSource))),
       child: const Text('Open reader')))),
   )));
   await tester.tap(find.text('Open reader'));
@@ -204,6 +210,134 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (_) async => null);
   });
+  for (final mode in ['scroll', 'page']) {
+    for (final size in [const Size(360, 800), const Size(1280, 800)]) {
+      testWidgets('reader source button cancels without moving $mode $size', (tester) async {
+        final store = _ReaderStore({_one.url: [NovelBlock.text('取消换源保持当前文字。' * 300)]});
+        store.prefs['mode'] = mode;
+        final choice = Completer<NovelBook?>();
+        var requests = 0;
+        await _open(tester, store, size: size, scale: 2,
+          onChangeSource: (_, book) { requests++; expect(book, same(_book)); return choice.future; });
+        final button = find.byWidgetPredicate((widget) =>
+          widget is IconButton && widget.tooltip == '更换书源');
+        expect(button.hitTestable(), findsOneWidget);
+        expect(tester.getCenter(button).dx, greaterThan(size.width / 2));
+        final state = tester.state(find.byType(NovelReaderPage));
+        final position = store.position('edition');
+        await tester.tap(button);
+        await tester.pump();
+        expect(tester.widget<IconButton>(button).onPressed, isNull);
+        expect(requests, 1);
+        choice.complete(null);
+        await tester.pumpAndSettle();
+        expect(tester.state(find.byType(NovelReaderPage)), same(state));
+        expect(store.position('edition')!.toJson(), position!.toJson());
+        expect(store.catalogRefreshes, [false]);
+        expect(tester.widget<IconButton>(button).onPressed, isNotNull);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  testWidgets('reader changes source in place and preserves its current anchor', (tester) async {
+    final text = List.generate(80, (i) => '段落$i：跨书源继续阅读的正文。').join();
+    final store = _ReaderStore({_one.url: [NovelBlock.text(text)]});
+    const target = NovelBook(sourceId: 'second', url: 'https://second/book', title: '另一书源译名');
+    final selectedFrom = <NovelBook>[];
+    await _open(tester, store, onChangeSource: (_, current) async {
+      selectedFrom.add(current);
+      return selectedFrom.length == 1 ? target : null;
+    });
+    final readerState = tester.state(find.byType(NovelReaderPage));
+    _scroll(tester).jumpTo(900);
+    await tester.pump();
+    final before = store.saved.last;
+    // The click must flush the unsaved position before source selection.
+    await tester.tap(find.byTooltip('更换书源'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(tester.state(find.byType(NovelReaderPage)), same(readerState));
+    expect(store.position('edition')!.sourceId, 'second');
+    expect(store.position('edition')!.textOffset, greaterThan(before.textOffset));
+    final restored = store.position('edition')!;
+    expect(restored.quote, contains('跨书源'));
+    expect(store.contentSources, [_book.sourceId, 'second']);
+    expect(find.text(target.title), findsOneWidget);
+    await tester.tap(find.byTooltip('更换书源'));
+    await tester.pumpAndSettle();
+    expect(selectedFrom, [_book, target]);
+    expect(store.position('edition')!.toJson(), restored.toJson());
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(find.byType(NovelReaderPage), findsNothing);
+    expect(find.text('Open reader'), findsOneWidget);
+  });
+
+  testWidgets('reader does not change source until the current position is saved', (tester) async {
+    final store = _ReaderStore({_one.url: [NovelBlock.text('保存失败不能丢失阅读进度。' * 300)]});
+    var selections = 0;
+    await _open(tester, store, onChangeSource: (_, _) async { selections++; return null; });
+    store.failSave = true;
+    _scroll(tester).jumpTo(800);
+    await tester.pump();
+    await tester.tap(find.byTooltip('更换书源'));
+    await tester.pumpAndSettle();
+    expect(selections, 0);
+    expect(find.textContaining('simulated disk write failure'), findsOneWidget);
+    store.failSave = false;
+    await tester.tap(find.byTooltip('更换书源'));
+    await tester.pumpAndSettle();
+    expect(selections, 1);
+    expect(store.saved.last.textOffset, greaterThan(0));
+  });
+
+  testWidgets('reader reports source selection errors and allows retry', (tester) async {
+    final store = _ReaderStore({_one.url: [NovelBlock.text('正文。' * 100)]});
+    var attempts = 0;
+    await _open(tester, store, onChangeSource: (_, _) async {
+      if (++attempts == 1) throw StateError('source selection failed');
+      return null;
+    });
+    await tester.tap(find.byTooltip('更换书源'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('source selection failed'), findsOneWidget);
+    expect(find.text(_book.title), findsOneWidget);
+    await tester.tap(find.byTooltip('更换书源'));
+    await tester.pumpAndSettle();
+    expect(attempts, 2);
+    expect(store.catalogRefreshes, [false]);
+  });
+
+  testWidgets('failed chapter loading still exposes reader source selection', (tester) async {
+    final store = _ReaderStore({_one.url: [NovelBlock.text('新书源正文。')]});
+    store.failedCatalogSources.add(_book.sourceId);
+    const target = NovelBook(sourceId: 'available', url: 'https://available/book', title: '可用书源');
+    await _open(tester, store, showControls: false, onChangeSource: (_, _) async => target);
+    expect(find.textContaining('source catalog unavailable'), findsOneWidget);
+    expect(find.byTooltip('更换书源').hitTestable(), findsOneWidget);
+    await tester.tap(find.byTooltip('更换书源'));
+    await tester.pumpAndSettle();
+    expect(store.position('edition')!.sourceId, target.sourceId);
+    expect(find.textContaining('新书源正文'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final fails in [false, true]) {
+    testWidgets('source selection completion after reader disposal is ignored: $fails', (tester) async {
+      final store = _ReaderStore({_one.url: [NovelBlock.text('正文。')]});
+      final choice = Completer<NovelBook?>();
+      await _open(tester, store, onChangeSource: (_, _) => choice.future);
+      await tester.tap(find.byTooltip('更换书源'));
+      await tester.pump();
+      await tester.pumpWidget(const SizedBox.shrink());
+      if (fails) { choice.completeError(StateError('late source failure')); }
+      else { choice.complete(_book); }
+      await tester.pumpAndSettle();
+      expect(store.catalogRefreshes, [false]);
+      expect(tester.takeException(), isNull);
+    });
+  }
   testWidgets('scrolling within a line keeps the body and saved anchor unchanged', (tester) async {
     final store = _ReaderStore({_one.url: List.generate(500,
       (i) => NovelBlock.text('段落$i：${List.filled(8, '长章节滚动性能和惯性验证。').join()}'))});

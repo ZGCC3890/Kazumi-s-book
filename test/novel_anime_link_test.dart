@@ -39,7 +39,7 @@ class _Service extends NovelService {
   final List<BangumiItem> items;
   @override NovelAiSettings get aiSettings => const NovelAiSettings(enabled: true, token: 'test-token');
   @override Future<List<String>> suggestTitles(String title, {required bool toAnime,
-    NovelAiSettings? settings, CancelToken? cancelToken}) async => ['动画译名'];
+    bool sameNovel = false, NovelAiSettings? settings, CancelToken? cancelToken}) async => ['动画译名'];
   Object? aiError;
   List<BangumiItem> aiMatches = [];
   @override Future<List<BangumiItem>> animeForTitle(String title) async {

@@ -10,16 +10,48 @@ void main() {
     model: 'test-model', token: 'test-only-token');
   test('service uses the explicit unsaved configuration and closes its isolated client', () async {
     final dio = Dio();
-    dio.interceptors.add(InterceptorsWrapper(onRequest: (request, handler) => handler.resolve(
-      Response(requestOptions: request, data: {'choices': [{'finish_reason': 'stop',
-        'message': {'content': '{"titles":["候选"]}'}}]}))));
+    dio.interceptors.add(InterceptorsWrapper(onRequest: (request, handler) {
+      expect(request.data['messages'][0]['content'], contains('同一本小说'));
+      handler.resolve(Response(requestOptions: request, data: {'choices': [{'finish_reason': 'stop',
+        'message': {'content': '{"titles":["候选"]}'}}]}));
+    }));
     final service = NovelService(WebDav(), aiClient: () => dio);
     addTearDown(service.dispose);
-    expect(await service.suggestTitles('作品', toAnime: false, settings: settings), ['候选']);
+    expect(await service.suggestTitles('作品', toAnime: false, sameNovel: true, settings: settings), ['候选']);
     expect(service.aiSettings.enabled, false);
     await expectLater(dio.get('https://api.test'), throwsA(isA<DioException>()));
     await expectLater(service.suggestTitles('作品', toAnime: false), throwsFormatException);
   });
+  for (final webSearch in [false, true]) {
+    test('source switching requests the same novel main title and alternate translations (web: $webSearch)', () async {
+      final dio = Dio();
+      addTearDown(dio.close);
+      final requests = <String>[];
+      dio.interceptors.add(InterceptorsWrapper(onRequest: (request, handler) {
+        requests.add(request.path);
+        if (request.path.endsWith('/tools/search')) {
+          expect(request.data['query'], '輝夜姬想讓人告白 小說版 ～单卷副标题～ 小说 主标题 不同中文译名');
+          handler.resolve(Response(requestOptions: request, data: {'results': [
+            {'title': '小说出版资料', 'url': 'https://publisher.test/book', 'summary': '同作品的不同译名', 'content': '出版资料'},
+          ]}));
+        } else {
+          final prompt = request.data['messages'][0]['content'] as String;
+          expect(prompt, contains('仅列出同一本小说的主标题和不同中文译名'));
+          expect(prompt, contains('不要列出改编动画、漫画、续作或衍生作品'));
+          expect(prompt, contains('使用简体中文'));
+          expect(prompt, contains('去掉“小说版”、卷号和单卷副标题'));
+          expect(prompt, isNot(contains('列出对应原作或正式衍生轻小说')));
+          handler.resolve(Response(requestOptions: request, data: {'choices': [{'finish_reason': 'stop',
+            'message': {'content': '{"titles":["辉夜姬想让人告白 小说版 ～单卷副标题～","辉夜大小姐想让我告白"]}'}}]}));
+        }
+      }));
+      final config = NovelAiSettings(enabled: true, webSearch: webSearch,
+        endpoint: settings.endpoint, token: settings.token, model: settings.model);
+      expect(await NovelAiClient(dio).titles(config, '輝夜姬想讓人告白 小說版 ～单卷副标题～',
+        toAnime: false, sameNovel: true), ['辉夜姬想让人告白', '辉夜大小姐想让我告白']);
+      expect(requests.length, webSearch ? 2 : 1);
+    });
+  }
   test('settings round trip and invalid endpoint or credentials are explicit errors', () {
     expect(NovelAiSettings.fromJson(settings.toJson()).toJson(), settings.toJson());
     for (final endpoint in ['http://api.test', 'https:', 'https://user@api.test',

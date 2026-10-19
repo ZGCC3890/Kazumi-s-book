@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kazumi/novel/novel_entry.dart';
 import 'package:kazumi/novel/novel_models.dart';
+import 'package:kazumi/novel/novel_reader_page.dart';
 import 'package:kazumi/novel/novel_rule.dart';
 import 'package:kazumi/novel/novel_search_results.dart';
 import 'package:kazumi/novel/novel_service.dart';
@@ -49,9 +51,13 @@ class _Service extends NovelService {
   @override String accountName(String sourceId) => '';
   @override Future<NovelAccount?> accountCredentials(String sourceId) async => null;
   bool aiEnabled = false;
+  final aiRequests = <(String, bool)>[];
   @override NovelAiSettings get aiSettings => NovelAiSettings(enabled: aiEnabled, token: 'test-token');
   @override Future<List<String>> suggestTitles(String title, {required bool toAnime,
-    NovelAiSettings? settings, CancelToken? cancelToken}) async => ['AI 小说译名'];
+    bool sameNovel = false, NovelAiSettings? settings, CancelToken? cancelToken}) async {
+    aiRequests.add((title, sameNovel));
+    return ['AI 小说译名'];
+  }
   final sources = {
     'linovel': _Adapter('linovel'),
     'lightnovel': _Adapter('lightnovel'),
@@ -110,7 +116,27 @@ class _Service extends NovelService {
   }
 }
 
-Future<void> _open(WidgetTester tester, _Service service) async {
+class _ReadingService extends _Service {
+  _ReadingService() {
+    selected = const NovelBook(sourceId: 'linovel', url: 'https://test/original', title: '当前小说');
+  }
+  NovelPosition? saved;
+  @override NovelBook? selectedBook(String editionId) => selected;
+  @override NovelPosition? position(String editionId) => saved;
+  @override NovelJson get preferences => {'fontSize': 20.0, 'lineHeight': 1.8,
+    'theme': 0, 'mode': 'scroll', 'font': 'system', 'margin': 24.0, 'brightness': 0.0};
+  @override Future<void> savePosition(NovelPosition position) async { saved = position; }
+  @override Future<List<NovelChapter>> catalog(NovelBook book, {bool refresh = false}) async => [
+    NovelChapter(url: 'https://test/${book.sourceId}/chapter', title: '第一章', volume: '第一卷', kind: '正文', number: 1),
+  ];
+  @override Future<List<NovelBlock>> content(String sourceId, NovelChapter chapter,
+      {bool refresh = false}) async => [NovelBlock.text('跨源阅读保留当前正文。' * 100)];
+  @override Future<String> chapterReadIdentity(String editionId, NovelBook book,
+      NovelChapter chapter, NovelPosition? restoredFrom) async => chapter.url;
+  @override Future<int> recordReadChapters(String editionId, Set<String> chapters) async => 1;
+}
+
+Future<void> _open(WidgetTester tester, _Service service, {String? editionId}) async {
   addTearDown(service.dispose);
   await tester.pumpWidget(
     MaterialApp(
@@ -124,6 +150,7 @@ Future<void> _open(WidgetTester tester, _Service service) async {
                     service: service,
                     animeId: 42,
                     initialQuery: '原词',
+                    existingEditionId: editionId,
               ),
             ),
             child: const Text('选择小说'),
@@ -154,6 +181,71 @@ Future<void> _openStatus(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('production reader source picker cancels then changes source without stacking readers', (tester) async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (_) async => null);
+    final service = _ReadingService()..aiEnabled = true;
+    addTearDown(() async { await tester.pumpWidget(const SizedBox.shrink()); service.dispose(); });
+    await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => Scaffold(
+      body: TextButton(onPressed: () => NovelEntry.read(context, service, 'selected-edition'),
+        child: const Text('打开阅读器'))))));
+    await tester.tap(find.text('打开阅读器'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(4, 300));
+    await tester.pumpAndSettle();
+    final readerState = tester.state(find.byType(NovelReaderPage));
+    final original = service.saved!.toJson();
+    for (var attempt = 0; attempt < 2; attempt++) {
+      await tester.tap(find.byTooltip('更换书源'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(NovelSearchPage), findsOneWidget);
+      for (final source in service.sources.values) {
+        expect(source.requests[attempt].$1, '当前小说');
+        source.complete(attempt, '目标小说');
+      }
+      await tester.pumpAndSettle();
+      if (attempt == 0) {
+        await tester.tap(find.byTooltip('关闭'));
+        await tester.pumpAndSettle();
+        expect(service.saved!.toJson(), original);
+        expect(service.selected!.sourceId, 'linovel');
+      } else {
+        await tester.tap(find.byTooltip('AI 搜索'));
+        await tester.pumpAndSettle();
+        expect(service.aiRequests.single, ('当前小说', true));
+        expect(find.text('AI 搜索书名'), findsOneWidget);
+        await tester.tap(find.text('AI 小说译名'));
+        await tester.pump();
+        for (final source in service.sources.values) {
+          expect(source.requests.last.$1, 'AI 小说译名');
+          source.complete(2, '目标小说');
+        }
+        await tester.pumpAndSettle();
+        expect(service.selected!.sourceId, 'linovel');
+        expect(service.saved!.toJson(), original);
+        final card = find.byKey(const ValueKey('novel-result-lightnovel-https://test/lightnovel/目标小说'));
+        final read = find.descendant(of: card, matching: find.text('阅读'));
+        await _scrollTo(tester, read);
+        await tester.tap(read);
+        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 700));
+        expect(service.boundEdition, 'selected-edition');
+        expect(service.selected!.sourceId, 'lightnovel');
+        expect(service.saved!.editionId, 'selected-edition');
+        expect(service.saved!.sourceId, 'lightnovel');
+        expect(service.saved!.quote, original['quote']);
+      }
+      expect(find.byType(NovelSearchPage), findsNothing);
+      expect(tester.state(find.byType(NovelReaderPage)), same(readerState));
+    }
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(find.byType(NovelReaderPage), findsNothing);
+    expect(find.text('打开阅读器'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final cancel in [false, true]) {
     testWidgets('anime entry resolves AI name before querying sources (cancel: $cancel)', (tester) async {
       final service = _Service()..aiEnabled = true;
@@ -186,12 +278,12 @@ void main() {
     await _open(tester, service);
     for (final source in service.sources.values) { source.complete(0, '原作品'); }
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('AI 关联小说'));
+    await tester.tap(find.byTooltip('AI 搜索'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(service.sources['linovel']!.requests.length, 1);
-    await tester.tap(find.byTooltip('AI 关联小说'));
+    await tester.tap(find.byTooltip('AI 搜索'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('AI 小说译名'));
     await tester.pump();
@@ -203,6 +295,43 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('关联作品'), findsNWidgets(2));
   });
+  for (final width in [360.0, 1280.0]) {
+    testWidgets('source AI and ordinary search share the book field at width $width', (tester) async {
+      tester.view.physicalSize = Size(width, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final service = _Service()..aiEnabled = true;
+      await _open(tester, service, editionId: 'current-edition');
+      for (final source in service.sources.values) { source.complete(0, '原作品'); }
+      await tester.pumpAndSettle();
+      final field = find.byType(TextField);
+      final ai = find.byTooltip('AI 搜索');
+      final search = find.byTooltip('搜索');
+      expect(find.descendant(of: field, matching: ai), findsOneWidget);
+      expect(find.descendant(of: field, matching: search), findsOneWidget);
+      expect(tester.getCenter(ai).dy, tester.getCenter(search).dy);
+      expect(tester.getCenter(ai).dx, greaterThan(tester.getCenter(search).dx));
+      await tester.enterText(field, '当前小说 第三卷');
+      await tester.tap(ai);
+      await tester.pumpAndSettle();
+      expect(service.aiRequests.single, ('当前小说 第三卷', true));
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(field).controller!.text, '当前小说 第三卷');
+      expect(find.text('原作品'), findsNWidgets(2));
+      await tester.tap(search);
+      await tester.pump();
+      for (final source in service.sources.values) {
+        expect(source.requests.last.$1, '当前小说 第三卷');
+        source.complete(1, '普通搜索结果');
+      }
+      await tester.pumpAndSettle();
+      expect(service.aiRequests.length, 1);
+      expect(service.selected, isNull);
+      expect(tester.takeException(), isNull);
+    });
+  }
   testWidgets('same-ID default upgrade re-searches the changed source and ignores its old response', (tester) async {
     final service = _Service()..pendingDefaults = true..defaultInstallGate = Completer<void>();
     final oldAdapter = service.sources['linovel']!;

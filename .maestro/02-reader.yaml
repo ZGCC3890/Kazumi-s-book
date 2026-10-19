@@ -209,12 +209,12 @@ appId: com.zgcc.kazumisbook
     waitToSettleTimeoutMs: 100
 - assertVisible: "阅读进度"
 - back
-- back
-- assertVisible: "加入书架？"
 - tapOn:
     point: "50%,50%"
     text: "加入书架"
     waitToSettleTimeoutMs: 100
+- assertVisible: "已在书架"
+- back
 - back
 - tapOn:
     point: "50%,50%"

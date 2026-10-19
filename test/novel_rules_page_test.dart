@@ -95,7 +95,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('AI 作品关联'));
     await tester.pumpAndSettle();
-    expect(find.text('API Token'), findsOneWidget);
+    expect(find.text('API Key'), findsOneWidget);
   });
   }
   TestWidgetsFlutterBinding.ensureInitialized();

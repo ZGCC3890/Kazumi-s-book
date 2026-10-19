@@ -36,11 +36,11 @@ class NovelService extends ChangeNotifier implements NovelReaderStore {
     notifyListeners();
   }
   Future<List<String>> suggestTitles(String title, {required bool toAnime,
-      NovelAiSettings? settings, CancelToken? cancelToken}) async {
+      bool sameNovel = false, NovelAiSettings? settings, CancelToken? cancelToken}) async {
     final dio = _aiClient();
     try {
       return await NovelAiClient(dio).titles(settings ?? aiSettings, title,
-        toAnime: toAnime, cancelToken: cancelToken);
+        toAnime: toAnime, sameNovel: sameNovel, cancelToken: cancelToken);
     } finally {
       dio.close();
     }
@@ -76,6 +76,7 @@ class NovelService extends ChangeNotifier implements NovelReaderStore {
     _box = await Hive.openBox<String>('novel_v1', path: path);
     _cache = await Hive.openBox<String>('novel_cache_v1', path: path);
     _rules = await Hive.openBox<String>('novel_rules_v1', path: path);
+    await _retireJapaneseDefault();
     final ai = _box.get('aiSettings');
     if (ai != null) _aiSettings = NovelAiSettings.fromJson(jsonDecode(ai) as NovelJson);
     _http = NovelHttpSession(
@@ -97,6 +98,20 @@ class NovelService extends ChangeNotifier implements NovelReaderStore {
   }
 
   List<NovelRule> get rules => _rules.values.map(NovelRule.decode).toList();
+
+  Future<void> _retireJapaneseDefault() async {
+    if (_box.get('retiredJapaneseDefault') == '1') return;
+    final installed = _rules.get('syosetu');
+    if ((ruleCatalogUrl == null || ruleCatalogUrl == defaultCatalog) && installed != null &&
+        sha256.convert(utf8.encode(installed)).toString() ==
+            'ca368f2bcbdae815f4533a2e7bc9f5003b3ccf8f93308b3333efab24d51a8a32') {
+      await _rules.delete('syosetu');
+      await _box.put('ruleRemoved/syosetu', '1');
+      if (preferredSource == 'syosetu') await _box.delete('preferredSource');
+    }
+    await _box.put('retiredJapaneseDefault', '1');
+  }
+
   NovelRule rule(String id) => rules.singleWhere((r) => r.id == id);
   NovelSourceAdapter adapter(String id) {
     final source = rule(id);
@@ -173,6 +188,7 @@ class NovelService extends ChangeNotifier implements NovelReaderStore {
     if (catalog['version'] != 1) throw const FormatException('不支持的规则索引版本');
     final candidates = <String, (String, List<String>)>{};
     for (final entry in catalog['rules'] as List) {
+      if (url == defaultCatalog && entry['id'] == 'syosetu') continue;
       if (_box.get('ruleRemoved/${entry['id']}') == '1') continue;
       final parsed = NovelRule.decode(
         await get(Uri.parse(url).resolve(entry['file'] as String).toString()),

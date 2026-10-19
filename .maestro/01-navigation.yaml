@@ -89,7 +89,16 @@ appId: com.zgcc.kazumisbook
 - tapOn:
     text: "AI 作品关联"
     waitToSettleTimeoutMs: 100
-- assertVisible: "API Token"
+- assertVisible: "API Key"
+- tapOn: {id: ".*novel-ai-choice-供应商 Provider.*", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "搜索供应商 Provider", waitToSettleTimeoutMs: 100}
+- inputText: "OpenAI"
+- tapOn: {text: "OpenAI", waitToSettleTimeoutMs: 100}
+- tapOn: {id: ".*novel-ai-choice-模型.*", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "搜索模型", waitToSettleTimeoutMs: 100}
+- inputText: "4.1-mini"
+- tapOn: {text: "gpt-4.1-mini", waitToSettleTimeoutMs: 100}
+- assertVisible: "https://api.openai.com/v1"
 - assertVisible: "验证连接"
 - takeScreenshot: build/android-ui/ai-association-settings
 - back

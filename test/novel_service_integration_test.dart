@@ -18,6 +18,9 @@ import 'package:kazumi/services/sync/webdav.dart';
 import 'package:logger/logger.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
+File _ruleFile(String id) => File(id == 'syosetu'
+  ? 'test/fixtures/syosetu_legacy.json' : 'novel_rules/$id.json');
+
 const _bookA = NovelBook(sourceId: 'wenku8', url: 'https://fixture.invalid/a', title: '同一文本版本');
 const _bookB = NovelBook(sourceId: 'syosetu', url: 'https://fixture.invalid/b', title: '同一文本版本');
 const _chapterA = NovelChapter(url: 'https://fixture.invalid/a/1', title: '第一章', volume: '第一卷', kind: '正文', number: 1);
@@ -176,7 +179,7 @@ void main() {
 
   Future<String> seed(NovelService service) async {
     await service.importRule(await File('novel_rules/wenku8.json').readAsString());
-    await service.importRule(await File('novel_rules/syosetu.json').readAsString());
+    await service.importRule(await _ruleFile('syosetu').readAsString());
     final edition = await service.bind(animeId: 42, book: _bookA,
       editionLabel: 'fixture identical text', language: 'zh');
     await service.bind(animeId: 43, book: _bookB, editionLabel: 'fixture identical text',
@@ -282,13 +285,73 @@ void main() {
     } finally { DioFactory.pluginDio.interceptors.remove(interceptor); }
   });
 
+  for (final kind in ['default', 'default-unselected', 'explicit-default', 'custom-rule', 'custom-catalog', 'absent']) {
+    test('Japanese default retirement preserves reading data and explicit imports ($kind)', () async {
+      var service = await device('retirement-$kind');
+      final edition = await seed(service);
+      await service.addToShelf(edition);
+      await service.savePosition(_position(edition, 9, source: 'syosetu', chapter: _chapterB));
+      final before = service.state.encode();
+      if (kind == 'custom-rule') {
+        final custom = jsonDecode(await _ruleFile('syosetu').readAsString()) as Map<String, dynamic>;
+        custom['name'] = '用户修改的规则';
+        await service.importRule(jsonEncode(custom));
+      }
+      if (kind == 'custom-catalog') await service.saveRuleCatalogUrl('https://custom.test/catalog.json');
+      if (kind == 'explicit-default') await service.saveRuleCatalogUrl(NovelService.defaultCatalog);
+      if (kind == 'absent') await service.removeRule('syosetu');
+      await service.selectSource(kind == 'default-unselected' ? 'wenku8' : 'syosetu');
+      await Hive.box<String>('novel_v1').put('defaultRulesInstalled', '4');
+      await Hive.box<String>('novel_v1').delete('retiredJapaneseDefault');
+      service = await device('retirement-$kind');
+      final retired = ['default', 'default-unselected', 'explicit-default'].contains(kind);
+      expect(service.rules.any((rule) => rule.id == 'syosetu'), !retired && kind != 'absent');
+      expect(service.state.encode(), before);
+      expect(service.isShelved(edition), true);
+      expect(service.position(edition)!.sourceId, 'syosetu');
+      if (retired) {
+        expect(Hive.box<String>('novel_v1').get('ruleRemoved/syosetu'), '1');
+        expect(service.preferredSource, kind == 'default-unselected' ? 'wenku8' : null);
+      }
+      await service.importRule(await _ruleFile('syosetu').readAsString());
+      service = await device('retirement-$kind');
+      expect(service.rules.any((rule) => rule.id == 'syosetu'), true);
+    });
+  }
+
+  test('a stale default catalog cannot reinstall the retired Japanese source', () async {
+    final service = await device('stale-default');
+    remote.files['/rules/catalog.json'] = utf8.encode(jsonEncode({'version': 1, 'rules': [
+      {'id': 'wenku8', 'file': 'wenku8.json'}, {'id': 'syosetu', 'file': 'syosetu.json'},
+    ]}));
+    for (final id in ['wenku8', 'syosetu']) {
+      remote.files['/rules/$id.json'] = await _ruleFile(id).readAsBytes();
+    }
+    final requests = <String>[];
+    final rewrite = InterceptorsWrapper(onRequest: (options, handler) {
+      if (options.uri.toString().startsWith(NovelService.defaultCatalog.replaceAll('catalog.json', ''))) {
+        requests.add(options.uri.pathSegments.last);
+        options.path = '${remote.url}/rules/${options.uri.pathSegments.last}';
+      }
+      handler.next(options);
+    });
+    DioFactory.pluginDio.interceptors.add(rewrite);
+    try {
+      await service.ensureDefaultRules();
+      expect(service.rules.map((rule) => rule.id), ['wenku8']);
+      expect(requests, ['catalog.json', 'wenku8.json']);
+    } finally {
+      DioFactory.pluginDio.interceptors.remove(rewrite);
+    }
+  });
+
   test('first use installs separate rules once and retains deletion after restart', () async {
     remote.files['/rules/catalog.json'] = utf8.encode(jsonEncode({'version': 1, 'rules': [
       {'id': 'wenku8', 'file': 'wenku8.json', 'replaces': <String>[]},
       {'id': 'syosetu', 'file': 'syosetu.json', 'replaces': <String>[]},
     ]}));
     for (final id in ['wenku8', 'syosetu']) {
-      remote.files['/rules/$id.json'] = await File('novel_rules/$id.json').readAsBytes();
+      remote.files['/rules/$id.json'] = await _ruleFile(id).readAsBytes();
     }
     var service = await device('automatic-rules');
     await service.saveRuleCatalogUrl('${remote.url}/rules/catalog.json');
@@ -309,10 +372,10 @@ void main() {
   test('0.1.0 source deletion survives adding new defaults on upgrade', () async {
     remote.files['/rules/catalog.json'] = await File('novel_rules/catalog.json').readAsBytes();
     for (final id in ['wenku8', 'syosetu', 'linovel', 'lightnovel']) {
-      remote.files['/rules/$id.json'] = await File('novel_rules/$id.json').readAsBytes();
+      remote.files['/rules/$id.json'] = await _ruleFile(id).readAsBytes();
     }
     final service = await device('legacy-rule-upgrade');
-    await service.importRule(await File('novel_rules/syosetu.json').readAsString());
+    await service.importRule(await _ruleFile('syosetu').readAsString());
     await Hive.box<String>('novel_v1').put('defaultRulesInstalled', '1');
     final rewrite = InterceptorsWrapper(onRequest: (options, handler) {
       if (options.uri.toString().startsWith(NovelService.defaultCatalog.replaceAll('catalog.json', ''))) {
@@ -341,7 +404,7 @@ void main() {
         {'id': 'syosetu', 'file': 'syosetu.json', 'replaces': <String>[]},
       ]}));
       remote.files['/rules/wenku8.json'] = utf8.encode(replacement);
-      remote.files['/rules/syosetu.json'] = await File('novel_rules/syosetu.json').readAsBytes();
+      remote.files['/rules/syosetu.json'] = await _ruleFile('syosetu').readAsBytes();
       await service.saveRuleCatalogUrl('${remote.url}/rules/catalog.json');
       final blocked = Completer<void>(), release = Completer<void>();
       final dio = DioFactory.pluginDio;
@@ -443,7 +506,7 @@ void main() {
     await service.saveRuleCatalogUrl('${remote.url}/rules/catalog.json');
     await expectLater(service.ensureDefaultRules(), throwsA(isA<DioException>()));
     expect(service.rules, isEmpty);
-    remote.files['/rules/syosetu.json'] = await File('novel_rules/syosetu.json').readAsBytes();
+    remote.files['/rules/syosetu.json'] = await _ruleFile('syosetu').readAsBytes();
     await service.ensureDefaultRules();
     expect(service.rules.length, 2);
   });
@@ -463,7 +526,7 @@ void main() {
     expect((index['rules'] as List).singleWhere((r) => r['id'] == 'wenku8')['replaces'], contains(oldHash));
     remote.files['/rules/catalog.json'] = utf8.encode(jsonEncode(index));
     for (final id in ['wenku8', 'syosetu', 'linovel', 'lightnovel']) {
-      remote.files['/rules/$id.json'] = await File('novel_rules/$id.json').readAsBytes();
+      remote.files['/rules/$id.json'] = await _ruleFile(id).readAsBytes();
     }
     await service.saveRuleCatalogUrl('${remote.url}/rules/catalog.json');
     await service.ensureDefaultRules();
@@ -497,7 +560,7 @@ void main() {
       await service.removeRule('syosetu');
       remote.files['/rules/catalog.json'] = utf8.encode(jsonEncode(index));
       for (final id in ['wenku8', 'linovel', 'lightnovel']) {
-        remote.files['/rules/$id.json'] = await File('novel_rules/$id.json').readAsBytes();
+        remote.files['/rules/$id.json'] = await _ruleFile(id).readAsBytes();
       }
       await service.saveRuleCatalogUrl('${remote.url}/rules/catalog.json');
       expect(service.needsDefaultRules, isTrue);
@@ -529,7 +592,7 @@ void main() {
     expect((index['rules'] as List).singleWhere((r) => r['id'] == 'wenku8')['replaces'], contains(oldHash));
     remote.files['/rules/catalog.json'] = utf8.encode(jsonEncode(index));
     for (final id in ['wenku8', 'linovel', 'lightnovel']) {
-      remote.files['/rules/$id.json'] = await File('novel_rules/$id.json').readAsBytes();
+      remote.files['/rules/$id.json'] = await _ruleFile(id).readAsBytes();
     }
     await service.saveRuleCatalogUrl('${remote.url}/rules/catalog.json');
     expect(service.needsDefaultRules, isTrue);

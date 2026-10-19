@@ -19,11 +19,15 @@ class NovelReaderPage extends StatefulWidget {
     required this.editionId,
     required this.book,
     this.onLeave,
+    this.onChangeSource,
+    this.shelfAction,
   });
   final NovelReaderStore service;
   final String editionId;
   final NovelBook book;
   final Future<void> Function(Set<String> chapters)? onLeave;
+  final Future<NovelBook?> Function(BuildContext context, NovelBook book)? onChangeSource;
+  final Widget? shelfAction;
   @override
   State<NovelReaderPage> createState() => _NovelReaderPageState();
 }
@@ -31,6 +35,7 @@ class NovelReaderPage extends StatefulWidget {
 class _NovelReaderPageState extends State<NovelReaderPage>
     with WidgetsBindingObserver {
   NovelReaderStore get service => widget.service;
+  late NovelBook _book;
   List<NovelChapter> _chapters = [];
   List<NovelBlock> _blocks = [];
   final Map<int, Future<Uint8List>> _images = {};
@@ -45,6 +50,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
   int _chapterIndex = 0, _fragment = 0, _generation = 0, _restoreRevision = 0;
   bool _busy = true, _chrome = false, _restoring = true, _leaving = false;
   bool _exitPending = false;
+  bool _changingSource = false;
   final Set<String> _readChapters = {};
   bool _initialSavePending = false,
       _orientationChanged = false,
@@ -55,7 +61,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
   int? _restoreImageBlock;
   late String _normalizedText, _chapterDigest, _serviceStatus;
   final Map<int, String> _imageHashes = {};
-  late final NovelIllustrations _illustrations;
+  late NovelIllustrations _illustrations;
   String get _text => _blocks.where((b) => !b.image).map((b) => b.value).join();
   // The former standalone night preset now uses paper white in app light mode.
   int get _dayTheme => _prefs['theme'] == 3 ? 0 : _prefs['theme'] as int;
@@ -63,17 +69,20 @@ class _NovelReaderPageState extends State<NovelReaderPage>
   @override
   void initState() {
     super.initState();
+    _book = widget.book;
     _prefs = service.preferences;
-    _illustrations = NovelIllustrations(
-      (chapter, refresh) => service.content(widget.book.sourceId, chapter, refresh: refresh),
-      (url) => service.image(widget.book.sourceId, url),
-    );
+    _illustrations = _createIllustrations();
     _serviceStatus = _status;
     WidgetsBinding.instance.addObserver(this);
     service.addListener(_serviceChanged);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     unawaited(_open());
   }
+
+  NovelIllustrations _createIllustrations() => NovelIllustrations(
+    (chapter, refresh) => service.content(_book.sourceId, chapter, refresh: refresh),
+    (url) => service.image(_book.sourceId, url),
+  );
 
   String get _status => '${service.state.revisions('position/${widget.editionId}').length > 1}/${service.syncError}';
   void _serviceChanged() {
@@ -107,7 +116,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
       _error = null;
     });
     try {
-      _chapters = await service.catalog(widget.book, refresh: refresh);
+      _chapters = await service.catalog(_book, refresh: refresh);
       if (NovelConflicts.has(service.state, 'position/${widget.editionId}')) {
         _fail(StateError('阅读进度有冲突，请选择要继续的进度。'));
         return;
@@ -129,16 +138,16 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     bool refresh = false,
   }) async {
     if (!await NovelConflicts.ensure(context, service,
-        () => [service.chapterMappingKey(position, widget.book)])) {
+        () => [service.chapterMappingKey(position, _book)])) {
       _fail(StateError('章节对应尚未选择，原进度已保留。'));
       return;
     }
-    final mapped = service.mappedChapter(position, widget.book);
+    final mapped = service.mappedChapter(position, _book);
     final currentMapping = mapped == null
         ? <NovelChapter>[]
         : _chapters.where((chapter) => chapter.url == mapped.url).toList();
     final candidates = mapped == null
-        ? NovelLocator.candidates(position, widget.book.sourceId, _chapters)
+        ? NovelLocator.candidates(position, _book.sourceId, _chapters)
         : currentMapping;
     final needsConfirmation = candidates.length != 1;
     final chapter = needsConfirmation
@@ -166,6 +175,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
       setState(() {
         _error = error.toString();
         _busy = false;
+        _chrome = true;
       });
   }
 
@@ -185,7 +195,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     try {
       final chapter = _chapters[index];
       final blocks = await service.content(
-        widget.book.sourceId,
+        _book.sourceId,
         chapter,
         refresh: refresh,
       );
@@ -212,7 +222,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
           proven = found != null;
         } else {
           final sameChapter =
-              restore.sourceId == widget.book.sourceId &&
+              restore.sourceId == _book.sourceId &&
               restore.chapter.url == chapter.url;
           final image = sameChapter
               ? blocks.indexWhere(
@@ -235,12 +245,12 @@ class _NovelReaderPageState extends State<NovelReaderPage>
         if (!await NovelConflicts.ensure(
           context,
           service,
-          () => service.chapterMappingWriteKeys(restore!, widget.book, chapter),
+          () => service.chapterMappingWriteKeys(restore!, _book, chapter),
         )) {
           _fail(StateError('章节对应尚未选择，原进度已保留。'));
           return;
         }
-        await service.confirmChapterMapping(restore!, widget.book, chapter);
+        await service.confirmChapterMapping(restore!, _book, chapter);
       }
       if (!mounted || generation != _generation) return;
       if (fresh) _restoreImageBlock = blocks.first.image ? 0 : null;
@@ -248,7 +258,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
           _pendingImageRestore ??
           NovelLocator.capture(
             editionId: widget.editionId,
-            sourceId: widget.book.sourceId,
+            sourceId: _book.sourceId,
             chapter: chapter,
             text: _text,
             offset: offset,
@@ -262,7 +272,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
       if (_pendingImageRestore != null) _savedLocation = _location;
       final readIdentity = await service.chapterReadIdentity(
         widget.editionId,
-        widget.book,
+        _book,
         chapter,
         restore,
       );
@@ -294,7 +304,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     _restoreImageBlock = f.image ? f.block : null;
     _location = NovelLocator.capturePrepared(
       editionId: widget.editionId,
-      sourceId: widget.book.sourceId,
+      sourceId: _book.sourceId,
       chapter: _chapters[_chapterIndex],
       normalized: _normalizedText,
       chapterDigest: _chapterDigest,
@@ -375,6 +385,30 @@ class _NovelReaderPageState extends State<NovelReaderPage>
 
   Future<void> _refresh() async {
     if (await _save()) await _open(refresh: true);
+  }
+
+  Future<void> _changeSource() async {
+    setState(() => _changingSource = true);
+    try {
+      if (!await _save() || !mounted) return;
+      final book = await widget.onChangeSource!(context, _book);
+      if (book == null || !mounted) return;
+      _generation++;
+      _illustrations.dispose();
+      setState(() {
+        _book = book;
+        _illustrations = _createIllustrations();
+      });
+      await _open();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _changingSource = false);
+    }
   }
 
   Future<void> _resolvePosition({bool reopen = false}) async {
@@ -761,7 +795,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     final generation = _generation;
     try {
       final bytes = await service.image(
-        widget.book.sourceId,
+        _book.sourceId,
         _blocks[index].value,
       );
       if (!mounted || generation != _generation) return bytes;
@@ -807,7 +841,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
           : (_blocks.first.image ? 0 : null);
       _location = NovelLocator.capture(
         editionId: widget.editionId,
-        sourceId: widget.book.sourceId,
+        sourceId: _book.sourceId,
         chapter: _chapters[_chapterIndex],
         text: _text,
         offset: proven ? found : 0,
@@ -1056,7 +1090,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
               backgroundColor: colors.$1,
               foregroundColor: colors.$2,
               leading: BackButton(onPressed: _leave),
-              title: Text(widget.book.title),
+              title: Text(_book.title),
               actions: [
                 IconButton(
                   tooltip: '刷新目录与正文',
@@ -1077,6 +1111,12 @@ class _NovelReaderPageState extends State<NovelReaderPage>
                   onPressed: _busy ? null : _settings,
                   icon: const Icon(Icons.text_fields_rounded),
                 ),
+                if (widget.onChangeSource != null)
+                  IconButton(
+                    tooltip: '更换书源',
+                    onPressed: _busy || _changingSource ? null : _changeSource,
+                    icon: const Icon(Icons.swap_horiz_rounded),
+                  ),
               ],
             ),
           ),
@@ -1260,6 +1300,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
                                 icon: const Icon(Icons.list),
                                 label: const Text('目录'),
                               ),
+                              if (widget.shelfAction != null) widget.shelfAction!,
                               IconButton(
                                 tooltip: '书签',
                                 onPressed: _bookmarks,

@@ -5,11 +5,19 @@ import 'package:kazumi/novel/novel_models.dart';
 import 'package:kazumi/novel/novel_locator.dart';
 import 'package:kazumi/novel/novel_rule.dart';
 
-NovelRule _rule(String id) => NovelRule.decode(File('novel_rules/$id.json').readAsStringSync());
+NovelRule _rule(String id) => NovelRule.decode(File(id == 'syosetu'
+  ? 'test/fixtures/syosetu_legacy.json' : 'novel_rules/$id.json').readAsStringSync());
 const _chapter = NovelChapter(url: 'https://initial.test/chapter',
     title: '第一章', volume: '第一卷', kind: 'chapter', number: 1);
 
 void main() {
+  test('public default catalog only distributes Chinese sources', () {
+    final index = jsonDecode(File('novel_rules/catalog.json').readAsStringSync()) as Map<String, dynamic>;
+    final ids = (index['rules'] as List).map((entry) => entry['id'] as String).toList();
+    expect(ids, ['lightnovel', 'linovel', 'wenku8']);
+    for (final id in ids) { expect(_rule(id).json['language'], startsWith('zh')); }
+    expect(File('novel_rules/syosetu.json').existsSync(), false);
+  });
   test('image headers are opt-in and require string header values', () {
     final ordinary = _rule('wenku8');
     expect(ordinary.imageHeaders, ordinary.headers);
