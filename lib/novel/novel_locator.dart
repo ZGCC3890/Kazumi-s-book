@@ -97,10 +97,11 @@ class NovelLocator {
     required int offset,
     required int updatedAt,
     String? imageHash,
+    String? imageUrl,
   }) {
     return capturePrepared(editionId: editionId, sourceId: sourceId,
       chapter: chapter, normalized: normalize(text), chapterDigest: digest(text),
-      offset: offset, updatedAt: updatedAt, imageHash: imageHash);
+      offset: offset, updatedAt: updatedAt, imageHash: imageHash, imageUrl: imageUrl);
   }
 
   static NovelPosition capturePrepared({
@@ -112,6 +113,7 @@ class NovelLocator {
     required int offset,
     required int updatedAt,
     String? imageHash,
+    String? imageUrl,
   }) {
     final at = offset.clamp(0, normalized.length);
     return NovelPosition(
@@ -128,6 +130,7 @@ class NovelLocator {
       updatedAt: updatedAt,
       chapterDigest: chapterDigest,
       imageHash: imageHash,
+      imageUrl: imageUrl,
     );
   }
 

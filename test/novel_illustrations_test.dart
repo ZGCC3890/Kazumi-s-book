@@ -203,7 +203,8 @@ void main() {
     await mount(tester, gallery);
     await tester.tap(find.byTooltip('显示插图栏'));
     await tester.pump();
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(Image), findsNothing);
     pending.completeError(StateError('HTTP 403'));
     await tester.pumpAndSettle();
     expect(find.byTooltip('Bad state: HTTP 403'), findsOneWidget);

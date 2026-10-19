@@ -109,7 +109,7 @@ class NovelIllustrationBar extends StatelessWidget {
     return SizedBox(width: 112, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Expanded(child: FutureBuilder<Uint8List>(future: gallery.image(url), builder: (context, snapshot) {
         if (snapshot.hasError) return _failure(snapshot.error!, () => gallery.retryImage(url));
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData) return const SizedBox.expand();
         return Semantics(label: '本卷插图 ${index + 1}，点击放大', button: true,
           child: InkWell(onTap: () => showNovelImage(context, snapshot.data!), child: Image.memory(
             snapshot.data!, fit: BoxFit.contain,

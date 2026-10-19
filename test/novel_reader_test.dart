@@ -9,6 +9,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kazumi/novel/novel_locator.dart';
 import 'package:kazumi/novel/novel_models.dart';
 import 'package:kazumi/novel/novel_reader_page.dart';
+import 'package:kazumi/novel/novel_reader_image.dart';
+import 'package:kazumi/novel/novel_reader_toolbar.dart';
 import 'package:kazumi/novel/novel_reader_store.dart';
 import 'package:kazumi/novel/novel_sync_state.dart';
 
@@ -17,10 +19,11 @@ const _one = NovelChapter(url: 'https://test/1', title: '第一章', volume: '�
 const _two = NovelChapter(url: 'https://test/2', title: '第二章', volume: '第一卷', kind: '正文', number: 2);
 
 class _ReaderStore extends ChangeNotifier implements NovelReaderStore {
-  _ReaderStore(this.blocks, {this.initial, this.imageBytes});
+  _ReaderStore(this.blocks, {this.initial, this.imageBytes, this.imageLoader});
   final Map<String, List<NovelBlock>> blocks;
   final NovelPosition? initial;
   final Uint8List? imageBytes;
+  final Future<Uint8List> Function(String)? imageLoader;
   final List<NovelPosition> saved = [];
   final List<String> requested = [];
   List<NovelChapter>? chapters;
@@ -40,7 +43,9 @@ class _ReaderStore extends ChangeNotifier implements NovelReaderStore {
     'mode': 'scroll', 'font': 'system', 'margin': 24.0, 'brightness': 0.0};
   @override NovelJson get preferences => Map.of(prefs);
   @override NovelSyncState get state => _state;
-  @override String? get syncError => null;
+  String? pendingSyncError;
+  int syncRetries = 0;
+  @override String? get syncError => pendingSyncError;
   @override NovelPosition? position(String editionId) {
     if (remotePosition != null) return remotePosition;
     final key = 'position/$editionId';
@@ -95,6 +100,7 @@ class _ReaderStore extends ChangeNotifier implements NovelReaderStore {
   }
   @override Future<Uint8List> image(String sourceId, String url) async {
     imageRequests.add(url);
+    if (imageLoader != null) return imageLoader!(url);
     return imageBytes!;
   }
   @override Future<void> savePosition(NovelPosition position) async {
@@ -118,7 +124,11 @@ class _ReaderStore extends ChangeNotifier implements NovelReaderStore {
     _state = _state.resolve(key, selected, 'test-device', expectedToken: expectedToken);
     notifyListeners();
   }
-  @override Future<void> retrySync() async {}
+  @override Future<void> retrySync() async {
+    syncRetries++;
+    pendingSyncError = null;
+    notifyListeners();
+  }
 }
 
 NovelPosition _position(NovelChapter chapter, String text, int offset) => NovelLocator.capture(
@@ -174,6 +184,14 @@ Future<void> _showControls(WidgetTester tester) async {
 
 ScrollController _scroll(WidgetTester tester) => tester.widget<CustomScrollView>(find.byType(CustomScrollView).first).controller!;
 
+Future<Uint8List> _readerPixels(WidgetTester tester, {int width = 8}) async =>
+    (await tester.runAsync(() async {
+      final image = await createTestImage(width: width, height: 8);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      return data!.buffer.asUint8List();
+    }))!;
+
 class _PopObserver extends NavigatorObserver {
   _PopObserver(this.onPop);
   final VoidCallback onPop;
@@ -205,6 +223,339 @@ void main() {
       (w) => w is ScrollView && w.controller == controller)), same(body));
     await tester.pump(const Duration(milliseconds: 700));
     expect(store.saved.length, writes);
+  });
+
+  for (final mode in ['scroll', 'page']) {
+    for (final size in [const Size(412, 915), const Size(1280, 800)]) {
+      for (final scale in [1.0, 2.0]) {
+        testWidgets('toolbar overlay $mode $size scale $scale keeps text fixed', (tester) async {
+          const bars = FakeViewPadding(top: 24, bottom: 24);
+          tester.view.padding = bars;
+          tester.view.viewPadding = bars;
+          addTearDown(tester.view.resetPadding);
+          addTearDown(tester.view.resetViewPadding);
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+              .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+            if (call.method == 'SystemChrome.setEnabledSystemUIMode') {
+              final visible = call.arguments == 'SystemUiMode.edgeToEdge';
+              await Future<void>.value();
+              tester.view.padding = visible ? bars : const FakeViewPadding();
+              tester.view.viewPadding = visible ? bars : const FakeViewPadding();
+            }
+            return null;
+          });
+          final store = _ReaderStore({_one.url: List.generate(300,
+            (i) => NovelBlock.text('段落$i：工具栏开关不能改变正文位置或阅读进度。'))});
+          store.prefs['mode'] = mode;
+          await _open(tester, store, size: size, scale: scale, showControls: false);
+          final body = find.byType(mode == 'scroll' ? CustomScrollView : PageView);
+          Object controller() => mode == 'scroll' ? _scroll(tester)
+              : tester.widget<PageView>(body).controller!;
+          double position() => mode == 'scroll' ? _scroll(tester).offset
+              : tester.widget<PageView>(body).controller!.page!;
+          if (mode == 'scroll') {
+            _scroll(tester).jumpTo(173.5);
+          } else {
+            tester.widget<PageView>(body).controller!.jumpToPage(2);
+          }
+          await tester.pumpAndSettle();
+          await tester.pump(const Duration(milliseconds: 700));
+          final originalController = controller();
+          final originalPosition = position();
+          final viewport = tester.getRect(body);
+          final line = find.descendant(of: body, matching: find.byType(Text))
+              .evaluate().firstWhere((element) {
+            final center = tester.getCenter(find.byWidget(element.widget));
+            return (element.widget as Text).data!.startsWith('段落') &&
+                center.dy > size.height * .35 && center.dy < size.height * .65;
+          }).widget as Text;
+          final text = find.descendant(of: body, matching: find.text(line.data!));
+          final textBounds = tester.getRect(text);
+          final writes = store.saved.length;
+          final anchor = store.saved.last.textOffset;
+          for (var toggle = 0; toggle < 6; toggle++) {
+            await tester.tapAt(viewport.center);
+            for (var frame = 0; frame < 12; frame++) {
+              await tester.pump(const Duration(milliseconds: 16));
+              expect(tester.getRect(body), viewport, reason: 'viewport at toggle $toggle frame $frame');
+              expect(controller(), same(originalController));
+              expect(position(), originalPosition);
+              expect(tester.getRect(text), textBounds);
+            }
+            expect(find.byTooltip('阅读设置'), toggle.isEven ? findsOneWidget : findsNothing);
+          }
+          await tester.pump(const Duration(milliseconds: 700));
+          expect(store.saved.length, writes);
+          expect(store.saved.last.textOffset, anchor);
+          expect(tester.takeException(), isNull);
+        });
+      }
+    }
+  }
+
+  for (final mode in ['scroll', 'page']) {
+    testWidgets('$mode keyboard and chapter controls work over the reading body', (tester) async {
+      final content = List.generate(150, (i) => NovelBlock.text('第$i段：覆盖式工具栏与键盘翻页操作。'));
+      final store = _ReaderStore({_one.url: content, _two.url: content});
+      store.prefs['mode'] = mode;
+      await _open(tester, store, showControls: false);
+      double position() => mode == 'scroll' ? _scroll(tester).offset
+          : tester.widget<PageView>(find.byType(PageView)).controller!.page!;
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pumpAndSettle();
+      expect(position(), greaterThan(0));
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pumpAndSettle();
+      expect(position(), closeTo(0, .01));
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
+      expect(position(), greaterThan(0));
+      await _showControls(tester);
+      await tester.tap(find.byTooltip('下一章'));
+      await tester.pumpAndSettle();
+      expect(store.saved.last.chapter.url, _two.url);
+      await tester.tap(find.byTooltip('上一章'));
+      await tester.pumpAndSettle();
+      expect(store.saved.last.chapter.url, _one.url);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('reader toolbar slides quickly and reverses without moving text', (tester) async {
+    final store = _ReaderStore({_one.url: List.generate(150,
+      (i) => NovelBlock.text('第$i段：工具栏动画不能重新排版正文。'))});
+    await _open(tester, store, showControls: false);
+    final body = find.byType(CustomScrollView);
+    final viewport = tester.getRect(body);
+    final controller = _scroll(tester);
+    await tester.tapAt(viewport.center);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+    expect(tester.getTopLeft(find.byType(AppBar)).dy, inExclusiveRange(-kToolbarHeight, 0));
+    expect(tester.getRect(body), viewport);
+    await tester.pump(NovelReaderToolbar.duration);
+    expect(tester.getTopLeft(find.byType(AppBar)).dy, 0);
+    final bottom = tester.getCenter(find.text('目录')).dy;
+    await tester.tapAt(viewport.center);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+    expect(tester.getTopLeft(find.byType(AppBar)).dy, inExclusiveRange(-kToolbarHeight, 0));
+    expect(tester.getCenter(find.text('目录')).dy, greaterThan(bottom));
+    await tester.tapAt(viewport.center);
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(find.byType(AppBar)).dy, 0);
+    expect(_scroll(tester), same(controller));
+    expect(tester.getRect(body), viewport);
+    await tester.tapAt(viewport.center);
+    await tester.pumpAndSettle();
+    expect(find.byType(AppBar), findsNothing);
+    expect(find.text('目录'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('opening the reader catalog reveals the current chapter each time', (tester) async {
+    final chapters = List.generate(100, (i) => NovelChapter(url: 'chapter-$i',
+      title: '第$i章', volume: '本卷', kind: '正文', number: i));
+    final store = _ReaderStore({for (final chapter in chapters)
+      chapter.url: const [NovelBlock.text('章节正文')]}, initial: _position(chapters[70], '章节正文', 0));
+    store.chapters = chapters;
+    await _open(tester, store);
+    await tester.tap(find.text('目录'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ListTile, chapters[70].title).hitTestable(), findsOneWidget);
+    await tester.tap(find.widgetWithText(ListTile, chapters[71].title));
+    await tester.pumpAndSettle();
+    expect(store.saved.last.chapter.url, chapters[71].url);
+    await tester.tap(find.text('目录'));
+    await tester.pumpAndSettle();
+    final selected = find.widgetWithText(ListTile, chapters[71].title);
+    expect(selected.hitTestable(), findsOneWidget);
+    expect(tester.widget<ListTile>(selected).selected, isTrue);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(store.saved.last.chapter.url, chapters[71].url);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('invalid illustration bytes can be retried without reopening the chapter', (tester) async {
+    var bytes = Uint8List.fromList([1, 2, 3]);
+    final store = _ReaderStore({_one.url: const [NovelBlock.image('image')]},
+      imageLoader: (_) async => bytes);
+    await _open(tester, store);
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+    await tester.pumpAndSettle();
+    expect(find.text('插图加载失败，重试'), findsOneWidget);
+    bytes = await _readerPixels(tester);
+    await tester.tap(find.text('插图加载失败，重试'));
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+    await tester.pumpAndSettle();
+    expect(find.text('插图加载失败，重试'), findsNothing);
+    expect(find.bySemanticsLabel('小说插图，点击放大'), findsOneWidget);
+    expect(store.requested, [_one.url]);
+    expect(store.imageRequests, ['image', 'image']);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final mode in ['scroll', 'page']) {
+    testWidgets('$mode illustrations appear independently and retry only the failed image', (tester) async {
+      final bytes = await _readerPixels(tester);
+      final pending = {'first': Completer<Uint8List>(), 'second': Completer<Uint8List>()};
+      final store = _ReaderStore({_one.url: const [NovelBlock.image('first'), NovelBlock.image('second')]},
+        imageLoader: (url) => pending[url]!.future);
+      store.prefs['mode'] = mode;
+      await _open(tester, store, showControls: false);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(Image), findsNothing);
+      final body = find.byType(mode == 'scroll' ? CustomScrollView : PageView);
+      final viewport = tester.getRect(body);
+      void go(int image) {
+        if (mode == 'scroll') {
+          _scroll(tester).jumpTo(image * viewport.height * .88);
+        } else {
+          tester.widget<PageView>(body).controller!.jumpToPage(image);
+        }
+      }
+      go(1);
+      await tester.pumpAndSettle();
+      expect(store.imageRequests, containsAll(['first', 'second']));
+      pending['second']!.complete(bytes);
+      await tester.pumpAndSettle();
+      expect(find.byType(Image), findsOneWidget);
+      expect(pending['first']!.isCompleted, isFalse);
+      expect(tester.getRect(body), viewport);
+      pending['first']!.completeError(StateError('fixture image failure'));
+      go(0);
+      await tester.pumpAndSettle();
+      expect(find.text('插图加载失败，重试'), findsOneWidget);
+      pending['first'] = Completer<Uint8List>();
+      await tester.tap(find.text('插图加载失败，重试'));
+      await tester.pump();
+      expect(find.text('插图加载失败，重试'), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      pending['first']!.complete(bytes);
+      await tester.pumpAndSettle();
+      expect(store.imageRequests.where((url) => url == 'first'), hasLength(2));
+      expect(store.imageRequests.where((url) => url == 'second'), hasLength(1));
+      expect(tester.getRect(body), viewport);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('same-source image progress opens its placeholder before bytes arrive', (tester) async {
+    final pending = Completer<Uint8List>();
+    final original = NovelPosition.fromJson({..._position(_one, '', 0).toJson(), 'imageUrl': 'second'});
+    final store = _ReaderStore({_one.url: const [NovelBlock.image('first'), NovelBlock.image('second')]},
+      initial: original, imageLoader: (_) => pending.future);
+    await _open(tester, store, showControls: false);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(_scroll(tester).offset, greaterThan(0));
+    expect(store.saved.last.imageUrl, 'second');
+    expect(store.saved.last.imageHash, isNull);
+    final offset = _scroll(tester).offset;
+    pending.complete(await _readerPixels(tester));
+    await tester.pumpAndSettle();
+    expect(_scroll(tester).offset, offset);
+    expect(store.saved.last.imageHash, isNotNull);
+    expect(NovelPosition.fromJson(store.saved.last.toJson()).imageUrl, 'second');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('legacy illustration bookmarks resolve while images remain individually visible', (tester) async {
+    final first = await _readerPixels(tester), second = await _readerPixels(tester, width: 12);
+    final pending = {'first': Completer<Uint8List>(), 'second': Completer<Uint8List>()};
+    final original = NovelPosition.fromJson({..._position(_one, '', 0).toJson(),
+      'imageHash': sha256.convert(second).toString()});
+    final store = _ReaderStore({_one.url: const [NovelBlock.image('first'), NovelBlock.image('second')]},
+      initial: original, imageLoader: (url) => pending[url]!.future);
+    await _open(tester, store, showControls: false);
+    expect(find.byType(NovelReaderImage), findsWidgets);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(store.saved, isEmpty);
+    pending['second']!.complete(second);
+    await tester.pumpAndSettle();
+    expect(find.byType(Image), findsOneWidget);
+    expect(store.saved, isEmpty);
+    pending['first']!.completeError(StateError('fixture first image failed'));
+    await tester.pumpAndSettle();
+    expect(find.text('重试定位'), findsOneWidget);
+    pending['first'] = Completer<Uint8List>();
+    await tester.tap(find.text('重试定位'));
+    await tester.pump();
+    pending['first']!.complete(first);
+    await tester.pumpAndSettle();
+    expect(_scroll(tester).offset, greaterThan(0));
+    expect(store.saved.last.imageUrl, 'second');
+    expect(store.saved.last.imageHash, original.imageHash);
+    expect(store.imageRequests.where((url) => url == 'second'), hasLength(1));
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final leave in [false, true]) {
+    testWidgets('late illustration completion cannot change the reader after ${leave ? 'exit' : 'a chapter change'}', (tester) async {
+      final bytes = await _readerPixels(tester);
+      final pending = Completer<Uint8List>();
+      final original = NovelPosition.fromJson({..._position(_one, '', 0).toJson(),
+        'imageHash': sha256.convert(bytes).toString()});
+      final store = _ReaderStore({_one.url: const [NovelBlock.image('first')],
+        _two.url: const [NovelBlock.text('第二章正文')]},
+        initial: original, imageLoader: (_) => pending.future);
+      await _open(tester, store);
+      await tester.tap(find.byTooltip(leave ? 'Back' : '下一章'));
+      await tester.pumpAndSettle();
+      final writes = store.saved.length;
+      pending.complete(bytes);
+      await tester.pumpAndSettle();
+      expect(store.saved.length, writes);
+      if (!leave) expect(store.saved.last.chapter.url, _two.url);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('reading ahead cancels pending illustration restoration without a late jump', (tester) async {
+    final bytes = await _readerPixels(tester);
+    final pending = Completer<Uint8List>();
+    final text = List.generate(100, (i) => '第$i段，等待插图时也能继续阅读。').join();
+    final original = NovelPosition.fromJson({..._position(_one, text, 0).toJson(),
+      'imageHash': sha256.convert(bytes).toString()});
+    final store = _ReaderStore({_one.url: [const NovelBlock.image('image'), NovelBlock.text(text)]},
+      initial: original, imageLoader: (_) => pending.future);
+    await _open(tester, store, showControls: false);
+    _scroll(tester).jumpTo(1100);
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 700));
+    final location = store.saved.last.textOffset;
+    final offset = _scroll(tester).offset;
+    expect(location, greaterThan(0));
+    pending.complete(bytes);
+    await tester.pumpAndSettle();
+    expect(_scroll(tester).offset, offset);
+    expect(store.saved.last.textOffset, location);
+    expect(store.saved.last.imageHash, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('sync notice and retry overlay the body without moving it', (tester) async {
+    final store = _ReaderStore({_one.url: List.generate(100,
+      (i) => NovelBlock.text('第$i段：同步提示不改变阅读布局。'))});
+    await _open(tester, store, showControls: false);
+    final body = find.byType(CustomScrollView);
+    final viewport = tester.getRect(body);
+    final controller = _scroll(tester);
+    store.pendingSyncError = 'fixture sync failure';
+    store.notifyListeners();
+    await tester.pumpAndSettle();
+    expect(find.text('云同步未完成：fixture sync failure'), findsOneWidget);
+    expect(tester.getRect(body), viewport);
+    await _showControls(tester);
+    expect(tester.getRect(body), viewport);
+    await tester.tap(find.text('重试'));
+    await tester.pumpAndSettle();
+    expect(store.syncRetries, 1);
+    expect(find.text('云同步未完成：fixture sync failure'), findsNothing);
+    expect(tester.getRect(body), viewport);
+    expect(_scroll(tester), same(controller));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('a fling keeps moving after release and persists its final anchor', (tester) async {
@@ -406,6 +757,7 @@ void main() {
       expect(paragraph().style!.color, const Color(0xff253323));
       mode.value = ThemeMode.dark;
       await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'Changing the reader theme');
       final scheme = Theme.of(tester.element(find.byType(NovelReaderPage))).colorScheme;
       expect(background(), scheme.surface);
       expect(paragraph().style!.color, scheme.onSurface);
@@ -413,15 +765,18 @@ void main() {
       expect(viewportPosition(), originalViewport);
       expect(store.saved.last.textOffset, offset);
       await _showControls(tester);
+      expect(tester.takeException(), isNull, reason: 'Showing reader controls');
       final toolbar = Theme.of(tester.element(find.byTooltip('阅读设置')));
       expect(toolbar.brightness, Brightness.dark);
       expect(toolbar.colorScheme.primary, scheme.primary);
       await tester.tap(find.byTooltip('阅读设置'));
       await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'Opening reader settings');
       expect(Theme.of(tester.element(find.text('阅读设置'))).brightness, Brightness.dark);
       expect(find.text('夜间'), findsNothing);
       mode.value = ThemeMode.light;
       await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'Changing the theme beneath settings');
       expect(Theme.of(tester.element(find.text('阅读设置'))).brightness, Brightness.light);
       Navigator.of(tester.element(find.text('阅读设置'))).pop();
       await tester.pumpAndSettle();
@@ -544,7 +899,7 @@ void main() {
 
   for (final mode in ['scroll', 'page']) {
   testWidgets('$mode window reflow and font changes preserve the exact saved text anchor', (tester) async {
-    final text = String.fromCharCodes(List.generate(500, (i) => 0x4e00 + i));
+    final text = String.fromCharCodes(List.generate(1200, (i) => 0x4e00 + i));
     final store = _ReaderStore({_one.url: [NovelBlock.text(text)]}, initial: _position(_one, text, 53));
     store.prefs['mode'] = mode;
     await _open(tester, store);
@@ -552,6 +907,7 @@ void main() {
       tester.view.physicalSize = Size(width, 800);
       await tester.pumpAndSettle();
       await tester.pump(const Duration(milliseconds: 700));
+      expect(store.saved.map((p) => p.textOffset).toSet(), {53}, reason: 'Reflow at width $width');
     }
     await tester.tap(find.byTooltip('阅读设置'));
     await tester.pumpAndSettle();
@@ -643,7 +999,7 @@ void main() {
   });
 
   testWidgets('PageDown reaches the last partial viewport before changing chapter', (tester) async {
-    final store = _ReaderStore({_one.url: List.generate(14, (i) => NovelBlock.text('段落$i')),
+    final store = _ReaderStore({_one.url: List.generate(20, (i) => NovelBlock.text('段落$i')),
       _two.url: const [NovelBlock.text('第二章内容')]});
     await _open(tester, store);
     final controller = _scroll(tester);
@@ -946,14 +1302,33 @@ void main() {
     store.prefs['mode'] = mode;
     await _open(tester, store, size: size, scale: 2);
     expect(store.requested, [_one.url]);
+    final body = find.byType(mode == 'scroll' ? CustomScrollView : PageView);
+    final viewport = tester.getRect(body);
+    Object controller() => mode == 'scroll' ? _scroll(tester)
+        : tester.widget<PageView>(body).controller!;
+    final originalController = controller();
     await tester.tap(find.byTooltip('显示插图栏'));
     await tester.pumpAndSettle();
+    expect(tester.getRect(body), viewport);
+    expect(controller(), same(originalController));
+    await tester.tapAt(viewport.center);
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('阅读设置'), findsNothing);
+    expect(tester.getRect(body), viewport);
+    expect(controller(), same(originalController));
+    await tester.tapAt(viewport.center);
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('阅读设置'), findsOneWidget);
+    expect(tester.getRect(body), viewport);
+    expect(controller(), same(originalController));
     await tester.tap(find.bySemanticsLabel('本卷插图 1，点击放大'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('关闭插图'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('隐藏插图栏'));
     await tester.pumpAndSettle();
+    expect(tester.getRect(body), viewport);
+    expect(controller(), same(originalController));
     await tester.tap(find.byTooltip('显示插图栏'));
     await tester.pumpAndSettle();
     await tester.pump(const Duration(milliseconds: 700));

@@ -8,7 +8,9 @@ import 'novel_models.dart';
 import 'novel_reader_store.dart';
 import 'novel_conflicts.dart';
 import 'novel_illustrations.dart';
-import 'novel_image_viewer.dart';
+import 'novel_chapter_list.dart';
+import 'novel_reader_toolbar.dart';
+import 'novel_reader_image.dart';
 
 class NovelReaderPage extends StatefulWidget {
   const NovelReaderPage({
@@ -31,13 +33,16 @@ class _NovelReaderPageState extends State<NovelReaderPage>
   NovelReaderStore get service => widget.service;
   List<NovelChapter> _chapters = [];
   List<NovelBlock> _blocks = [];
-  final Map<int, Uint8List> _images = {};
+  final Map<int, Future<Uint8List>> _images = {};
+  final Set<int> _failedImages = {};
+  NovelPosition? _pendingImageRestore;
+  Object? _imageRestoreError;
   NovelLayout? _layout;
   String? _layoutKey, _error;
   String? _saveError;
   late NovelJson _prefs;
   NovelPosition? _location, _savedLocation;
-  int _chapterIndex = 0, _fragment = 0, _generation = 0;
+  int _chapterIndex = 0, _fragment = 0, _generation = 0, _restoreRevision = 0;
   bool _busy = true, _chrome = false, _restoring = true, _leaving = false;
   bool _exitPending = false;
   final Set<String> _readChapters = {};
@@ -184,28 +189,17 @@ class _NovelReaderPageState extends State<NovelReaderPage>
         chapter,
         refresh: refresh,
       );
-      final images = <int, Uint8List>{};
-      // Image bytes also provide content evidence for illustration bookmarks.
-      for (var i = 0; i < blocks.length; i++) {
-        if (blocks[i].image) {
-          images[i] = await service.image(
-            widget.book.sourceId,
-            blocks[i].value,
-          );
-        }
-      }
       if (!mounted || generation != _generation) return;
       _startAtEnd = startAtEnd;
       _initialSavePending = true;
       _blocks = blocks;
       _normalizedText = NovelLocator.normalize(_text);
       _chapterDigest = NovelLocator.digest(_text);
-      _imageHashes
-        ..clear()
-        ..addAll(images.map((index, bytes) => MapEntry(index, sha256.convert(bytes).toString())));
-      _images
-        ..clear()
-        ..addAll(images);
+      _imageHashes.clear();
+      _images.clear();
+      _failedImages.clear();
+      _pendingImageRestore = null;
+      _imageRestoreError = null;
       _chapterIndex = index;
       _illustrations.select(_chapters, index, refresh: refresh);
       _restoreImageBlock = null;
@@ -214,35 +208,35 @@ class _NovelReaderPageState extends State<NovelReaderPage>
       var proven = restore == null;
       if (restore != null) {
         final found = NovelLocator.locate(restore, _text);
-        if (restore.imageHash == null) {
+        if (restore.imageHash == null && restore.imageUrl == null) {
           proven = found != null;
         } else {
-          final matches = images.entries
-              .where(
-                (entry) =>
-                    sha256.convert(entry.value).toString() == restore.imageHash,
-              )
-              .toList();
+          final sameChapter =
+              restore.sourceId == widget.book.sourceId &&
+              restore.chapter.url == chapter.url;
+          final image = sameChapter
+              ? blocks.indexWhere(
+                  (block) => block.image && block.value == restore.imageUrl,
+                )
+              : -1;
           proven =
-              found != null &&
-              matches.length == 1 &&
-              NovelLocator.normalize(
-                    blocks
-                        .take(matches.single.key)
-                        .where((block) => !block.image)
-                        .map((block) => block.value)
-                        .join(),
-                  ).length ==
-                  found;
-          if (proven) _restoreImageBlock = matches.single.key;
+              image >= 0 && found != null && _textBeforeImage(image) == found;
+          if (proven) {
+            _restoreImageBlock = image;
+          } else if (restore.imageHash != null) {
+            _pendingImageRestore = restore;
+          }
         }
         if (proven) offset = found!;
         if (!proven) fresh = true;
       }
       if (!mounted || generation != _generation) return;
       if (confirmMapping) {
-        if (!await NovelConflicts.ensure(context, service, () =>
-            service.chapterMappingWriteKeys(restore!, widget.book, chapter))) {
+        if (!await NovelConflicts.ensure(
+          context,
+          service,
+          () => service.chapterMappingWriteKeys(restore!, widget.book, chapter),
+        )) {
           _fail(StateError('章节对应尚未选择，原进度已保留。'));
           return;
         }
@@ -250,21 +244,22 @@ class _NovelReaderPageState extends State<NovelReaderPage>
       }
       if (!mounted || generation != _generation) return;
       if (fresh) _restoreImageBlock = blocks.first.image ? 0 : null;
-      _location = NovelLocator.capture(
-        editionId: widget.editionId,
-        sourceId: widget.book.sourceId,
-        chapter: chapter,
-        text: _text,
-        offset: offset,
-        updatedAt: DateTime.now().millisecondsSinceEpoch,
-        imageHash: fresh
-            ? (blocks.first.image
-                  ? sha256.convert(images[0]!).toString()
-                  : null)
-            : proven
-            ? restore?.imageHash
-            : null,
-      );
+      _location =
+          _pendingImageRestore ??
+          NovelLocator.capture(
+            editionId: widget.editionId,
+            sourceId: widget.book.sourceId,
+            chapter: chapter,
+            text: _text,
+            offset: offset,
+            updatedAt: DateTime.now().millisecondsSinceEpoch,
+            imageHash: proven ? restore?.imageHash : null,
+            imageUrl: _restoreImageBlock == null
+                ? null
+                : blocks[_restoreImageBlock!].value,
+          );
+      // Preserve the saved bookmark until its image evidence is resolved or the user moves.
+      if (_pendingImageRestore != null) _savedLocation = _location;
       final readIdentity = await service.chapterReadIdentity(
         widget.editionId,
         widget.book,
@@ -277,7 +272,9 @@ class _NovelReaderPageState extends State<NovelReaderPage>
         _busy = false;
         _layoutKey = null;
       });
-      if (restore != null && !proven) {
+      if (_pendingImageRestore != null) {
+        unawaited(_restoreIllustration(_pendingImageRestore!, generation));
+      } else if (restore != null && !proven) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('已定位到对应章节，从本章开头继续阅读')));
@@ -290,6 +287,8 @@ class _NovelReaderPageState extends State<NovelReaderPage>
   void _moved(int fragment, {bool force = false}) {
     if (_restoring || _layout == null || fragment < 0) return;
     if (!force && fragment == _fragment) return;
+    _pendingImageRestore = null;
+    if (_imageRestoreError != null) setState(() => _imageRestoreError = null);
     _fragment = fragment;
     final f = _layout!.fragments[fragment];
     _restoreImageBlock = f.image ? f.block : null;
@@ -301,7 +300,8 @@ class _NovelReaderPageState extends State<NovelReaderPage>
       chapterDigest: _chapterDigest,
       offset: f.offset,
       updatedAt: DateTime.now().millisecondsSinceEpoch,
-      imageHash: f.image ? _imageHashes[f.block]! : null,
+      imageHash: f.image ? _imageHashes[f.block] : null,
+      imageUrl: f.image ? _blocks[f.block].value : null,
     );
     _saveTimer ??= Timer(const Duration(milliseconds: 600), () {
       _saveTimer = null;
@@ -404,14 +404,10 @@ class _NovelReaderPageState extends State<NovelReaderPage>
           children: [
             ListTile(title: Text(title)),
             Expanded(
-              child: ListView.builder(
-                itemCount: chapters.length,
-                itemBuilder: (_, i) => ListTile(
-                  title: Text(chapters[i].title),
-                  subtitle: Text(chapters[i].volume),
-                  selected: chapters[i].url == _chapters[_chapterIndex].url,
-                  onTap: () => Navigator.pop(ctx, chapters[i]),
-                ),
+              child: NovelChapterList(
+                chapters: chapters,
+                current: _chapters[_chapterIndex],
+                onSelected: (chapter) => Navigator.pop(ctx, chapter),
               ),
             ),
           ],
@@ -753,6 +749,101 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     );
   }
 
+  int _textBeforeImage(int index) => NovelLocator.normalize(
+    _blocks
+        .take(index)
+        .where((block) => !block.image)
+        .map((block) => block.value)
+        .join(),
+  ).length;
+
+  Future<Uint8List> _image(int index) => _images.putIfAbsent(index, () async {
+    final generation = _generation;
+    try {
+      final bytes = await service.image(
+        widget.book.sourceId,
+        _blocks[index].value,
+      );
+      if (!mounted || generation != _generation) return bytes;
+      _imageHashes[index] = sha256.convert(bytes).toString();
+      if (_pendingImageRestore == null &&
+          _restoreImageBlock == index &&
+          !_restoring) {
+        _moved(_fragment, force: true);
+        unawaited(_save());
+      }
+      return bytes;
+    } catch (_) {
+      if (mounted && generation == _generation) _failedImages.add(index);
+      rethrow;
+    }
+  });
+
+  Future<void> _restoreIllustration(
+    NovelPosition restore,
+    int generation,
+  ) async {
+    try {
+      await Future.wait([
+        for (var i = 0; i < _blocks.length; i++)
+          if (_blocks[i].image) _image(i),
+      ]);
+      if (!mounted ||
+          generation != _generation ||
+          _pendingImageRestore != restore) {
+        return;
+      }
+      final found = NovelLocator.locate(restore, _text);
+      final matches = _imageHashes.entries
+          .where((entry) => entry.value == restore.imageHash)
+          .toList();
+      final proven =
+          found != null &&
+          matches.length == 1 &&
+          _textBeforeImage(matches.single.key) == found;
+      _pendingImageRestore = null;
+      _restoreImageBlock = proven
+          ? matches.single.key
+          : (_blocks.first.image ? 0 : null);
+      _location = NovelLocator.capture(
+        editionId: widget.editionId,
+        sourceId: widget.book.sourceId,
+        chapter: _chapters[_chapterIndex],
+        text: _text,
+        offset: proven ? found : 0,
+        updatedAt: DateTime.now().millisecondsSinceEpoch,
+        imageHash: _imageHashes[_restoreImageBlock],
+        imageUrl: _restoreImageBlock == null
+            ? null
+            : _blocks[_restoreImageBlock!].value,
+      );
+      setState(() {
+        _restoreRevision++;
+        _initialSavePending = true;
+      });
+      if (!proven) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('已定位到对应章节，从本章开头继续阅读')));
+      }
+    } catch (error) {
+      if (mounted &&
+          generation == _generation &&
+          _pendingImageRestore == restore) {
+        setState(() => _imageRestoreError = error);
+      }
+    }
+  }
+
+  void _retryIllustrationRestore() {
+    for (final index in _failedImages) {
+      _images.remove(index);
+    }
+    _failedImages.clear();
+    setState(() => _imageRestoreError = null);
+    unawaited(_restoreIllustration(_pendingImageRestore!, _generation));
+  }
+
   Widget _fragmentWidget(NovelFragment f, TextStyle style) {
     if (!f.image) {
       return SizedBox(
@@ -766,19 +857,21 @@ class _NovelReaderPageState extends State<NovelReaderPage>
         ),
       );
     }
-    final bytes = _images[f.block]!;
     return SizedBox(
       height: f.height,
-      child: Semantics(
-        label: '小说插图，点击放大',
-        button: true,
-        child: InkWell(
-          onTap: () => showNovelImage(context, bytes),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Image.memory(bytes, fit: BoxFit.contain),
-          ),
-        ),
+      child: NovelReaderImage(
+        key: ValueKey('$_generation/${f.block}'),
+        bytes: _image(f.block),
+        retry: () {
+          if (_imageRestoreError != null) {
+            _retryIllustrationRestore();
+          } else {
+            setState(() {
+              _images.remove(f.block);
+              _failedImages.remove(f.block);
+            });
+          }
+        },
       ),
     );
   }
@@ -794,9 +887,6 @@ class _NovelReaderPageState extends State<NovelReaderPage>
         _turn(1);
       } else {
         setState(() => _chrome = !_chrome);
-        SystemChrome.setEnabledSystemUIMode(
-          _chrome ? SystemUiMode.edgeToEdge : SystemUiMode.immersiveSticky,
-        );
       }
     },
     child: child,
@@ -806,7 +896,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     final scaler = MediaQuery.textScalerOf(context);
     final key =
         '$width/$height/${_prefs['fontSize']}/${_prefs['lineHeight']}/'
-        '${_prefs['font']}/${_prefs['mode']}/${scaler.scale(style.fontSize!)}/$_chapterIndex/$_generation';
+        '${_prefs['font']}/${_prefs['mode']}/${scaler.scale(style.fontSize!)}/$_chapterIndex/$_generation/$_restoreRevision';
     if (_layoutKey != key) {
       _restoring = true;
       _layoutKey = key;
@@ -841,11 +931,26 @@ class _NovelReaderPageState extends State<NovelReaderPage>
         oldScroll?.dispose();
         oldPages?.dispose();
         if (!mounted) return;
+        if (_prefs['mode'] == 'scroll') {
+          final position = _scroll!.position;
+          // Resolve the restored viewport boundary before enabling progress updates.
+          _scroll!.jumpTo(
+            position.pixels.clamp(
+              position.minScrollExtent,
+              position.maxScrollExtent,
+            ),
+          );
+        }
         _restoring = false;
         // Reflow preserves the exact semantic anchor; only user movement updates it.
         if (_initialSavePending) {
           _initialSavePending = false;
           if (startAtEnd) _moved(_fragment, force: true);
+          if (_pendingImageRestore == null &&
+              _restoreImageBlock != null &&
+              _imageHashes.containsKey(_restoreImageBlock)) {
+            _moved(_fragment, force: true);
+          }
           unawaited(_save());
         }
       });
@@ -861,27 +966,33 @@ class _NovelReaderPageState extends State<NovelReaderPage>
                 padding: EdgeInsets.symmetric(horizontal: inset),
                 sliver: SliverVariedExtentList.builder(
                   itemCount: _layout!.fragments.length,
-                  itemExtentBuilder: (index, _) => _layout!.fragments[index].height,
-                  itemBuilder: (_, index) => _fragmentWidget(_layout!.fragments[index], style),
+                  itemExtentBuilder: (index, _) =>
+                      _layout!.fragments[index].height,
+                  itemBuilder: (_, index) =>
+                      _fragmentWidget(_layout!.fragments[index], style),
                 ),
               ),
               SliverPadding(
                 padding: EdgeInsets.symmetric(horizontal: inset),
-                sliver: SliverToBoxAdapter(child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  TextButton(
-                    onPressed: _chapterIndex > 0 ? () => _chapter(-1) : null,
-                    child: const Text('上一章'),
+                sliver: SliverToBoxAdapter(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      TextButton(
+                        onPressed: _chapterIndex > 0
+                            ? () => _chapter(-1)
+                            : null,
+                        child: const Text('上一章'),
+                      ),
+                      TextButton(
+                        onPressed: _chapterIndex + 1 < _chapters.length
+                            ? () => _chapter(1)
+                            : null,
+                        child: const Text('下一章'),
+                      ),
+                    ],
                   ),
-                  TextButton(
-                    onPressed: _chapterIndex + 1 < _chapters.length
-                        ? () => _chapter(1)
-                        : null,
-                    child: const Text('下一章'),
-                  ),
-                ],
-                )),
+                ),
               ),
             ],
           ),
@@ -937,178 +1048,240 @@ class _NovelReaderPageState extends State<NovelReaderPage>
         data: theme,
         child: Scaffold(
           backgroundColor: colors.$1,
-          appBar: _chrome
-              ? AppBar(
-                  backgroundColor: colors.$1,
-                  foregroundColor: colors.$2,
-                  leading: BackButton(onPressed: _leave),
-                  title: Text(widget.book.title),
-                  actions: [
-                    IconButton(
-                      tooltip: '刷新目录与正文',
-                      onPressed: _busy ? null : _refresh,
-                      icon: const Icon(Icons.refresh),
-                    ),
-                    IconButton(
-                      tooltip: '添加书签',
-                      onPressed: _busy ? null : _bookmark,
-                      icon: const Icon(Icons.bookmark_add_outlined),
-                    ),
-                    NovelIllustrationToggle(gallery: _illustrations, enabled: !_busy),
-                    IconButton(
-                      tooltip: '阅读设置',
-                      onPressed: _busy ? null : _settings,
-                      icon: const Icon(Icons.text_fields_rounded),
-                    ),
-                  ],
-                )
-              : null,
-          body: SafeArea(
-            child: Column(
-              children: [
-                if (!_busy) NovelIllustrationBar(gallery: _illustrations),
-                if (conflict)
-                  MaterialBanner(
-                    content: const Text('多设备进度有冲突，自动保存已暂停。'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => _resolvePosition(reopen: true),
-                        child: const Text('选择进度'),
-                      ),
-                    ],
-                  ),
-                if (_saveError != null)
-                  MaterialBanner(
-                    content: Text('本地保存失败：$_saveError'),
-                    actions: [
-                      TextButton(onPressed: _save, child: const Text('重试保存')),
-                    ],
-                  ),
-                if (service.syncError != null)
-                  MaterialBanner(
-                    content: Text('云同步未完成：${service.syncError}'),
-                    actions: [
-                      TextButton(
-                        onPressed: service.retrySync,
-                        child: const Text('重试'),
-                      ),
-                    ],
-                  ),
-                Expanded(
-                  child: _busy
-                      ? const Center(child: CircularProgressIndicator())
-                      : _error != null
-                      ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(_error!),
-                                TextButton(
-                                  onPressed: () => _open(refresh: true),
-                                  child: const Text('重新加载'),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                      : CallbackShortcuts(
-                          bindings: {
-                            const SingleActivator(
-                              LogicalKeyboardKey.arrowRight,
-                            ): () =>
-                                _turn(1),
-                            const SingleActivator(
-                              LogicalKeyboardKey.pageDown,
-                            ): () =>
-                                _turn(1),
-                            const SingleActivator(
-                              LogicalKeyboardKey.space,
-                            ): () =>
-                                _turn(1),
-                            const SingleActivator(
-                              LogicalKeyboardKey.arrowLeft,
-                            ): () =>
-                                _turn(-1),
-                            const SingleActivator(
-                              LogicalKeyboardKey.pageUp,
-                            ): () =>
-                                _turn(-1),
-                          },
-                          child: Focus(
-                            autofocus: true,
-                            child: DecoratedBox(
-                              position: DecorationPosition.foreground,
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(
-                                  alpha: (_prefs['brightness'] as num).toDouble(),
-                                ),
-                              ),
-                              child: LayoutBuilder(
-                                builder: (_, c) {
-                                  final column = c.maxWidth.clamp(0.0, 900.0);
-                                  final width = column -
-                                      2 * (_prefs['margin'] as num).toDouble();
-                                  return _body(
-                                    width,
-                                    c.maxHeight,
-                                    style,
-                                    (c.maxWidth - width) / 2,
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
+          extendBody: true,
+          extendBodyBehindAppBar: true,
+          appBar: NovelReaderToolbar(
+            visible: _chrome,
+            child: AppBar(
+              backgroundColor: colors.$1,
+              foregroundColor: colors.$2,
+              leading: BackButton(onPressed: _leave),
+              title: Text(widget.book.title),
+              actions: [
+                IconButton(
+                  tooltip: '刷新目录与正文',
+                  onPressed: _busy ? null : _refresh,
+                  icon: const Icon(Icons.refresh),
                 ),
-                if (_chrome && !_busy && _error == null)
-                  Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Text(
-                      '${_chapters[_chapterIndex].volume} ${_chapters[_chapterIndex].title}  ·  '
-                      '${_chapterIndex + 1}/${_chapters.length}',
-                      style: TextStyle(color: colors.$2, fontSize: 12),
-                    ),
-                  ),
+                IconButton(
+                  tooltip: '添加书签',
+                  onPressed: _busy ? null : _bookmark,
+                  icon: const Icon(Icons.bookmark_add_outlined),
+                ),
+                NovelIllustrationToggle(
+                  gallery: _illustrations,
+                  enabled: !_busy,
+                ),
+                IconButton(
+                  tooltip: '阅读设置',
+                  onPressed: _busy ? null : _settings,
+                  icon: const Icon(Icons.text_fields_rounded),
+                ),
               ],
             ),
           ),
-          bottomNavigationBar: _chrome && !_busy && _error == null
-              ? SafeArea(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      IconButton(
-                        tooltip: '上一章',
-                        onPressed: _chapterIndex > 0
-                            ? () => _chapter(-1)
-                            : null,
-                        icon: const Icon(Icons.skip_previous_rounded),
+          // Overlay controls must not become additional body padding.
+          body: MediaQuery(
+            data: MediaQuery.of(context),
+            // Keep body semantics separate from overlay controls and modal routes.
+            child: Semantics(
+              container: true,
+              explicitChildNodes: true,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  SafeArea(
+                    child: _busy
+                        ? const Center(child: CircularProgressIndicator())
+                        : _error != null
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(_error!),
+                                  TextButton(
+                                    onPressed: () => _open(refresh: true),
+                                    child: const Text('重新加载'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : CallbackShortcuts(
+                            bindings: {
+                              const SingleActivator(
+                                LogicalKeyboardKey.arrowRight,
+                              ): () =>
+                                  _turn(1),
+                              const SingleActivator(
+                                LogicalKeyboardKey.pageDown,
+                              ): () =>
+                                  _turn(1),
+                              const SingleActivator(
+                                LogicalKeyboardKey.space,
+                              ): () =>
+                                  _turn(1),
+                              const SingleActivator(
+                                LogicalKeyboardKey.arrowLeft,
+                              ): () =>
+                                  _turn(-1),
+                              const SingleActivator(
+                                LogicalKeyboardKey.pageUp,
+                              ): () =>
+                                  _turn(-1),
+                            },
+                            child: Focus(
+                              autofocus: true,
+                              child: DecoratedBox(
+                                position: DecorationPosition.foreground,
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(
+                                    alpha: (_prefs['brightness'] as num)
+                                        .toDouble(),
+                                  ),
+                                ),
+                                child: LayoutBuilder(
+                                  builder: (_, c) {
+                                    final column = c.maxWidth.clamp(0.0, 900.0);
+                                    final width =
+                                        column -
+                                        2 *
+                                            (_prefs['margin'] as num)
+                                                .toDouble();
+                                    return _body(
+                                      width,
+                                      c.maxHeight,
+                                      style,
+                                      (c.maxWidth - width) / 2,
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          ),
+                  ),
+                  AnimatedPositioned(
+                    duration: NovelReaderToolbar.duration,
+                    curve: Curves.easeOutCubic,
+                    top: _chrome ? kToolbarHeight : 0,
+                    left: 0,
+                    right: 0,
+                    child: SafeArea(
+                      bottom: false,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (!_busy)
+                            NovelIllustrationBar(gallery: _illustrations),
+                          if (_imageRestoreError != null)
+                            MaterialBanner(
+                              content: Text(
+                                '插图未能完整加载，暂时无法定位原插图书签：$_imageRestoreError',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: _retryIllustrationRestore,
+                                  child: const Text('重试定位'),
+                                ),
+                              ],
+                            ),
+                          if (conflict)
+                            MaterialBanner(
+                              content: const Text('多设备进度有冲突，自动保存已暂停。'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      _resolvePosition(reopen: true),
+                                  child: const Text('选择进度'),
+                                ),
+                              ],
+                            ),
+                          if (_saveError != null)
+                            MaterialBanner(
+                              content: Text('本地保存失败：$_saveError'),
+                              actions: [
+                                TextButton(
+                                  onPressed: _save,
+                                  child: const Text('重试保存'),
+                                ),
+                              ],
+                            ),
+                          if (service.syncError != null)
+                            MaterialBanner(
+                              content: Text('云同步未完成：${service.syncError}'),
+                              actions: [
+                                TextButton(
+                                  onPressed: service.retrySync,
+                                  child: const Text('重试'),
+                                ),
+                              ],
+                            ),
+                        ],
                       ),
-                      TextButton.icon(
-                        onPressed: _catalog,
-                        icon: const Icon(Icons.list),
-                        label: const Text('目录'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          bottomNavigationBar: !_busy && _error == null
+              ? NovelReaderToolbar(
+                  visible: _chrome,
+                  fromBottom: true,
+                  child: Material(
+                    color: colors.$1,
+                    child: SafeArea(
+                      top: false,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Text(
+                              '${_chapters[_chapterIndex].volume} ${_chapters[_chapterIndex].title}  ·  '
+                              '${_chapterIndex + 1}/${_chapters.length}',
+                              style: TextStyle(color: colors.$2, fontSize: 12),
+                            ),
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              IconButton(
+                                tooltip: '上一章',
+                                onPressed: _chapterIndex > 0
+                                    ? () => _chapter(-1)
+                                    : null,
+                                icon: const Icon(Icons.skip_previous_rounded),
+                              ),
+                              TextButton.icon(
+                                onPressed: _catalog,
+                                icon: const Icon(Icons.list),
+                                label: const Text('目录'),
+                              ),
+                              IconButton(
+                                tooltip: '书签',
+                                onPressed: _bookmarks,
+                                icon: const Icon(Icons.bookmarks_outlined),
+                              ),
+                              IconButton(
+                                tooltip: '阅读进度',
+                                onPressed: _progress,
+                                icon: const Icon(Icons.tune),
+                              ),
+                              IconButton(
+                                tooltip: '下一章',
+                                onPressed: _chapterIndex + 1 < _chapters.length
+                                    ? () => _chapter(1)
+                                    : null,
+                                icon: const Icon(Icons.skip_next_rounded),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        tooltip: '书签',
-                        onPressed: _bookmarks,
-                        icon: const Icon(Icons.bookmarks_outlined),
-                      ),
-                      IconButton(
-                        tooltip: '阅读进度',
-                        onPressed: _progress,
-                        icon: const Icon(Icons.tune),
-                      ),
-                      IconButton(
-                        tooltip: '下一章',
-                        onPressed: _chapterIndex + 1 < _chapters.length
-                            ? () => _chapter(1)
-                            : null,
-                        icon: const Icon(Icons.skip_next_rounded),
-                      ),
-                    ],
+                    ),
                   ),
                 )
               : null,

@@ -101,12 +101,14 @@ class NovelPosition {
     required this.updatedAt,
     required this.chapterDigest,
     this.imageHash,
+    this.imageUrl,
   });
   final String editionId, sourceId, quote, prefix, suffix;
   final NovelChapter chapter;
   final int textOffset, updatedAt;
   final String chapterDigest;
   final String? imageHash;
+  final String? imageUrl;
   NovelJson toJson() => {
     'editionId': editionId,
     'sourceId': sourceId,
@@ -118,6 +120,7 @@ class NovelPosition {
     'updatedAt': updatedAt,
     'chapterDigest': chapterDigest,
     'imageHash': imageHash,
+    'imageUrl': imageUrl,
   };
   factory NovelPosition.fromJson(NovelJson j) => NovelPosition(
     editionId: j['editionId'] as String,
@@ -130,5 +133,6 @@ class NovelPosition {
     updatedAt: j['updatedAt'] as int,
     chapterDigest: j['chapterDigest'] as String,
     imageHash: j['imageHash'] as String?,
+    imageUrl: j['imageUrl'] as String?,
   );
 }
