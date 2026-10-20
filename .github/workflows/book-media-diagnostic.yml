@@ -93,6 +93,12 @@ jobs:
           run-id: 39074039751
           github-token: ${{ github.token }}
           path: android-upgrade-apk
+      - uses: actions/download-artifact@v4
+        with:
+          name: Owned-native-video-fixture
+          run-id: 39074039751
+          github-token: ${{ github.token }}
+          path: build/android-ui/fixtures
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -119,7 +125,7 @@ jobs:
           emulator-build: 16428233
           emulator-options: -no-window -gpu swiftshader -feature -HardwareDecoder -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
-          script: bash tool/android_ui/run.sh ${{ matrix.layout }} full
+          script: bash tool/android_ui/run.sh ${{ matrix.layout }} full full
       - uses: actions/upload-artifact@v4
         if: always()
         with:

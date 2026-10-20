@@ -3,6 +3,9 @@ name: Kazumi's book checks, builds and releases
 on:
   push:
     branches: [feature/novel-reader]
+    paths-ignore:
+      - '**/*.md'
+      - LICENSE
   workflow_dispatch:
 
 permissions:
@@ -31,6 +34,10 @@ jobs:
           flutter-version-file: pubspec.yaml
           cache: true
       - run: flutter pub get
+      - name: Validate native test orchestration
+        run: |
+          python3 -m unittest discover -s tool/android_ui -p '*_test.py'
+          node --test tool/android_ui/playback_sample.test.cjs
       - run: flutter analyze --no-fatal-infos --fatal-warnings
       - name: Run complete Flutter regression suite
         timeout-minutes: 5
@@ -132,6 +139,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -216,6 +226,7 @@ jobs:
       fail-fast: false
       matrix:
         layout: [phone, tablet]
+        suite: [upgrade, reading]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -223,21 +234,38 @@ jobs:
           name: Kazumis-book-Android-ui-test
           path: android-ui-apk
       - uses: actions/download-artifact@v4
+        if: matrix.suite == 'upgrade'
         with:
           name: Kazumis-book-Android-upgrade-baseline
           path: android-upgrade-apk
+      - uses: actions/download-artifact@v4
+        with:
+          name: Owned-native-video-fixture
+          path: build/android-ui/fixtures
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+      - uses: actions/cache@v4
+        id: maestro
+        with:
+          path: ~/.cache/kazumi-maestro/cli-2.11.0
+          key: maestro-linux-cli-2.11.0
       - name: Install pinned Android UI test runner
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg
-          curl --fail --location --silent --show-error https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.11.0/maestro.zip --output "$RUNNER_TEMP/maestro.zip"
-          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP/maestro"
-          test -f "$RUNNER_TEMP/maestro/maestro/bin/maestro"
-          echo "$RUNNER_TEMP/maestro/maestro/bin" >> "$GITHUB_PATH"
+          mkdir -p build/android-ui
+          sudo apt-get update -qq > build/android-ui/packages.log 2>&1
+          sudo apt-get install -y -qq ffmpeg >> build/android-ui/packages.log 2>&1
+          if [ '${{ steps.maestro.outputs.cache-hit }}' != true ]; then
+            curl --fail --location --silent --show-error https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.11.0/maestro.zip --output "$RUNNER_TEMP/maestro.zip"
+            unzip -q "$RUNNER_TEMP/maestro.zip" -d "$HOME/.cache/kazumi-maestro/cli-2.11.0"
+          fi
+          test -f "$HOME/.cache/kazumi-maestro/cli-2.11.0/maestro/bin/maestro"
+          echo "$HOME/.cache/kazumi-maestro/cli-2.11.0/maestro/bin" >> "$GITHUB_PATH"
+      - uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk/system-images/android-34/google_apis/x86_64
+          key: android-ui-linux-api34-google-apis-x64-v1
       - name: Enable emulator acceleration
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -254,11 +282,11 @@ jobs:
           emulator-build: 16428233
           emulator-options: -no-window -gpu swiftshader -feature -HardwareDecoder -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
-          script: bash tool/android_ui/run.sh ${{ matrix.layout }} full
+          script: bash tool/android_ui/run.sh ${{ matrix.layout }} full ${{ matrix.suite }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Android-UI-${{ matrix.layout }}
+          name: Android-UI-${{ matrix.layout }}-${{ matrix.suite }}
           path: |
             build/android-ui/
             ~/.maestro/tests/

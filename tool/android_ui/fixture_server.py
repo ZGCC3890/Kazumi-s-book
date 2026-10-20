@@ -241,6 +241,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--base-url", default=BASE)
     parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--ready-file", type=Path)
     args = parser.parse_args()
     BASE = args.base_url
     args.output.mkdir(parents=True, exist_ok=True)
@@ -251,6 +252,8 @@ def main():
     server.directories = {'/dav'}
     server.account_generation = 1
     server.account_logins = 0
+    if args.ready_file:
+        args.ready_file.write_text(str(server.server_port), encoding="utf-8")
     server.serve_forever()
 
 
