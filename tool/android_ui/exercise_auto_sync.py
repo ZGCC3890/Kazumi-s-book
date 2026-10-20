@@ -53,6 +53,8 @@ def main(stage):
         manifest.write_text(json.dumps({'key': key, 'before': entities}), encoding='utf-8')
     elif stage == 'verify':
         saved = json.loads(manifest.read_text(encoding='utf-8'))
+        manifest.with_name('auto-sync-state.json').write_text(
+            json.dumps(entities), encoding='utf-8')
         verify(entities, saved['before'], saved['key'])
     else:
         raise ValueError(stage)

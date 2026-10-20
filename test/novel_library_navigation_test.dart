@@ -222,6 +222,22 @@ void main() {
         await tester.dragFrom(Offset(animeSync.left - 150, animeTabs.center.dy), const Offset(30, 15));
         await tester.tap(find.byType(CloseButton));
         expect(windowCalls, containsAll(['startDragging', 'close']));
+        final semantics = tester.ensureSemantics();
+        service.syncing = true;
+        service.notifyListeners();
+        await tester.pump();
+        final syncNode = tester.getSemantics(find.byTooltip('同步小说'));
+        expect(syncNode.getSemanticsData().flagsCollection.isEnabled, ui.Tristate.isFalse);
+        expect(syncNode.getSemanticsData().flagsCollection.isButton, isTrue);
+        expect(syncNode.getSemanticsData().hasAction(ui.SemanticsAction.tap), isFalse);
+        service.syncing = false;
+        service.notifyListeners();
+        await tester.pump();
+        expect(tester.getSemantics(find.byTooltip('同步小说')).getSemanticsData()
+            .flagsCollection.isEnabled, ui.Tristate.isTrue);
+        expect(tester.getSemantics(find.byTooltip('同步小说')).getSemanticsData()
+            .hasAction(ui.SemanticsAction.tap), isTrue);
+        semantics.dispose();
         expect(find.text('已入架的小说'), findsOneWidget);
         expect(service.images, [('source-a', 'https://source/covers/1.png')]);
         expect(find.byType(Image), findsOneWidget);

@@ -44,6 +44,8 @@ if stage == 'inject':
     print('Injected a cross-source remote chapter-three revision into the owned DAV fixture.')
 else:
     manifest = json.loads(MANIFEST.read_text(encoding='utf-8'))
+    MANIFEST.with_name(f'conflict-{stage}-state.json').write_text(
+        json.dumps(entities), encoding='utf-8')
     key = manifest['key']
     revisions = entities[key]
     if stage == 'cancelled':

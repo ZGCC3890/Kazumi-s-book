@@ -52,7 +52,7 @@ class NovelLibraryPage extends StatelessWidget {
         toolbarHeight: 72,
         title: title ?? const Text('书架'),
         actions: [
-          Padding(padding: const EdgeInsets.only(right: 8), child: Tooltip(
+          Padding(padding: const EdgeInsets.only(right: 8), child: MergeSemantics(child: Tooltip(
             message: '小说规则', child: StateActionButton.tonal(
             text: '规则',
             icon: Icons.rule_folder_outlined,
@@ -61,15 +61,15 @@ class NovelLibraryPage extends StatelessWidget {
                 builder: (_) => NovelRulesPage(service: service),
               ),
             ),
-          ))),
-          Padding(padding: const EdgeInsets.only(right: 8), child: Tooltip(
+          )))),
+          Padding(padding: const EdgeInsets.only(right: 8), child: MergeSemantics(child: Tooltip(
             message: '同步小说', child: StateActionButton.tonal(
             text: '同步',
             icon: Icons.sync_rounded,
             onPressed: service.syncing
                 ? null
                 : () => _run(context, service.sync),
-          ))),
+          )))),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
