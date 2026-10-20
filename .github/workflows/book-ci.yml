@@ -253,7 +253,7 @@ jobs:
           key: maestro-linux-cli-2.11.0
       - name: Install pinned Android UI test runner
         run: |
-          mkdir -p build/android-ui
+          mkdir -p build/android-ui "$HOME/.cache/kazumi-maestro/cli-2.11.0"
           sudo apt-get update -qq > build/android-ui/packages.log 2>&1
           sudo apt-get install -y -qq ffmpeg >> build/android-ui/packages.log 2>&1
           if [ '${{ steps.maestro.outputs.cache-hit }}' != true ]; then
