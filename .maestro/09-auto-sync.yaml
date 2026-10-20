@@ -13,5 +13,5 @@ appId: com.zgcc.kazumisbook
 - takeScreenshot: build/android-ui/automatic-sync-furthest-progress
 - back
 - extendedWaitUntil:
-    visible: {text: "(?s).*同步小说.*", enabled: true}
+    visible: {text: "同步", enabled: true}
     timeout: 15000

@@ -227,6 +227,15 @@ void main() {
         service.notifyListeners();
         await tester.pump();
         final syncNode = tester.getSemantics(find.byTooltip('同步小说'));
+        expect(syncNode.getSemanticsData().label, '同步');
+        for (final flow in ['00-upgrade-check', '05-cross-source',
+          '06-conflict-cancel', '07-conflict-resolve', '09-auto-sync', 'owned-main']) {
+          final selectors = RegExp(r'text: "([^"]*同步[^"]*)"')
+              .allMatches(File('.maestro/$flow.yaml').readAsStringSync())
+              .map((match) => match[1]).toList();
+          expect(selectors, isNotEmpty, reason: flow);
+          expect(selectors, everyElement(syncNode.getSemanticsData().label), reason: flow);
+        }
         expect(syncNode.getSemanticsData().flagsCollection.isEnabled, ui.Tristate.isFalse);
         expect(syncNode.getSemanticsData().flagsCollection.isButton, isTrue);
         expect(syncNode.getSemanticsData().hasAction(ui.SemanticsAction.tap), isFalse);
