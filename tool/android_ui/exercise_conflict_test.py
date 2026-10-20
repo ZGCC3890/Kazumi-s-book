@@ -18,6 +18,7 @@ class ConflictFixtureTest(unittest.TestCase):
     def test_selected_english_chapter_round_trips_through_reader_and_sync(self):
         original = {'clock': {'local-ui-device': 1}, 'value': {
             'editionId': 'owned-book', 'sourceId': 'fixture-b',
+            'bookUrl': 'http://10.0.2.2:8765/novels/B/book.html',
             'chapter': {'url': 'http://10.0.2.2:8765/novels/B/2.html',
                         'title': 'Chapter 2', 'volume': 'Volume 1', 'kind': '正文', 'number': None},
         }}
@@ -46,12 +47,15 @@ class ConflictFixtureTest(unittest.TestCase):
             remote = uploaded[0]['entities']['position/owned-book'][0]
             canonical_chapter = dict(original['value']['chapter'],
                                      url='http://10.0.2.2:8765/novels/B/3.html', title='Chapter 3')
-            self.assertEqual(remote['value']['chapter'], canonical_chapter)
+            self.assertEqual(remote['value']['sourceId'], 'fixture-a')
+            self.assertEqual(remote['value']['chapter'], dict(canonical_chapter,
+                url='http://10.0.2.2:8765/novels/A/3.html'))
             entities['position/owned-book'] = [original, remote]
             stage('cancelled')
             selected = copy.deepcopy(remote)
             selected['clock']['local-ui-device'] = 2
             selected['value']['chapter'] = canonical_chapter
+            selected['value']['sourceId'] = 'fixture-b'
             entities['position/owned-book'] = [selected]
             stage('resolved')
             with self.assertRaises(ValueError):

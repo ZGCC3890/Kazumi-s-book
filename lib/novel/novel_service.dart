@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
@@ -17,6 +18,8 @@ import 'novel_http_session.dart';
 import 'novel_anime_resolver.dart';
 import 'novel_ai.dart';
 import 'novel_accounts.dart';
+import 'novel_progress_merge.dart';
+import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 
 class NovelService extends ChangeNotifier implements NovelReaderStore {
@@ -26,6 +29,8 @@ class NovelService extends ChangeNotifier implements NovelReaderStore {
   final Dio Function() _aiClient;
   final _writes = AsyncSerialQueue();
   final _ruleWrites = AsyncSerialQueue();
+  final _syncOperations = AsyncSerialQueue();
+  Future<bool> Function()? saveReader;
   final _anime = NovelAnimeResolver();
   NovelAiSettings _aiSettings = const NovelAiSettings();
   NovelAiSettings get aiSettings => _aiSettings;
@@ -112,7 +117,15 @@ class NovelService extends ChangeNotifier implements NovelReaderStore {
     await _box.put('retiredJapaneseDefault', '1');
   }
 
-  NovelRule rule(String id) => rules.singleWhere((r) => r.id == id);
+  NovelRule rule(String id) => rules.singleWhere((r) => r.id == id,
+    orElse: () => throw StateError('尚未安装书源“$id”，请在小说规则中导入对应规则'));
+
+  Future<void> _prepareSource(String id) async {
+    if (!rules.any((rule) => rule.id == id) && needsDefaultRules) {
+      await ensureDefaultRules();
+    }
+    rule(id);
+  }
   NovelSourceAdapter adapter(String id) {
     final source = rule(id);
     return NovelAuthenticatedSource(XPathNovelAdapter(source,
@@ -136,6 +149,7 @@ class NovelService extends ChangeNotifier implements NovelReaderStore {
     final key = 'image/$sourceId/$url';
     final cached = _cache.get(key);
     if (cached != null) return base64Decode(cached);
+    await _prepareSource(sourceId);
     final source = rule(sourceId);
     final bytes = await _accounts.execute(source, () => _http.image(source, url));
     await _cache.put(key, base64Encode(bytes));
@@ -435,10 +449,10 @@ class NovelService extends ChangeNotifier implements NovelReaderStore {
       .toList();
 
   Future<void> _commit(
-    NovelSyncState Function(NovelSyncState) change, {
+    FutureOr<NovelSyncState> Function(NovelSyncState) change, {
     Map<String, List<String>>? seen,
   }) => _writes.run(() async {
-    final next = change(state);
+    final next = await change(state);
     if (next.encode() == state.encode() && seen == null) return;
     // Payload and causal revision share a single persisted record.
     await _box.put(
@@ -530,6 +544,7 @@ class NovelService extends ChangeNotifier implements NovelReaderStore {
     NovelBook book, {
     bool refresh = false,
   }) async {
+    await _prepareSource(book.sourceId);
     final key =
         'catalog/${sha256.convert(utf8.encode(rule(book.sourceId).encode()))}/${book.url}';
     final cached = _cache.get(key);
@@ -596,9 +611,25 @@ class NovelService extends ChangeNotifier implements NovelReaderStore {
     }
   }
 
-  Future<void> sync() async {
+  Future<void> syncAutomatically() async {
+    if (!syncEnabled) return;
+    try {
+      await init();
+      if (saveReader != null && !await saveReader!()) {
+        throw StateError('当前阅读位置尚未保存，请返回阅读器处理后再同步');
+      }
+      await sync();
+    } catch (error) {
+      syncError = error.toString();
+      KazumiLogger().w('Novel automatic sync failed', error: error);
+      notifyListeners();
+    }
+  }
+
+  Future<void> sync() => _syncOperations.run(_sync);
+
+  Future<void> _sync() async {
     if (!syncEnabled) throw StateError('请先启用 WebDAV 小说同步');
-    if (syncing) return;
     syncing = true;
     syncNotice = null;
     notifyListeners();
@@ -633,6 +664,8 @@ class NovelService extends ChangeNotifier implements NovelReaderStore {
               scope: names.toList()..sort(),
             },
           );
+          await _commit((s) => NovelProgressMerge.resolve(s, deviceId,
+            (book) => catalog(book)));
           return state;
         },
       );

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:kazumi/bean/appbar/sys_app_bar.dart';
+import 'package:kazumi/bean/widget/state_presentation.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'novel_entry.dart';
 import 'novel_rules_page.dart';
@@ -45,26 +47,29 @@ class NovelLibraryPage extends StatelessWidget {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: service,
     builder: (_, _) => Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
+      appBar: SysAppBar(
+        needTopOffset: false,
+        toolbarHeight: 72,
         title: title ?? const Text('书架'),
         actions: [
-          IconButton(
-            tooltip: '小说规则',
-            icon: const Icon(Icons.rule_folder_outlined),
+          Padding(padding: const EdgeInsets.only(right: 8), child: Tooltip(
+            message: '小说规则', child: StateActionButton.tonal(
+            text: '规则',
+            icon: Icons.rule_folder_outlined,
             onPressed: () => Navigator.of(context, rootNavigator: true).push<void>(
               MaterialPageRoute(
                 builder: (_) => NovelRulesPage(service: service),
               ),
             ),
-          ),
-          IconButton(
-            tooltip: '同步小说',
-            icon: const Icon(Icons.sync),
+          ))),
+          Padding(padding: const EdgeInsets.only(right: 8), child: Tooltip(
+            message: '同步小说', child: StateActionButton.tonal(
+            text: '同步',
+            icon: Icons.sync_rounded,
             onPressed: service.syncing
                 ? null
                 : () => _run(context, service.sync),
-          ),
+          ))),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -76,8 +81,8 @@ class NovelLibraryPage extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         children: [
           SwitchListTile(
-            title: const Text('WebDAV 手动同步阅读进度与书签'),
-            subtitle: const Text('阅读时保存到本地；点击右上角“同步小说”与云盘合并。'),
+            title: const Text('WebDAV 同步阅读进度与书签'),
+            subtitle: const Text('启动、退出阅读器及关闭应用时同步；阅读时保存在本地，也可点击右上角手动同步。'),
             value: GStorage.getSetting(SettingsKeys.webDavEnableNovels),
             onChanged: (value) => _run(context, () async {
               if (value && !GStorage.getSetting(SettingsKeys.webDavEnable)) {

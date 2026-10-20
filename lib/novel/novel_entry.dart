@@ -129,6 +129,7 @@ class NovelEntry {
           service: service,
           editionId: editionId,
           book: book,
+          registerSave: (save) => service.saveReader = save,
           shelfAction: NovelShelfAction(service: service, editionId: editionId, animeId: animeId),
           onChangeSource: (context, current) async {
             final selected = await _selectSource(context, service, animeId,
@@ -168,6 +169,7 @@ class NovelEntry {
         ),
       ),
     );
+    await service.syncAutomatically();
   }
 
   static Future<void> search(

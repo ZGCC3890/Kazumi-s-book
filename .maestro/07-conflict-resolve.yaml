@@ -23,11 +23,11 @@ appId: com.zgcc.kazumisbook
 - back
 - tapOn:
     point: "50%,50%"
-    text: "同步小说"
+    text: "(?s).*同步小说.*"
     waitToSettleTimeoutMs: 100
 - extendedWaitUntil:
     visible:
-      text: "同步小说"
+      text: "(?s).*同步小说.*"
       enabled: true
     timeout: 15000
 - takeScreenshot: build/android-ui/conflict-final-sync

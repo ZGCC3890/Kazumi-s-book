@@ -700,17 +700,19 @@ void main() {
     await sync(service);
     expect(remote.snapshotGets, 2, reason: 'Only B initial and B edited snapshots are unseen.');
     final key = 'position/$edition';
-    expect(service.state.revisions(key), hasLength(2));
-    expect(() => service.position(edition), throwsStateError);
-    final selected = service.state.revisions(key).singleWhere((r) => r.value!['textOffset'] == 2);
-    await service.resolve(key, selected,
-        expectedToken: service.state.conflictToken(key));
+    expect(service.state.revisions(key), hasLength(1));
+    expect(service.position(edition)!.textOffset, 8);
     await sync(service);
 
     service = await device('B');
     await sync(service);
     expect(service.state.conflicts, isEmpty);
-    expect(service.position(edition)!.textOffset, 2, reason: 'Explicit earlier progress wins; never take maximum progress.');
+    expect(service.position(edition)!.textOffset, 8, reason: 'Concurrent progress in the same source keeps the later reading position.');
+    await service.savePosition(_position(edition, 2));
+    await sync(service);
+    service = await device('A');
+    await sync(service);
+    expect(service.position(edition)!.textOffset, 2, reason: 'A subsequent intentional rewind is not a conflict.');
     remote.requests.clear();
     await sync(service);
     expect(remote.snapshotGets, 0);

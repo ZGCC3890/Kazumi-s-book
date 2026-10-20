@@ -145,6 +145,7 @@ Future<void> _open(WidgetTester tester, _ReaderStore store, {double scale = 1, b
   List<NavigatorObserver> observers = const [],
   ValueNotifier<ThemeMode>? themeMode,
   Future<NovelBook?> Function(BuildContext, NovelBook)? onChangeSource,
+  void Function(Future<bool> Function()? save)? registerSave,
   Future<void> Function(Set<String>)? onLeave}) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = size;
@@ -166,6 +167,7 @@ Future<void> _open(WidgetTester tester, _ReaderStore store, {double scale = 1, b
     home: Builder(builder: (context) => Scaffold(appBar: shelfAppBar, body: TextButton(
       onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
         NovelReaderPage(service: store, editionId: 'edition', book: _book,
+          registerSave: registerSave,
           onLeave: onLeave, onChangeSource: onChangeSource))),
       child: const Text('Open reader')))),
   )));
@@ -209,6 +211,44 @@ void main() {
   setUp(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (_) async => null);
+  });
+  testWidgets('desktop reader drags, closes, toggles fullscreen and restores window without changing progress', (tester) async {
+    const channel = MethodChannel('window_manager');
+    var fullscreen = false;
+    final calls = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call.method);
+      if (call.method == 'isFullScreen') return fullscreen;
+      if (call.method == 'setFullScreen') fullscreen = (call.arguments as Map)['isFullScreen'] as bool;
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, null));
+    final store = _ReaderStore({_one.url: [NovelBlock.text('桌面窗口保持阅读位置。' * 300)]});
+    Future<bool> Function()? save;
+    await _open(tester, store, size: const Size(1280, 800), registerSave: (value) => save = value);
+    expect(save, isNotNull);
+    expect(await save!(), isTrue);
+    final before = store.saved.last.toJson();
+    await tester.drag(find.text('测试小说'), const Offset(40, 10));
+    expect(calls, contains('startDragging'));
+    await tester.tap(find.byTooltip('切换全屏（F11）'));
+    await tester.pumpAndSettle();
+    expect(fullscreen, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(fullscreen, isFalse);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f11);
+    await tester.pumpAndSettle();
+    expect(fullscreen, isTrue);
+    await tester.tap(find.byType(CloseButton));
+    await tester.pumpAndSettle();
+    expect(calls, contains('close'));
+    expect(store.saved.last.toJson(), before);
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(fullscreen, isFalse);
+    expect(save, isNull);
+    expect(store.saved.last.bookUrl, _book.url);
   });
   for (final mode in ['scroll', 'page']) {
     for (final size in [const Size(360, 800), const Size(1280, 800)]) {

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
@@ -194,6 +195,9 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(CollectPage), findsOneWidget);
         expect(find.byType(NovelLibraryPage), findsNothing);
+        final animeTabs = tester.getRect(find.byType(CollectLibraryTabs));
+        final animeSync = tester.getRect(find.byTooltip('同步收藏'));
+        final close = tester.getRect(find.byType(CloseButton));
         await tester.tap(
           find.descendant(
             of: find.byType(CollectLibraryTabs),
@@ -202,6 +206,22 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.byType(NovelLibraryPage), findsOneWidget);
+        expect(tester.getRect(find.byType(CollectLibraryTabs)).topLeft, animeTabs.topLeft);
+        expect(tester.getRect(find.byType(CollectLibraryTabs)).height, animeTabs.height);
+        expect(tester.getRect(find.byTooltip('同步小说')), animeSync);
+        expect(tester.getRect(find.byType(CloseButton)), close);
+        expect(tester.getCenter(find.byTooltip('小说规则')).dx, lessThan(animeSync.left));
+        final windowCalls = <String>[];
+        const channel = MethodChannel('window_manager');
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+          windowCalls.add(call.method);
+          if (call.method == 'isFullScreen') return false;
+          return null;
+        });
+        addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, null));
+        await tester.dragFrom(Offset(animeSync.left - 150, animeTabs.center.dy), const Offset(30, 15));
+        await tester.tap(find.byType(CloseButton));
+        expect(windowCalls, containsAll(['startDragging', 'close']));
         expect(find.text('已入架的小说'), findsOneWidget);
         expect(service.images, [('source-a', 'https://source/covers/1.png')]);
         expect(find.byType(Image), findsOneWidget);
@@ -350,7 +370,7 @@ void main() {
     addTearDown(() => tester.runAsync(() => GStorage.resetSettings(SettingsKeys.byGroup(SettingGroup.webdav))));
     await tester.pumpWidget(MaterialApp(home: NovelLibraryPage(service: service)));
     await tester.pumpAndSettle();
-    await tester.runAsync(() => tester.tap(find.text('WebDAV 手动同步阅读进度与书签')));
+    await tester.runAsync(() => tester.tap(find.text('WebDAV 同步阅读进度与书签')));
     await tester.pumpAndSettle();
     expect(GStorage.getSetting(SettingsKeys.webDavEnableNovels), isTrue);
     expect(service.syncCalls, 0);

@@ -11,6 +11,9 @@ import 'novel_illustrations.dart';
 import 'novel_chapter_list.dart';
 import 'novel_reader_toolbar.dart';
 import 'novel_reader_image.dart';
+import 'novel_reader_window.dart';
+import 'package:kazumi/utils/device.dart';
+import 'package:window_manager/window_manager.dart';
 
 class NovelReaderPage extends StatefulWidget {
   const NovelReaderPage({
@@ -21,6 +24,7 @@ class NovelReaderPage extends StatefulWidget {
     this.onLeave,
     this.onChangeSource,
     this.shelfAction,
+    this.registerSave,
   });
   final NovelReaderStore service;
   final String editionId;
@@ -28,6 +32,7 @@ class NovelReaderPage extends StatefulWidget {
   final Future<void> Function(Set<String> chapters)? onLeave;
   final Future<NovelBook?> Function(BuildContext context, NovelBook book)? onChangeSource;
   final Widget? shelfAction;
+  final void Function(Future<bool> Function()? save)? registerSave;
   @override
   State<NovelReaderPage> createState() => _NovelReaderPageState();
 }
@@ -62,6 +67,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
   late String _normalizedText, _chapterDigest, _serviceStatus;
   final Map<int, String> _imageHashes = {};
   late NovelIllustrations _illustrations;
+  final _window = NovelReaderWindow();
   String get _text => _blocks.where((b) => !b.image).map((b) => b.value).join();
   // The former standalone night preset now uses paper white in app light mode.
   int get _dayTheme => _prefs['theme'] == 3 ? 0 : _prefs['theme'] as int;
@@ -75,6 +81,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     _serviceStatus = _status;
     WidgetsBinding.instance.addObserver(this);
     service.addListener(_serviceChanged);
+    widget.registerSave?.call(_save);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     unawaited(_open());
   }
@@ -94,6 +101,8 @@ class _NovelReaderPageState extends State<NovelReaderPage>
   @override
   void dispose() {
     _saveTimer?.cancel();
+    widget.registerSave?.call(null);
+    _window.dispose();
     service.removeListener(_serviceChanged);
     WidgetsBinding.instance.removeObserver(this);
     _scroll?.dispose();
@@ -259,6 +268,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
           NovelLocator.capture(
             editionId: widget.editionId,
             sourceId: _book.sourceId,
+            bookUrl: _book.url,
             chapter: chapter,
             text: _text,
             offset: offset,
@@ -305,6 +315,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     _location = NovelLocator.capturePrepared(
       editionId: widget.editionId,
       sourceId: _book.sourceId,
+      bookUrl: _book.url,
       chapter: _chapters[_chapterIndex],
       normalized: _normalizedText,
       chapterDigest: _chapterDigest,
@@ -366,6 +377,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
       }
       if (!leaveWithoutWriting && !await _save()) return;
       await widget.onLeave?.call(Set.unmodifiable(_readChapters));
+      if (_window.used) await _window.restore();
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
       if (_orientationChanged) await SystemChrome.setPreferredOrientations([]);
       if (mounted) setState(() => _leaving = true);
@@ -842,6 +854,7 @@ class _NovelReaderPageState extends State<NovelReaderPage>
       _location = NovelLocator.capture(
         editionId: widget.editionId,
         sourceId: _book.sourceId,
+        bookUrl: _book.url,
         chapter: _chapters[_chapterIndex],
         text: _text,
         offset: proven ? found : 0,
@@ -1073,7 +1086,14 @@ class _NovelReaderPageState extends State<NovelReaderPage>
     );
     final conflict =
         service.state.revisions('position/${widget.editionId}').length > 1;
-    return PopScope(
+    return CallbackShortcuts(
+      bindings: {
+        if (isDesktop()) const SingleActivator(LogicalKeyboardKey.f11): _window.toggle,
+        if (isDesktop()) const SingleActivator(LogicalKeyboardKey.escape): () {
+          if (_window.fullscreen) unawaited(_window.toggle());
+        },
+      },
+      child: PopScope(
       canPop: _leaving,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) unawaited(_leave());
@@ -1086,12 +1106,20 @@ class _NovelReaderPageState extends State<NovelReaderPage>
           extendBodyBehindAppBar: true,
           appBar: NovelReaderToolbar(
             visible: _chrome,
-            child: AppBar(
+            child: GestureDetector(
+              onPanStart: isDesktop() ? (_) => windowManager.startDragging() : null,
+              child: AppBar(
               backgroundColor: colors.$1,
               foregroundColor: colors.$2,
               leading: BackButton(onPressed: _leave),
               title: Text(_book.title),
               actions: [
+                if (isDesktop()) ListenableBuilder(listenable: _window,
+                  builder: (_, _) => IconButton(
+                    tooltip: '切换全屏（F11）',
+                    onPressed: _window.toggle,
+                    icon: Icon(_window.fullscreen ? Icons.fullscreen_exit : Icons.fullscreen),
+                  )),
                 IconButton(
                   tooltip: '刷新目录与正文',
                   onPressed: _busy ? null : _refresh,
@@ -1117,8 +1145,9 @@ class _NovelReaderPageState extends State<NovelReaderPage>
                     onPressed: _busy || _changingSource ? null : _changeSource,
                     icon: const Icon(Icons.swap_horiz_rounded),
                   ),
+                if (isDesktop()) CloseButton(onPressed: () => windowManager.close()),
               ],
-            ),
+            )),
           ),
           // Overlay controls must not become additional body padding.
           body: MediaQuery(
@@ -1328,6 +1357,6 @@ class _NovelReaderPageState extends State<NovelReaderPage>
               : null,
         ),
       ),
-    );
+    ));
   }
 }

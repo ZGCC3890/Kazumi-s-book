@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:kazumi/novel/novel_sync_lifecycle.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_modular/flutter_modular.dart';
@@ -76,6 +77,7 @@ class _AppWidgetState extends State<AppWidget>
     trayManager.removeListener(this);
     windowManager.removeListener(this);
     WidgetsBinding.instance.removeObserver(this);
+    inject<NovelSyncLifecycle>().dispose();
     super.dispose();
   }
 
@@ -177,11 +179,12 @@ class _AppWidgetState extends State<AppWidget>
   }
 
   @override
-  void onTrayMenuItemClick(MenuItem menuItem) {
+  void onTrayMenuItemClick(MenuItem menuItem) async {
     switch (menuItem.key) {
       case 'show_window':
         windowManager.show();
       case 'exit':
+        await inject<NovelSyncLifecycle>().close();
         exit(0);
     }
   }
@@ -218,6 +221,7 @@ class _AppWidgetState extends State<AppWidget>
       if (!mounted) return;
       switch (action) {
         case ExitDialogAction.exit:
+          await inject<NovelSyncLifecycle>().close();
           exit(0);
         case ExitDialogAction.minimizeToTray:
           await windowManager.hide();

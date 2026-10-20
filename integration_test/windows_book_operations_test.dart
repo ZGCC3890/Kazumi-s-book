@@ -26,6 +26,9 @@ import 'package:kazumi/bean/dialog/update_available_dialog.dart';
 import 'package:kazumi/services/update/auto_updater.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+import 'package:window_manager/window_manager.dart';
+import 'package:kazumi/pages/collect/collect_library_tabs.dart';
+import 'package:kazumi/novel/novel_sync_lifecycle.dart';
 
 import 'support/native_test_profile.dart';
 
@@ -246,7 +249,19 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await click(tester, find.descendant(of: find.byType(NavigationRail),
         matching: find.byIcon(Icons.favorite_border)));
+    final tabBounds = tester.getRect(find.byType(CollectLibraryTabs));
+    final syncBounds = tester.getRect(find.byTooltip('同步收藏'));
+    final closeBounds = tester.getRect(find.byType(CloseButton));
     await text(tester, '书架');
+    expect(tester.getRect(find.byType(CollectLibraryTabs)), tabBounds);
+    expect(tester.getRect(find.byTooltip('同步小说')), syncBounds);
+    expect(tester.getRect(find.byType(CloseButton)), closeBounds);
+    for (var i = 0; i < 3; i++) {
+      await click(tester, find.descendant(of: find.byType(CollectLibraryTabs), matching: find.text('追番')));
+      expect(tester.getRect(find.byType(CollectLibraryTabs)), tabBounds);
+      await click(tester, find.descendant(of: find.byType(CollectLibraryTabs), matching: find.text('书架')));
+      expect(tester.getRect(find.byType(CollectLibraryTabs)), tabBounds);
+    }
     await visible(tester, find.text('葬送的芙莉莲'));
     expect(novels.isShelved(reader.editionId), isTrue);
     expect(novels.selectedBook(reader.editionId)!.cover,
@@ -263,7 +278,13 @@ void main() {
         'Bookshelf must resume chapter two');
     await screenshot(tester, 'reader-resumed');
     await click(tester, find.textContaining('Chapter 2 opening'));
+    final originalFullscreen = await windowManager.isFullScreen();
+    await click(tester, find.byTooltip('切换全屏（F11）'));
+    expect(await windowManager.isFullScreen(), !originalFullscreen);
+    expect(novels.position(reader.editionId)!.chapter.title, 'Chapter 2');
+    await screenshot(tester, 'reader-fullscreen');
     await back(tester);
+    expect(await windowManager.isFullScreen(), originalFullscreen);
     await click(tester, find.byTooltip('小说操作'));
     await text(tester, '删除书籍');
     await text(tester, '取消');
@@ -311,7 +332,7 @@ void main() {
     await text(tester, '返回同步设置');
     await text(tester, '启用 WebDAV');
     await text(tester, '小说阅读进度与书签');
-    await visible(tester, find.text('已启用小说手动同步'));
+    await visible(tester, find.text('已启用小说自动同步'));
     await text(tester, '立即同步小说');
     await visible(tester, find.text('小说阅读进度与书签已同步'));
     final davHttp = HttpClient();
@@ -330,6 +351,10 @@ void main() {
       davHttp.close(force: true);
     }
     await screenshot(tester, 'webdav-novel-sync');
+    final beforeClose = novels.lastSync;
+    await inject<NovelSyncLifecycle>().close();
+    expect(novels.syncError, isNull);
+    expect(novels.lastSync!.isAfter(beforeClose!), isTrue);
     final updateRequests = <String>[];
     final updater = DioFactory.downloadDio;
     const zipName = 'Kazumis-book-Windows-999.0.0.zip';

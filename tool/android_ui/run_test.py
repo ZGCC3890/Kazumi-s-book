@@ -85,12 +85,13 @@ class NativeRunnerTest(unittest.TestCase):
                 def flows(events):
                     return sorted(line for line in events.splitlines() if line.startswith('flow '))
                 self.assertEqual(flows(full_events), flows(upgrade_events + reading_events))
-                self.assertEqual(len(flows(full_events)), 6)
+                self.assertEqual(len(flows(full_events)), 7)
                 self.assertNotIn('install -r android-upgrade-apk', reading_events)
                 self.assertIn('verify_upgrade.py legacy', upgrade_events)
                 self.assertIn('verify_upgrade.py upgraded', upgrade_events)
                 self.assertIn('verify_sync.py build/android-ui/webdav-state.json full', reading_events)
                 self.assertIn('exercise_conflict.py resolved', reading_events)
+                self.assertIn('exercise_auto_sync.py verify', reading_events)
                 self.assertIn('flow .maestro/08-accounts.yaml', reading_events)
                 self.assertNotIn('flow .maestro/08-accounts.yaml', upgrade_events)
                 size = '800x1280' if layout == 'tablet' else '480x900'

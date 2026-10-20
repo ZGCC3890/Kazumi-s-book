@@ -26,7 +26,9 @@ if stage == 'inject':
                           if key.startswith('position/') and revisions[0]['value']['sourceId'] == 'fixture-b')
     assert len(revisions) == 1
     remote = copy.deepcopy(revisions[0]['value'])
-    remote['chapter'].update(url=remote['chapter']['url'].replace('/2.html', '/3.html'),
+    remote['sourceId'] = 'fixture-a'
+    remote['bookUrl'] = remote['bookUrl'].replace('/B/', '/A/')
+    remote['chapter'].update(url=remote['chapter']['url'].replace('/B/', '/A/').replace('/2.html', '/3.html'),
                              title='Chapter 3', number=None)
     assert remote['chapter']['url'].endswith('/3.html')
     remote.update(textOffset=0, quote='Chapter 3 opening paragraph.', prefix='', suffix='',
@@ -39,7 +41,7 @@ if stage == 'inject':
     with urllib.request.urlopen(request) as response:
         assert response.status == 201
     MANIFEST.write_text(json.dumps({'key': key, 'before': entities, 'remote': remote_revision}), encoding='utf-8')
-    print('Injected an independent remote chapter-three revision into the owned DAV fixture.')
+    print('Injected a cross-source remote chapter-three revision into the owned DAV fixture.')
 else:
     manifest = json.loads(MANIFEST.read_text(encoding='utf-8'))
     key = manifest['key']
@@ -56,8 +58,9 @@ else:
         for device, counter in original_clock.items():
             assert revisions[0]['clock'][device] >= counter, f'Resolution forgot {device}'
         assert any(revisions[0]['clock'][device] > counter for device, counter in original_clock.items()), 'Local resolution revision did not advance'
-        for field in ('editionId', 'sourceId', 'chapter'):
-            assert revisions[0]['value'][field] == manifest['remote']['value'][field], f'Resolution changed selected {field}'
+        assert revisions[0]['value']['editionId'] == manifest['remote']['value']['editionId']
+        assert revisions[0]['value']['sourceId'] == 'fixture-b', 'Reader must restore the chosen progress in its selected source'
+        assert revisions[0]['value']['chapter']['url'] == manifest['remote']['value']['chapter']['url'].replace('/A/', '/B/')
     else:
         raise ValueError(stage)
     for before_key, before_value in manifest['before'].items():

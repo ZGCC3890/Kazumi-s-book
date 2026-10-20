@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:kazumi/novel/novel_sync_lifecycle.dart';
 import 'dart:io';
 import 'package:kazumi/novel/novel_service.dart';
 import 'package:flutter/material.dart';
@@ -60,6 +61,7 @@ class _InitPageState extends State<InitPage> {
   Future<void> _initializeApp() async {
     try {
       await inject<NovelService>().init();
+      unawaited(inject<NovelSyncLifecycle>().start());
     } catch (error) {
       if (mounted) setState(() => _novelInitializationError = error.toString());
       return;

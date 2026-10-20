@@ -1,0 +1,17 @@
+appId: com.zgcc.kazumisbook
+---
+- runFlow: set-layout.yaml
+- stopApp
+- launchApp
+- extendedWaitUntil: {visible: "热门番组", timeout: 10000}
+- tapOn: {text: "(?s).*追番.*", point: "50%,50%", waitToSettleTimeoutMs: 100}
+- tapOn: {text: "(?s).*书架.*", point: "50%,50%", waitToSettleTimeoutMs: 100}
+- extendedWaitUntil: {visible: "(?s).*上次同步：.*", timeout: 15000}
+- assertNotVisible: "(?s).*阅读进度有冲突.*"
+- tapOn: {text: "(?s).*葬送的芙莉莲.*", point: "50%,50%", waitToSettleTimeoutMs: 100}
+- extendedWaitUntil: {visible: ".*Chapter 3 opening.*", timeout: 2000}
+- takeScreenshot: build/android-ui/automatic-sync-furthest-progress
+- back
+- extendedWaitUntil:
+    visible: {text: "(?s).*同步小说.*", enabled: true}
+    timeout: 15000

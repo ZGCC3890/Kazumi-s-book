@@ -124,6 +124,9 @@ run_stage conflict-cancel maestro test -e LAYOUT="$1" .maestro/06-conflict-cance
 python3 tool/android_ui/exercise_conflict.py cancelled
 run_stage conflict-resolve maestro test -e LAYOUT="$1" .maestro/07-conflict-resolve.yaml
 python3 tool/android_ui/exercise_conflict.py resolved
+python3 tool/android_ui/exercise_auto_sync.py inject
+run_stage auto-sync maestro test -e LAYOUT="$1" .maestro/09-auto-sync.yaml
+python3 tool/android_ui/exercise_auto_sync.py verify
 curl --fail --silent http://127.0.0.1:8765/fixture-state > build/android-ui/webdav-final-state.json
 # Account import edits the real clipboard rule copied by the navigation flow.
 run_stage accounts maestro test -e LAYOUT="$1" .maestro/08-accounts.yaml

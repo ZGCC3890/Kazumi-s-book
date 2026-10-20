@@ -48,6 +48,7 @@ class _Adapter implements NovelSourceAdapter {
 
 class _Service extends NovelService {
   _Service() : super(WebDav());
+  @override bool get syncEnabled => false;
   @override String accountName(String sourceId) => '';
   @override Future<NovelAccount?> accountCredentials(String sourceId) async => null;
   bool aiEnabled = false;

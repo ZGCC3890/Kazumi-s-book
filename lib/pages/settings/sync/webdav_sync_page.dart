@@ -131,13 +131,13 @@ class _WebDavSyncPageState extends State<WebDavSyncPage> {
                 SettingsTile.switchTile(
                   leading: Icons.menu_book_outlined,
                   title: const Text('小说阅读进度与书签'),
-                  description: const Text('阅读时保存在本地；点击“立即同步小说”后与云盘合并'),
+                  description: const Text('启动、退出阅读器及关闭应用时同步；阅读时保存在本地'),
                   initialValue: GStorage.getSetting(SettingsKeys.webDavEnableNovels),
                   enabled: enabled && !_busy,
                   onToggle: (value) => _run(() async {
                     final next = value ?? !GStorage.getSetting(SettingsKeys.webDavEnableNovels);
                     await GStorage.putSetting(SettingsKeys.webDavEnableNovels, next);
-                    _message = next ? '已启用小说手动同步' : '小说同步已关闭';
+                    _message = next ? '已启用小说自动同步' : '小说同步已关闭';
                   }),
                 ),
                 SettingsTile.switchTile(

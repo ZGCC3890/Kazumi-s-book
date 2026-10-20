@@ -15,7 +15,11 @@ class NovelBookCover extends StatefulWidget {
 
 class _NovelBookCoverState extends State<NovelBookCover> {
   Future<Uint8List>? _bytes;
+  String? _sourceRule;
+  String? get _currentRule => widget.service.rules
+      .where((rule) => rule.id == widget.book?.sourceId).firstOrNull?.encode();
   void _load() {
+    _sourceRule = _currentRule;
     final book = widget.book;
     _bytes = book == null || book.cover.isEmpty
         ? null
@@ -33,7 +37,8 @@ class _NovelBookCoverState extends State<NovelBookCover> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.service != widget.service ||
         oldWidget.book?.sourceId != widget.book?.sourceId ||
-        oldWidget.book?.cover != widget.book?.cover)
+        oldWidget.book?.cover != widget.book?.cover ||
+        _sourceRule != _currentRule)
       _load();
   }
 

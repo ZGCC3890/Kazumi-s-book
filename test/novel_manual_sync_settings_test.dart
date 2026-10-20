@@ -88,7 +88,7 @@ void main() {
     await tap('小说阅读进度与书签');
     expect(GStorage.getSetting(SettingsKeys.webDavEnableNovels), isTrue);
     expect(novels.calls, 0);
-    await feedback('已启用小说手动同步');
+    await feedback('已启用小说自动同步');
     novels.pending = Completer<void>();
     await tap('立即同步小说');
     await tap('立即同步小说');
