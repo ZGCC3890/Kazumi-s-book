@@ -111,6 +111,11 @@ start_fixture
 curl --fail --silent --show-error http://127.0.0.1:8765/fixture-state > build/android-ui/fixture-clean-ready.json
 fi
 if [ "$suite" != upgrade ]; then
+if [ "$suite" = reading ]; then
+  # The upgrade flow already acknowledges Android's first fullscreen prompt.
+  # A separate emulator needs the same system state before reader assertions.
+  adb shell settings put secure immersive_mode_confirmations confirmed
+fi
 run_stage reading-playback-sync maestro test -e LAYOUT="$1" "$main_flow"
 curl --fail --silent http://127.0.0.1:8765/fixture-state > build/android-ui/webdav-state.json
 python3 tool/android_ui/verify_sync.py build/android-ui/webdav-state.json "$validation_scope"
@@ -120,8 +125,7 @@ python3 tool/android_ui/exercise_conflict.py cancelled
 run_stage conflict-resolve maestro test -e LAYOUT="$1" .maestro/07-conflict-resolve.yaml
 python3 tool/android_ui/exercise_conflict.py resolved
 curl --fail --silent http://127.0.0.1:8765/fixture-state > build/android-ui/webdav-final-state.json
-fi
-if [ "$suite" != reading ]; then
+# Account import edits the real clipboard rule copied by the navigation flow.
 run_stage accounts maestro test -e LAYOUT="$1" .maestro/08-accounts.yaml
 fi
 kill "$fixture_pid"

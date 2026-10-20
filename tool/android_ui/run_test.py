@@ -17,6 +17,7 @@ case "$*" in
     if [ "${FAIL_AT:-}" = media ]; then echo 'Volume not ready'; return 1; fi
     echo 'No result found.' ;;
   'shell dumpsys window') echo 'mCurrentFocus=test' ;;
+  'shell settings put secure immersive_mode_confirmations confirmed') touch immersive-confirmed ;;
 esac
 ''',
     'curl': '''#!/usr/bin/env bash
@@ -39,6 +40,14 @@ esac
 local flow="${*: -1}"
 echo "flow $flow" >> events
 if [ "${FAIL_AT:-}" = "$flow" ]; then echo 'assertion failed'; return 7; fi
+case "$flow" in
+  .maestro/00-upgrade-seed.yaml) touch immersive-confirmed ;;
+  .maestro/main.yaml|.maestro/owned-main.yaml)
+    if [ ! -f immersive-confirmed ]; then echo 'System fullscreen prompt covers reader'; return 6; fi
+    touch clipboard-rule ;;
+  .maestro/08-accounts.yaml)
+    if [ ! -f clipboard-rule ]; then echo 'No copied rule for the select-all operation'; return 9; fi ;;
+esac
 ''',
     'sleep': '#!/usr/bin/env bash\n/usr/bin/sleep 0.01\n',
 }
@@ -82,6 +91,8 @@ class NativeRunnerTest(unittest.TestCase):
                 self.assertIn('verify_upgrade.py upgraded', upgrade_events)
                 self.assertIn('verify_sync.py build/android-ui/webdav-state.json full', reading_events)
                 self.assertIn('exercise_conflict.py resolved', reading_events)
+                self.assertIn('flow .maestro/08-accounts.yaml', reading_events)
+                self.assertNotIn('flow .maestro/08-accounts.yaml', upgrade_events)
                 size = '800x1280' if layout == 'tablet' else '480x900'
                 self.assertIn('adb shell wm size ' + size, reading_events)
 
