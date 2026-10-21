@@ -1,1 +1,9 @@
-A flutter app for collecting and watching anime online with custom rules. Use up to five lines of Xpath expressions to build your own rules. Supports rule import and rule sharing. Supports danmaku. In development (～￣▽￣)～
+Kazumi's book is an independent GPL-3.0 fork of Predidit/Kazumi that adds light novel reading to anime search, tracking and playback.
+
+Search custom book sources, open results directly, and manage a cover-grid bookshelf. The reader offers scrolling and paged reading, chapter navigation, typography and themes, bookmarks, illustrations and source switching. Optional AI title lookup uses a provider you configure.
+
+Reading progress stays on your device. Enable your own WebDAV server to sync at app startup, when leaving the reader or when the Android app enters the background. Manual sync remains available. Book-source credentials and AI settings are excluded from novel sync.
+
+This fork is released and maintained separately from official Kazumi.
+Project, source and support: https://github.com/ZGCC3890/Kazumi-s-book
+Upstream: https://github.com/Predidit/Kazumi

@@ -2,26 +2,43 @@
 
 <h1>Kazumi's book</h1>
 
-独立的番剧与轻小说阅读软件，基于 [Predidit/Kazumi](https://github.com/Predidit/Kazumi) 的 GPL-3.0 源码继续开发。Android 标识为 `com.zgcc.kazumisbook`，Windows 使用独立可执行文件和数据目录；应用更新仅检查本仓库 Releases。
+基于 [Predidit/Kazumi](https://github.com/Predidit/Kazumi) 开发的番剧与轻小说应用，在原有追番、搜索和播放功能之上，增加小说书架、阅读器、作品关联与阅读进度同步。
 
-当前开发分支：[`feature/novel-reader`](https://github.com/ZGCC3890/Kazumi-s-book/tree/feature/novel-reader)。[小说规则与使用说明](novel_rules/README.md) · [版本说明](CHANGELOG.md)。
+这是由 [ZGCC3890](https://github.com/ZGCC3890) 维护的独立衍生项目，不是官方 Kazumi 发行版。开发分支：[`feature/novel-reader`](https://github.com/ZGCC3890/Kazumi-s-book/tree/feature/novel-reader)。
 
-[下载 Kazumi's book](https://github.com/ZGCC3890/Kazumi-s-book/releases/latest)：提供 Android arm64 APK、Windows x64 ZIP 和 SHA256 校验文件。Android 可覆盖升级本项目相同签名的版本；Windows 需完整解压 ZIP 后运行 `kazumis_book.exe`。
-
-以下保留上游项目介绍与署名。
+[下载应用](https://github.com/ZGCC3890/Kazumi-s-book/releases/latest) · [使用与同步](#小说使用) · [小说规则](novel_rules/README.md) · [版本说明](CHANGELOG.md) · [参与贡献](CONTRIBUTING.md)
 
 <img src="assets/images/logo/logo_rounded.png" width=200></img>
 
-<a href="https://t.me/kazumi_app"><img src="https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white"></img></a>
+<a href="https://github.com/ZGCC3890/Kazumi-s-book/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/ZGCC3890/Kazumi-s-book?style=for-the-badge"></a>
+<a href="LICENSE"><img alt="License: GPL v3" src="https://img.shields.io/badge/License-GPL_v3-blue?style=for-the-badge"></a>
 
 <img src="https://img.shields.io/badge/Flutter-03A9F4?style=for-the-badge&logo=flutter&logoColor=white"></img>
 <img src="https://img.shields.io/badge/Dart-00B4AB?style=for-the-badge&logo=Dart&logoColor=white"></img>
 
-<a href="https://trendshift.io/repositories/11432"><img src="https://trendshift.io/api/badge/trendshift/repositories/11432/yearly?language=Dart"></img></a>
-<a href="https://hellogithub.com/repository/Predidit/Kazumi" target="_blank"><img src="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=68d824ea55ee4b07aba6fe1dd61ac939&claim_uid=J9Qu6aDd8LT1nU0"/></img></a>
-
-<p>使用 Flutter 开发的基于自定义规则的番剧采集与在线观看程序。使用最多五行基于 <code>Xpath</code> 语法的选择器构建自己的规则。支持规则导入与规则分享。支持基于 <code>Anime4K</code> 的实时超分辨率。绝赞开发中 (～￣▽￣)～</p>
+<p>使用 Flutter 开发。看番与阅读相互关联，书源规则独立管理，阅读位置保存在本机，并可通过自己的 WebDAV 在设备间同步。</p>
 </div>
+
+## 项目特色
+
+- **番剧与小说关联**：从追番条目续读小说，或从小说卡片查找对应番剧；可主动使用 AI 查询不同译名。
+- **多书源搜索与书架**：按来源展示封面卡片，直接阅读、换源、加入或移出书架。
+- **原生阅读器**：滚动与翻页、字体与主题、目录定位、书签、插图独立加载；有独立插图章时提供可收起的插图栏。
+- **跨设备进度**：本地保存，按启动、退出阅读器和退出应用等事件同步；同源并发进度保留更远位置，跨源冲突由用户选择。
+- **独立安装**：Android 包名 `com.zgcc.kazumisbook`；Windows 程序 `kazumis_book.exe`，使用独立数据目录。更新来自本仓库，可与官方 Kazumi 共存。
+
+## 安装与更新
+
+从 [Releases](https://github.com/ZGCC3890/Kazumi-s-book/releases/latest) 下载与平台对应的文件，可使用同页的 `SHA256SUMS.txt` 校验完整性。
+
+| 平台 | 发行文件 | 安装方式 |
+| --- | --- | --- |
+| Android 10+，arm64 | APK | 安装 APK；本项目相同正式签名的版本支持覆盖升级。 |
+| Windows 10+，x64 | ZIP | 完整解压到有写入权限的目录，运行 `kazumis_book.exe`；可放在 D 盘等自定义目录。 |
+
+从 0.1.8 起，Windows 下载校验后点击“立即安装”，会将文件替换到**正在运行的程序目录**，关闭前保存并同步阅读进度，更新完成后重新打开。系统临时目录仅用于下载和解压，不决定安装位置。0.1.7 及更早发行版尚无这一自动替换流程，首次升级需退出程序后，将新版 ZIP 完整解压覆盖原程序目录。更新或手动覆盖时保留完整的 `data/` 和 DLL 文件。
+
+macOS、Linux、iOS 等平台目录继承自上游，本分支目前不发布这些平台的安装包，也不将它们列为已验证的平台。上游各平台支持情况见 [Kazumi](https://github.com/Predidit/Kazumi)。
 
 ## 小说使用
 
@@ -29,7 +46,7 @@
 
 - 在搜索栏切换“番剧／小说”。两种搜索共用历史记录，无痕模式不保存历史。小说结果按书源分别显示为封面卡片，点击封面或“阅读”直接打开该源；点击“看番”查询关联番剧并进入选源播放。已绑定小说的番剧阅读按钮直接续读。
 - 在“追番”旁切换到“书架”。书架以封面卡片展示小说，卡片菜单可以更换书源或删除书籍。删除只移出书架，保留本地阅读位置和书签。
-- 阅读器支持滚动、翻页、目录、书签及插图缩放。点击正文中间显示或隐藏工具栏，在阅读设置中调整字体、行距、页边距、纸色与屏幕方向；明暗跟随应用主题。
+- 阅读器支持滚动、翻页、目录、书签及插图缩放。点击正文中间以滑入动画显示或隐藏覆盖工具栏，正文不位移；打开目录定位到当前章。右上角可更换书源，底部可加入书架；Windows 支持拖动顶部栏、F11 全屏和 Esc 退出。在阅读设置中调整字体、行距、页边距、纸色与屏幕方向；明暗跟随应用主题。
 - 当前卷有独立插图章时，书签旁显示插图栏开关。展开后按章节及图片原顺序横向浏览，点击缩略图可放大；展开、收起及查看图片保持正文阅读位置，切卷时更新为当前卷的插图。首次展开后才读取插图章，不根据正文中的插图编号猜测位置。
 - 默认书源在首次使用时获取。需要登录的书源通过“书源账号”登录；验证成功后账号密码加密保存在本机，会话过期时自动登录，清除登录会删除本机凭据。添加、更新规则和登录要求见[小说规则说明](novel_rules/README.md)。
 - 在“设置 → AI 作品关联”依次选择供应商、模型，再填写 API Key 并启用。供应商和模型列表支持搜索，内置选项会自动填写接口地址及模型 ID；其他兼容 Chat Completions 的接口可选择“自定义”。默认使用 DeepSeek，联网检索要求服务支持 DeepSeek Search 协议；切换到其他内置供应商时默认关闭联网检索，并清空旧 API Key。番剧首次选择小说、小说卡片的“AI 关联番剧”及换源搜索框旁的“AI 搜索”会提供候选名称，选择后查询实际来源。未启用时保留原有名称和别名匹配。AI 配置只保存在本机。
@@ -44,31 +61,22 @@
 
 Nextcloud 地址格式为 `https://你的域名/remote.php/dav/files/登录ID/指定目录/`。目录名含中文时直接填写中文并保留末尾 `/`，不要预先转换为百分号编码。密码使用 Nextcloud“个人设置 → 安全 → 设备和会话”生成的应用密码。
 
-## 支持平台
-
-- Android 10 及以上
-- Windows 10 及以上
-- MacOS 10.15 及以上
-- Linux (实验性)
-- iOS 13 及以上 (需要 [侧载](https://kazumi.app/docs/misc/how-to-install-in-ios))
-- HarmonyOS 5.0 及以上 (位于 [分支仓库](https://github.com/ErBWs/Kazumi/releases/latest)，需要 [侧载](https://kazumi.app/docs/misc/how-to-install-in-ohos))
-
 ## 屏幕截图
+
+下方为本项目 Windows 界面的实际运行截图；书籍封面和内容来自用户配置的第三方书源。
 
 <table>
   <tr>
-    <td><img alt="homepage" src="static/screenshot/img_1.png"></td>
-    <td><img alt="timetable" src="static/screenshot/img_2.png"></td>
-    <td><img alt="details" src="static/screenshot/img_3.png"></td>
+    <td width="50%"><img alt="按书源展示小说搜索结果，卡片提供阅读与看番入口" src="static/screenshot/windows-search.jpg"><br>小说搜索与作品关联</td>
+    <td width="50%"><img alt="小说书架、规则管理与 WebDAV 同步" src="static/screenshot/windows-bookshelf.jpg"><br>书架与进度同步</td>
+  </tr>
   <tr>
-  <tr>
-    <td><img alt="selection-page" src="static/screenshot/img_4.png"></td>
-    <td><img alt="rules-mange" src="static/screenshot/img_5.png"></td>
-    <td><img alt="rules-edit" src="static/screenshot/img_6.png"></td>
-  <tr>
+    <td><img alt="小说正文和覆盖式阅读工具栏" src="static/screenshot/windows-reader.jpg"><br>阅读器与阅读工具</td>
+    <td><img alt="阅读器顶部按原顺序展示当前卷插图" src="static/screenshot/windows-illustrations.jpg"><br>可收起的插图栏</td>
+  </tr>
 </table>
 
-## 功能 / 开发计划
+## 继承的番剧功能
 
 - [X]  规则编辑器
 - [X]  番剧目录
@@ -82,7 +90,7 @@ Nextcloud 地址格式为 `https://你的域名/remote.php/dav/files/登录ID/�
 - [X]  硬件加速
 - [X]  高刷适配
 - [X]  追番列表
-- [X]  番剧弹幕
+- [X]  番剧弹幕接口（构建时需配置本应用的弹弹play凭据）
 - [X]  在线更新
 - [X]  历史记录
 - [X]  倍速播放
@@ -93,44 +101,9 @@ Nextcloud 地址格式为 `https://你的域名/remote.php/dav/files/登录ID/�
 - [X]  超分辨率
 - [X]  一起看
 - [X]  番剧下载
-- [ ]  番剧更新提醒
-- [ ]  还有更多 (/・ω・＼)
-
-## 上游项目发行渠道
-
-以下渠道提供官方 Kazumi。Kazumi's book 的 Android 和 Windows 版本请使用[本仓库 Releases](https://github.com/ZGCC3890/Kazumi-s-book/releases/latest)。
-
-<a href="https://github.com/Predidit/Kazumi/releases">
-  <img src="static/svg/get_it_on_github.svg" alt="Get it on Github" width="200"/>
-</a>
-
-### Android
-
-<a href="https://f-droid.org/packages/com.predidit.kazumi">
-  <img src="https://fdroid.gitlab.io/artwork/badge/get-it-on-zh-hans.svg"
-  alt="Get it on F-Droid" width="200">
-</a>
-
-### GNU/Linux
-
-<a href="https://flathub.org/apps/io.github.Predidit.Kazumi">
-  <img src="https://flathub.org/api/badge?svg&locale=zh-Hans" alt="Get it on Flathub" width="175"/>
-</a>
-
-#### Arch Linux
-
-可以从 [AUR](http://aur.archlinux.org) 安装。
-
-##### AUR
-
-```bash
-[yay/paru] -S kazumi # 从源码构建
-[yay/paru] -S kazumi-bin # 二进制包
-```
-
 ## 贡献
 
-欢迎向我们的 [规则仓库](https://github.com/Predidit/KazumiRules) 提交您的自定义规则。您可以自由选择是否在规则中留下您的ID。详细的规则编写教程可以参考 [规则开发文档](https://kazumi.app/docs/rules/develop-rules)
+问题和功能建议请提交到[本仓库 Issues](https://github.com/ZGCC3890/Kazumi-s-book/issues)，贡献代码前阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。小说规则在 [novel_rules/](novel_rules/README.md) 维护；番剧规则沿用上游 [KazumiRules](https://github.com/Predidit/KazumiRules)，格式与小说规则不同。
 
 ## Q&A
 
@@ -153,9 +126,9 @@ A: 本程序在视频播放时, 会尽可能多地缓存视频到内存, 以提�
 
 A: 部分视频源的番剧使用了反盗链措施, 这可以被 Kazumi 解决, 但无法被外部播放器解决。
 
-#### Q: 为什么下载的 Linux 版本缺少图标和托盘功能？
+#### Q: 官方 Kazumi 和本项目的同步数据兼容吗？
 
-A: 使用 .deb 版本进行安装, tar.gz 版本仅为方便二次打包, 这一格式先天缺乏图标和托盘功能支持。
+A: 观看记录和收藏沿用官方协议，使用原有 WebDAV 基址即可。小说数据位于独立子目录，官方 Kazumi 不支持阅读或编辑这些数据。请先在原客户端完成同步，再在本项目启用对应同步项。
 
 </details>
 
@@ -185,40 +158,39 @@ Windows 构建需要 Visual Studio 的 C++ 桌面开发工具及匹配工具集�
 
 ## 开发
 
-欢迎您提交 PR！在开始之前, 请阅读 [贡献指引](static/doc/CONTRIBUTING.md) 以了解我们对 PR 和 AI 参与辅助开发的规定。
+环境准备、构建及测试命令见 [贡献指引](CONTRIBUTING.md)，模块职责见 [项目结构](static/doc/STRUCTURE.md)。公开文档说明产品和贡献方式；版本变化记录在 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 美术资源
 
 本项目图标来自 [Yuquanaaa](https://www.pixiv.net/users/66219277) 发表在 [Pixiv](https://www.pixiv.net/artworks/116666979) 上的作品。
 
-此图标由其原作者 [Yuquanaaa](https://www.pixiv.net/users/66219277) 拥有版权。我们已获得原作者的授权和许可, 可以在本项目中使用这一图标。这一图标不是自由使用的, 未经原作者明确授权, 任何人不得擅自使用、复制、修改或分发这一图标。
+图标版权属于原作者。上游声明已取得其用于 Kazumi 的授权；本分支保留该来源说明，不将上游授权表述为本分支另行取得的授权。图标不因代码采用 GPL 而自动成为可自由使用的素材，再分发或另作他用时须核对原作者许可。
 
 本项目内嵌字体为 [Mi Sans](https://hyperos.mi.com/font/zh/details/sc/) 字体, 由 [Xiaomi](https://www.mi.com/index.html) 开发和拥有版权。
 
-## 免责声明
+## 开源许可与上游来源
+
+本项目由 [Predidit/Kazumi](https://github.com/Predidit/Kazumi) 衍生，保留上游作者及贡献者的署名，新增小说模块和本分支集成修改由本项目贡献者维护。代码继续按 [GNU GPL 第 3 版](LICENSE) 发布；修改和发行日期见 [版本说明](CHANGELOG.md)，每个发行版的源码可通过同名 Git 标签获取。
+
+分发修改版时应保留适用的版权和许可声明，标明修改，并按 GPL 要求提供相应源码。第三方库、图标、字体及站点内容按各自条款使用，详情见 [第三方声明](THIRD_PARTY_NOTICES.md)。GPL 原文保持不变。
+
+## 使用说明与责任
 
 本项目基于 GNU 通用公共许可证第 3 版（GPL-3.0）授权。我们不对其适用性、可靠性或准确性作出任何明示或暗示的保证。在法律允许的最大范围内, 作者和贡献者不承担任何因使用本软件而产生的直接、间接、偶然、特殊或后果性的损害赔偿责任。
 
-使用本项目需遵守所在地法律法规, 不得进行任何侵犯第三方知识产权的行为。因使用本项目而产生的数据和缓存应在24小时内清除, 超出 24 小时的使用需获得相关权利人的授权。
+本应用按用户配置的规则访问第三方网站，不托管番剧或小说内容。请遵守内容来源的条款和适用法律，取得所需授权；代码许可证不授予第三方作品的版权许可。
 
 ## 隐私政策
 
-我们不收集任何用户数据, 不使用任何遥测组件。
+阅读进度、设置及账号凭据保存在本机；启用 WebDAV 后向用户指定服务器同步，主动调用 AI 关联时向所选供应商发送查询内容。外部书源、Bangumi 等服务会接收完成请求所需的信息。具体数据范围见 [隐私说明](PRIVACY.md)。
 
-## 代码签名策略
+## 发行与身份
 
-提交者: [贡献者](https://github.com/Predidit/Kazumi/graphs/contributors)
-审阅者: [所有者](https://github.com/Predidit)
-
-## 赞助
-
-
-| ![signpath](https://signpath.org/assets/favicon-50x50.png)                                                                                                                      | Free code signing on Windows provided by[SignPath.io](https://about.signpath.io/), certficate by [SignPath Foundation](https://signpath.org/) |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="https://kilo.ai/favicon/favicon.svg" width="50">                                                                                                                      | **Automatic PR review provided by [Kilo Code](https://kilo.ai/), sponsored by the [Kilo OSS Program](https://kilo.ai/oss)**                   |
-| <a href="https://m.do.co/c/0062035db3e4"><img src="https://opensource.nyc3.cdn.digitaloceanspaces.com/attribution/assets/SVG/DO_Logo_icon_blue.svg" width="50" height="50"></a> | **Cloud infrastructure is supported by [DigitalOcean](https://m.do.co/c/0062035db3e4)**                                                       |
+Android 正式版使用本项目固定签名。Windows 以 ZIP 发布，不继承上游的 SignPath 签名或赞助关系。安装包和源码只以本仓库对应版本为准；请将本分支的问题反馈给本仓库维护者。
 
 ## 致谢
+
+感谢 [Predidit/Kazumi](https://github.com/Predidit/Kazumi) 及其[贡献者](https://github.com/Predidit/Kazumi/graphs/contributors)提供项目基础，以及[本分支贡献者](https://github.com/ZGCC3890/Kazumi-s-book/graphs/contributors)持续改进小说与番剧体验。
 
 特别感谢 [XpathSelector](https://github.com/simonkimi/xpath_selector) 这个优秀的项目是本项目的基石。
 
@@ -229,8 +201,6 @@ Windows 构建需要 Visual Studio 的 C++ 桌面开发工具及匹配工具集�
 特别感谢 [Anime4K](https://github.com/bloc97/Anime4K) 本项目使用 Anime4K 进行实时超分。
 
 特别感谢 [SyncPlay](https://github.com/Syncplay/syncplay) 本项目使用 SyncPlay 协议并通过 SyncPlay 公共服务器实现一起看功能。
-
-特别感谢 [所有贡献者](https://github.com/Predidit/Kazumi/graphs/contributors) 本项目因为你们变得更好。
 
 特别感谢 [trace.moe](https://trace.moe) 本项目使用了 trace.moe 提供的图片识别番剧功能。
 

@@ -7,8 +7,7 @@ body:
     attributes:
       value: |
         请填写以下内容，以方便我们进行问题定位和修复。
-        填写前，请先查看 [Issues 列表](https://github.com/Predidit/Kazumi/issues) 查看是否已经有和你主题重复的 Issue。重复 Issue 会被关闭。
-        如果你的 Kazumi 版本不为最新版，请先更新再重试查看问题是否仍然存在。旧版本的 Issue 可能不会被处理，因为新版可能已经修复了问题。 
+        填写前，请先搜索[本仓库 Issues](https://github.com/ZGCC3890/Kazumi-s-book/issues)和[版本说明](https://github.com/ZGCC3890/Kazumi-s-book/blob/feature/novel-reader/CHANGELOG.md)。请明确实际版本，不能升级时说明原因。不要上传密码、API Key、Cookie 或未脱敏的个人数据。
 
   - type: textarea
     id: description
@@ -21,8 +20,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: Kazumi 版本
-      description: '你所使用的 Kazumi 版本。版本号可以在 我的-设置-关于 页面底部找到。'
+      label: Kazumi's book 版本
+      description: '填写关于页面中的版本号；自行构建时同时提供提交号。'
     validations:
       required: true
 
@@ -31,11 +30,9 @@ body:
     attributes:
       label: 你所使用的平台
       options:
-        - macOS
         - Android
         - Windows
-        - Linux
-        - iOS
+        - 其他平台自行构建（请在描述中说明）
     validations:
       required: true
 
@@ -99,9 +96,9 @@ body:
     attributes:
       label: 提交前确认
       options:
-        - label: 我已经查看了 [Issues 列表](https://github.com/Predidit/Kazumi/issues) ，没有发现重复问题。
+        - label: 我已经查看了[本仓库 Issues](https://github.com/ZGCC3890/Kazumi-s-book/issues)，没有发现重复问题。
           required: true
         - label: 我已经提交了日志信息，并说明了问题和复现步骤。
           required: true
-        - label: 我正在使用最新版本的 Kazumi 应用，问题没有被修复。
+        - label: 我已填写实际版本、复现步骤和预期结果，并检查附件不含敏感信息。
           required: true

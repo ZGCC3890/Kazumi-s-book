@@ -70,6 +70,8 @@ jobs:
         with:
           name: Owned-native-video-fixture
           path: build/windows-ui/fixtures
+      - name: Verify portable Windows update and restart
+        run: flutter test test/windows_portable_update_test.dart --no-pub
       - name: Native Windows application operations
         shell: pwsh
         timeout-minutes: 25

@@ -10,6 +10,7 @@ import 'package:kazumi/request/core/network_exception.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/update/update_download_source.dart';
 import 'package:kazumi/services/update/update_downloader.dart';
+import 'package:kazumi/services/update/windows_portable_update.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
@@ -116,6 +117,8 @@ class AutoUpdater {
   factory AutoUpdater() => _instance;
 
   AutoUpdater._internal();
+
+  Future<void> Function()? beforeWindowsRestart;
 
   final DownloadHttpClient _downloadClient = DownloadHttpClient.instance;
 
@@ -360,7 +363,7 @@ class AutoUpdater {
               ),
               const SizedBox(height: 12),
               Text(
-                '安装过程中应用将会退出',
+                Platform.isWindows ? '更新将应用到当前程序目录，完成后自动重新打开' : '安装过程中应用将会退出',
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.error,
                   fontSize: 12,
@@ -441,8 +444,6 @@ class AutoUpdater {
     try {
       KazumiDialog.showToast(message: '准备安装更新，应用即将退出...');
 
-      await Future.delayed(const Duration(seconds: 2));
-
       if (Platform.isWindows) {
         if (installationType == InstallationType.windowsMsix) {
           final Uri fileUri = Uri.file(filePath);
@@ -452,9 +453,18 @@ class AutoUpdater {
             throw 'Could not launch $fileUri';
           }
         } else {
-          await Process.start('explorer.exe', [filePath], runInShell: true);
+          final update = await WindowsPortableUpdate.prepare(
+            archivePath: filePath,
+            executablePath: Platform.resolvedExecutable,
+            processId: pid,
+          );
+          await update.install(
+            beforeExit: () async {
+              await beforeWindowsRestart?.call();
+            },
+          );
+          return;
         }
-        await Future.delayed(const Duration(seconds: 1));
         exit(0);
       } else if (Platform.isMacOS) {
         if (filePath.endsWith('.dmg')) {

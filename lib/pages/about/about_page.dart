@@ -51,7 +51,7 @@ class AboutPage extends StatelessWidget {
                       icon: Icons.handshake_outlined,
                       title: '贡献指南',
                       url:
-                          '${ApiEndpoints.sourceUrl}/blob/main/static/doc/CONTRIBUTING.md',
+                          '${ApiEndpoints.sourceUrl}/blob/feature/novel-reader/CONTRIBUTING.md',
                     ),
                     const AboutLinkTile.route(
                       icon: Icons.favorite_outline_rounded,
@@ -61,7 +61,8 @@ class AboutPage extends StatelessWidget {
                     const AboutLinkTile(
                       icon: Icons.balance_rounded,
                       title: 'GPL-3.0 许可证',
-                      url: '${ApiEndpoints.sourceUrl}/blob/main/LICENSE',
+                      url:
+                          '${ApiEndpoints.sourceUrl}/blob/feature/novel-reader/LICENSE',
                     ),
                     const AboutLinkTile.route(
                       icon: Icons.description_outlined,

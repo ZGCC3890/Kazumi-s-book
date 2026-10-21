@@ -1,6 +1,5 @@
 <!--
-提交 PR 前，请确认您已经阅读 [贡献指引](https://github.com/ZGCC3890/Kazumi-s-book/blob/feature/novel-reader/static/doc/CONTRIBUTING.md)。不符合的 PR 可能会被延迟处理或直接关闭。
-请勿随意删除此模板的任何部分。
+提交前请阅读 [贡献指引](https://github.com/ZGCC3890/Kazumi-s-book/blob/feature/novel-reader/CONTRIBUTING.md)，目标分支为 feature/novel-reader。
 -->
 
 ## 描述
@@ -21,23 +20,16 @@
 - [ ] 文档或格式
 - [ ] 其它
 
-## AI 辅助开发
+## 验证
 
-<!-- 这个 PR 的工作是否用到了 AI 辅助？ -->
-
-- [ ] 没有使用 AI 辅助
-- [ ] AI 辅助开发了部分功能，但是我已检查并理解 AI 所写的代码
-- [ ] 基本上都由 AI 实现，但是我非常了解 AI 的代码与写完的产物
-
-AI 辅助模型: 
-
-<!-- 请按照要求，填写完整的 AI 模型名称，如 “Claude Fable 5”，“Kimi-K3” -->
+<!-- 写明平台、测试命令、结果和未验证范围。界面改动请附真实截图；Bug 修复说明复现条件和回归验证。 -->
 
 ## 提交前检查
 
 - [ ] 我已经填写了 PR 模板中的所有内容
-- [ ] 我已经阅读了 [贡献指引](https://github.com/ZGCC3890/Kazumi-s-book/blob/feature/novel-reader/static/doc/CONTRIBUTING.md) ，并遵守指引进行开发
-- [ ] 这个 PR 的功能已经经过我的测试，并且我完全理解我（或 AI）做出的改动
+- [ ] 我已经阅读了[贡献指引](https://github.com/ZGCC3890/Kazumi-s-book/blob/feature/novel-reader/CONTRIBUTING.md)，并检查许可证与第三方声明
+- [ ] 我已审阅改动，执行适用的本地检查，并如实列出未验证项
+- [ ] 改动不含账号凭据、个人数据或临时开发记录
 
 ## 附注
 

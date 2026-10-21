@@ -1,1 +1,1 @@
-An anime collection APP based on custom rules.
+Anime and light novels with custom sources, reading progress and WebDAV sync.

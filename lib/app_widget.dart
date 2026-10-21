@@ -6,6 +6,7 @@ import 'package:flutter_modular/flutter_modular.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:kazumi/services/storage/storage.dart';
+import 'package:kazumi/services/update/auto_updater.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/network/metered_network_service.dart';
@@ -35,6 +36,7 @@ class _AppWidgetState extends State<AppWidget>
   @override
   void initState() {
     super.initState();
+    AutoUpdater().beforeWindowsRestart = () => inject<NovelSyncLifecycle>().close();
     trayManager.addListener(this);
     windowManager.addListener(this);
     WidgetsBinding.instance.addObserver(this);
@@ -77,6 +79,7 @@ class _AppWidgetState extends State<AppWidget>
     trayManager.removeListener(this);
     windowManager.removeListener(this);
     WidgetsBinding.instance.removeObserver(this);
+    AutoUpdater().beforeWindowsRestart = null;
     inject<NovelSyncLifecycle>().dispose();
     super.dispose();
   }
